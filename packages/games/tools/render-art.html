@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="vi">
+  <body>
+    <script type="module">
+      import "@fontsource/baloo-2/800.css";
+
+      // Every game may ship src/<slug>/cover.ts exporting renderPoster/renderBanner.
+      const covers = import.meta.glob("../src/*/cover.ts");
+      await document.fonts.load('800 40px "Baloo 2"');
+      const out = {};
+      for (const [path, load] of Object.entries(covers)) {
+        const slug = path.split("/").at(-2);
+        const mod = await load();
+        out[slug] = {};
+        for (const [name, fn] of [["poster", mod.renderPoster], ["banner", mod.renderBanner]]) {
+          if (!fn) continue;
+          const canvas = document.createElement("canvas");
+          fn(canvas);
+          out[slug][name] = canvas.toDataURL("image/webp", 0.86);
+        }
+      }
+      window.__art = out;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Assets-only Worker: the portal is a static SPA, so there is no worker script.
+  // Cloudflare serves dist/client directly and applies public/_headers.
+  "name": "engames",
+  "account_id": "4db494888d9a82bbe3df140e2e1a7676",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist/client",
+    // Unknown paths (e.g. /games/chien-thu on a cold load) get index.html with a
+    // 200, and the client router takes over.
+    "not_found_handling": "single-page-application"
+  },
+  // Custom Domain: Cloudflare creates the DNS record and certificate. The
+  // trinhvaphuong.com zone must live in the same account as this Worker.
+  "routes": [{ "pattern": "engames.trinhvaphuong.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false
+}

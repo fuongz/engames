@@ -1,0 +1,32 @@
+{
+  "name": "web-games",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.11",
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd apps/web dev",
+    "build": "bun run --filter '*' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "lint": "biome lint && node scripts/audit-layout.mjs",
+    "format": "biome format --write",
+    "check": "biome check",
+    "//gate": "BUILD FIRST. The route generator writes src/routeTree.gen.ts during the build, and router.tsx imports it — so a typecheck ahead of the build fails on a fresh checkout with an error that is not real. Build is also the honest gate for a structural change, where a green tsc proves nothing.",
+    "gate": "bun run build && bun run lint && bun run typecheck && bun run test",
+    "test": "bun run --filter '*' test",
+    "ui:add": "node scripts/ui-add.mjs",
+    "deploy": "bun run --cwd apps/web deploy"
+  },
+  "//deps": "The root holds ONLY what runs ACROSS the tree. A dependency parked here that one app needs is how versions silently drift: both apps resolve it, only one declares it, and bumping it for one bumps it for both. Everything else lives in apps/*/package.json.",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "typescript": "^6.0.3"
+  }
+}

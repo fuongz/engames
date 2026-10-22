@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Engames</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="30%" r="80%"><stop offset="0" stop-color="#b8f06a"/><stop offset="1" stop-color="#5cb82e"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g stroke="#2a1f1a" stroke-width="14" stroke-linejoin="round">
+    <path d="M150 230 L128 100 L236 176 Z" fill="#ff5d8f"/>
+    <path d="M362 230 L384 100 L276 176 Z" fill="#ff5d8f"/>
+    <ellipse cx="256" cy="290" rx="150" ry="128" fill="#8fe05a"/>
+    <ellipse cx="256" cy="338" rx="84" ry="56" fill="#effbd8" stroke="none"/>
+    <ellipse cx="204" cy="270" rx="40" ry="46" fill="#fff" stroke-width="10"/>
+    <ellipse cx="308" cy="270" rx="40" ry="46" fill="#fff" stroke-width="10"/>
+  </g>
+  <circle cx="212" cy="278" r="22" fill="#1d1410"/>
+  <circle cx="316" cy="278" r="22" fill="#1d1410"/>
+  <circle cx="222" cy="266" r="8" fill="#fff"/>
+  <circle cx="326" cy="266" r="8" fill="#fff"/>
+  <path d="M236 330 q10 14 20 0 q10 14 20 0" fill="none" stroke="#2a1f1a" stroke-width="9" stroke-linecap="round"/>
+</svg>

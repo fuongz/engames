@@ -1,0 +1,16 @@
+node_modules
+dist
+.output
+.vite
+.tanstack
+.wrangler
+
+# secrets
+.dev.vars
+.env
+.env.*
+!.env.example
+
+# os
+.DS_Store
+*.log
