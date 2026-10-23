@@ -82,7 +82,7 @@ const FOREST = "#2f8a3c";
 
 const inRect = (p: Vec, r: { x: number; y: number; w: number; h: number }) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
-export function startGame(root: HTMLElement, { storage, audio }: GameContext): GameInstance {
+export function startGame(root: HTMLElement, { storage, audio, reportScore }: GameContext): GameInstance {
   // Canvas text silently falls back until the face is loaded; ask for it up front.
   void document.fonts?.load('800 20px "Baloo 2"');
   const stage = new Stage(root, W, H, { bleed: true });
@@ -194,6 +194,7 @@ export function startGame(root: HTMLElement, { storage, audio }: GameContext): G
         eggs.push({ from: { x: CENTER.x, y: CENTER.y }, t: 0 });
         break;
       case "gameover":
+        reportScore?.({ score: state.score, detail: `Đợt ${state.wave}` });
         for (const [i, f] of [440, 349, 262, 196].entries()) audio.tone({ freq: f, dur: 0.22, type: "triangle", vol: 0.15, delay: i * 0.18 });
         break;
     }

@@ -10,9 +10,11 @@ Live target: <https://engames.trinhvaphuong.com> (Cloudflare Workers).
 ## Layout
 
 ```
-apps/web/          portal — TanStack Start (SPA mode) + Tailwind v4 + shadcn/Base UI
+apps/web/          portal — TanStack Start (SPA mode on Workers) + Tailwind v4 + shadcn/Base UI
+  src/server/      Better Auth (Google) + leaderboard server functions over D1/Drizzle
+  drizzle/         generated SQL migrations (never hand-edit)
   public/          manifest.webmanifest, sw.js, icons/, _headers
-  wrangler.jsonc   assets-only Worker + custom domain
+  wrangler.jsonc   Worker, D1 binding `DB` (prod-engames), custom domain
 packages/games/    the games — framework-free TypeScript on <canvas>
   src/core/        Stage (DPR canvas, letterbox, pointer mapping), Loop, AudioBus, storage
   src/registry.ts  discovers every src/<slug>/manifest.ts
@@ -29,6 +31,26 @@ bun run gate       # build → lint + layout audit → typecheck → tests (keep
 bun run deploy     # build and `wrangler deploy` (needs Cloudflare credentials)
 bun run ui:add x   # shadcn add for apps/web, with the `#/` alias fix applied
 ```
+
+## Accounts, leaderboard and D1
+
+Sign-in (Google via Better Auth) exists only to put a name on leaderboards.
+Signed-in players keep their best score per game; guests type a name at game
+over and every guest run is its own row. Games report a finished run with
+`ctx.reportScore({ score, detail })`; the portal shows the save dialog.
+
+One-time setup:
+
+1. Google Cloud Console → Credentials → OAuth client ID (Web). Redirect URIs:
+   `http://localhost:5173/api/auth/callback/google` and
+   `https://engames.trinhvaphuong.com/api/auth/callback/google`.
+2. Local: `cp apps/web/.dev.vars.example apps/web/.dev.vars` and fill it in.
+3. Production secrets (from `apps/web`):
+   `bunx wrangler secret put BETTER_AUTH_SECRET` (and `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`).
+
+Schema changes (from `apps/web`): edit `src/server/db/schema.ts`, then
+`bun run db:generate` → `bun run db:migrate:local` → `bun run db:migrate:remote`
+before deploying code that needs the new columns.
 
 ## Adding a game
 

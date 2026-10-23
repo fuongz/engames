@@ -36,9 +36,21 @@ export interface GameManifest {
  */
 export const SUMMARY_KEY = "summary";
 
+/** A finished run, offered to the portal's leaderboard. */
+export interface ScoreReport {
+  score: number;
+  /** Short game-specific context shown next to the score, e.g. "Đợt 12". */
+  detail?: string;
+}
+
 export interface GameContext {
   storage: GameStorage;
   audio: AudioBus;
+  /**
+   * Call once when a run ends (game over / round complete), never on quit.
+   * Optional so a game still runs outside the portal.
+   */
+  reportScore?(report: ScoreReport): void;
 }
 
 export interface GameInstance {

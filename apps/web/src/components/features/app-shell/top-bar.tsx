@@ -2,6 +2,7 @@ import { Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "#/components/ui/button";
+import { AccountButton } from "#/components/shared/auth/account-button";
 import { Kbd } from "#/components/ui/kbd";
 
 /**
@@ -31,6 +32,10 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
         <Button variant="ghost" size="icon" className="size-10 rounded-full lg:hidden" aria-label="Tìm game" onClick={onSearch}>
           <HugeiconsIcon icon={Search01Icon} />
         </Button>
+        {/* Desktop has it in the sidebar */}
+        <div className="lg:hidden">
+          <AccountButton variant="compact" />
+        </div>
       </div>
     </header>
   );

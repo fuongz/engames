@@ -3,32 +3,47 @@ import { findGame, games } from "@web-games/games";
 import { GameDetails } from "#/components/features/game-player/game-details";
 import { GamePlayer } from "#/components/features/game-player/game-player";
 import { GameCard } from "#/components/shared/games/game-card";
+import { LeaderboardList } from "#/components/shared/leaderboard/leaderboard-list";
+import { getLeaderboard } from "#/server/leaderboard";
 
 export const Route = createFileRoute("/games/$slug")({
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
     const game = findGame(params.slug);
     if (!game) throw notFound();
-    return game;
+    // Offline (installed PWA) or API down: the game still plays, the board just hides
+    const board = await getLeaderboard({ data: { slug: game.slug, limit: 10 } }).catch(() => null);
+    return { game, board };
   },
   head: ({ loaderData }) => ({
-    meta: [{ title: loaderData ? `${loaderData.title} · Engames` : "Engames" }],
+    meta: [{ title: loaderData ? `${loaderData.game.title} · Engames` : "Engames" }],
   }),
   component: GamePage,
 });
 
 function GamePage() {
-  const game = Route.useLoaderData();
+  const { game, board } = Route.useLoaderData();
   const others = games.filter((g) => g.slug !== game.slug).slice(0, 6);
+  const leaderboard = board ? (
+    <LeaderboardList entries={board} />
+  ) : (
+    <p className="text-sm text-muted-foreground">Không tải được bảng xếp hạng (đang offline?).</p>
+  );
 
-  // The player gets the full width; the guide, then other games, stack below it.
-  // On phones the player is full-screen and the guide lives in its info dialog.
+  // The player gets the full width; guide + leaderboard, then other games, stack
+  // below it. On phones the player is full-screen and both open as dialogs.
   return (
     <main className="grid gap-6">
-      <GamePlayer game={game} details={<GameDetails game={game} />} />
-      <section className="hidden content-start gap-4 rounded-2xl bg-card p-6 ring-1 ring-border lg:grid">
-        <h2 className="text-2xl leading-tight font-bold tracking-tight">{game.title}</h2>
-        <GameDetails game={game} />
-      </section>
+      <GamePlayer game={game} details={<GameDetails game={game} />} leaderboard={leaderboard} />
+      <div className="hidden gap-6 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <section className="grid content-start gap-4 rounded-2xl bg-card p-6 ring-1 ring-border">
+          <h2 className="text-2xl leading-tight font-bold tracking-tight">{game.title}</h2>
+          <GameDetails game={game} />
+        </section>
+        <section className="grid content-start gap-4 rounded-2xl bg-card p-6 ring-1 ring-border">
+          <h2 className="text-xl font-bold tracking-tight">Bảng xếp hạng</h2>
+          {leaderboard}
+        </section>
+      </div>
       {others.length > 0 && (
         <section className="hidden gap-3 lg:grid">
           <h2 className="text-xl font-semibold tracking-tight">Game khác</h2>

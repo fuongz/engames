@@ -4,9 +4,11 @@
 //  - Page navigations: network first (so deploys show up), cached shell offline.
 //  - /assets/*: content-hashed by Vite, so cache first and keep forever.
 //  - Everything else same-origin (icons, manifest): stale-while-revalidate.
+//  - /api/* (sign-in) and /_serverFn/* (leaderboard) are never touched: they are
+//    live data, and caching an OAuth callback would be actively harmful.
 //
 // Bump VERSION to drop old caches after a change to this file's strategy.
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = `engames-${VERSION}`;
 const SHELL = "/";
 const PRECACHE = [SHELL, "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/icon-512.png"];
@@ -29,13 +31,17 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_serverFn")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(SHELL, copy));
+          // Only a real HTML page may become the offline shell
+          if (res.ok && res.headers.get("content-type")?.includes("text/html")) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(SHELL, copy));
+          }
           return res;
         })
         .catch(() => caches.match(SHELL)),

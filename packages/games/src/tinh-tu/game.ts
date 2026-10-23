@@ -47,7 +47,7 @@ interface Button {
 
 const JOY_RADIUS = 60;
 
-export function startGame(root: HTMLElement, { storage, audio }: GameContext): GameInstance {
+export function startGame(root: HTMLElement, { storage, audio, reportScore }: GameContext): GameInstance {
   // Canvas text silently falls back until the face is loaded; ask for it up front.
   void document.fonts?.load('800 20px "Baloo 2"');
   const stage = new Stage(root, W, H, { bleed: true });
@@ -290,6 +290,10 @@ export function startGame(root: HTMLElement, { storage, audio }: GameContext): G
         for (const [i, f] of [523, 659, 784, 1046].entries()) audio.tone({ freq: f, dur: 0.18, type: "triangle", vol: 0.12, delay: 0.4 + i * 0.1 });
         break;
       case "end":
+        reportScore?.({
+          score: state.score,
+          detail: `${state.result?.stars ?? 0}★ · ${state.shards}/${SHARD_GOAL} mảnh`,
+        });
         if (e.won) for (const [i, f] of [659, 784, 988, 1318].entries()) audio.tone({ freq: f, dur: 0.2, type: "triangle", vol: 0.12, delay: i * 0.12 });
         else for (const [i, f] of [440, 349, 262].entries()) audio.tone({ freq: f, dur: 0.25, type: "triangle", vol: 0.12, delay: i * 0.18 });
         break;

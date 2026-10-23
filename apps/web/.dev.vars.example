@@ -1,0 +1,16 @@
+# Copy to .dev.vars (gitignored) for `bun run dev`. In production these are
+# Worker secrets: `bunx wrangler secret put <NAME>` (BETTER_AUTH_URL is a var
+# in wrangler.jsonc instead).
+
+# Local origin, overrides the production URL in wrangler.jsonc
+BETTER_AUTH_URL=http://localhost:5173
+
+# Any long random string: `openssl rand -base64 32`
+BETTER_AUTH_SECRET=
+
+# Google Cloud Console → APIs & Services → Credentials → OAuth client (Web).
+# Authorized redirect URIs:
+#   http://localhost:5173/api/auth/callback/google
+#   https://engames.trinhvaphuong.com/api/auth/callback/google
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

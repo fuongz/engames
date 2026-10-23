@@ -1,16 +1,38 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Assets-only Worker: the portal is a static SPA, so there is no worker script.
-  // Cloudflare serves dist/client directly and applies public/_headers.
+  // TanStack Start on Workers: the server entry handles /api/auth/* (Better Auth)
+  // and server functions (leaderboard); the SPA shell and static files are served
+  // from assets. Cloudflare applies public/_headers to asset responses.
   "name": "engames",
   "account_id": "4db494888d9a82bbe3df140e2e1a7676",
   "compatibility_date": "2026-10-01",
-  "assets": {
-    "directory": "./dist/client",
-    // Unknown paths (e.g. /games/chien-thu on a cold load) get index.html with a
-    // 200, and the client router takes over.
-    "not_found_handling": "single-page-application"
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "@tanstack/react-start/server-entry",
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
   },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "prod-engames",
+      "database_id": "e9afff81-6f15-4cd1-9378-7fa2e087fb3c",
+      // Drizzle writes SQL here; wrangler applies it from here. Two tools, one
+      // directory — change it and you must change BOTH this key and `out` in
+      // drizzle.config.ts, or `migrations apply` silently finds nothing to do.
+      "migrations_dir": "drizzle"
+    }
+  ],
+
+  // Public config. Secrets (BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID,
+  // GOOGLE_CLIENT_SECRET) go in via `wrangler secret put`, and locally in
+  // .dev.vars (see .dev.vars.example), which also overrides BETTER_AUTH_URL.
+  "vars": {
+    "BETTER_AUTH_URL": "https://engames.trinhvaphuong.com"
+  },
+
   // Custom Domain: Cloudflare creates the DNS record and certificate. The
   // trinhvaphuong.com zone must live in the same account as this Worker.
   "routes": [{ "pattern": "engames.trinhvaphuong.com", "custom_domain": true }],
