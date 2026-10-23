@@ -1,7 +1,7 @@
 // Layout and balance numbers. Layout values were measured from the reference
 // ad recording (see RE_NOTES.md); balance values are our own tuning.
 
-import type { Localized } from "../core";
+import type { Localized } from "../core/i18n";
 
 export const W = 540;
 export const H = 900;

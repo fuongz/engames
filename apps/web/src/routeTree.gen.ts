@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as GamesSlugRouteImport } from './routes/games.$slug'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiOnlineResultsRouteImport } from './routes/api/online/results'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +35,25 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOnlineResultsRoute = ApiOnlineResultsRouteImport.update({
+  id: '/api/online/results',
+  path: '/api/online/results',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/library': typeof LibraryRoute
   '/games/$slug': typeof GamesSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/online/results': typeof ApiOnlineResultsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/library': typeof LibraryRoute
   '/games/$slug': typeof GamesSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/online/results': typeof ApiOnlineResultsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,21 @@ export interface FileRoutesById {
   '/library': typeof LibraryRoute
   '/games/$slug': typeof GamesSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/online/results': typeof ApiOnlineResultsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/library' | '/games/$slug' | '/api/auth/$'
+  fullPaths:
+    '/' | '/library' | '/games/$slug' | '/api/auth/$' | '/api/online/results'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/library' | '/games/$slug' | '/api/auth/$'
-  id: '__root__' | '/' | '/library' | '/games/$slug' | '/api/auth/$'
+  to: '/' | '/library' | '/games/$slug' | '/api/auth/$' | '/api/online/results'
+  id:
+    | '__root__'
+    | '/'
+    | '/library'
+    | '/games/$slug'
+    | '/api/auth/$'
+    | '/api/online/results'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +83,7 @@ export interface RootRouteChildren {
   LibraryRoute: typeof LibraryRoute
   GamesSlugRoute: typeof GamesSlugRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiOnlineResultsRoute: typeof ApiOnlineResultsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +116,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/online/results': {
+      id: '/api/online/results'
+      path: '/api/online/results'
+      fullPath: '/api/online/results'
+      preLoaderRoute: typeof ApiOnlineResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +131,7 @@ const rootRouteChildren: RootRouteChildren = {
   LibraryRoute: LibraryRoute,
   GamesSlugRoute: GamesSlugRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiOnlineResultsRoute: ApiOnlineResultsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

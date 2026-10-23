@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { findGame } from "@web-games/games";
+import { boardKey, findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
 import { currentUser } from "#/server/auth";
 import { getDb } from "#/server/db";
@@ -28,8 +29,13 @@ const playerName = z
   .pipe(z.string().min(2, "Tên cần ít nhất 2 ký tự").max(20, "Tên tối đa 20 ký tự"));
 
 export const getLeaderboard = createServerFn({ method: "GET" })
-  .validator(z.object({ slug, limit: z.number().int().min(1).max(50).default(10) }))
-  .handler(({ data }) => topScores(getDb(), data.slug, data.limit));
+  .validator(
+    z
+      .object({ slug, limit: z.number().int().min(1).max(50).default(10), mode: z.enum(["coop"]).optional() })
+      .refine((d) => !d.mode || findOnlineGame(d.slug) !== undefined, "Not an online game"),
+  )
+  // Online boards live under "<slug>:<mode>" in the same table (online-multiplayer.md §9)
+  .handler(({ data }) => topScores(getDb(), boardKey(data.slug, data.mode), data.limit));
 
 export const submitScore = createServerFn({ method: "POST" })
   .validator(

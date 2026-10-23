@@ -16,6 +16,7 @@ local repository instruction, then these general rules.
 | What may I install? How is it configured? | [`docs/standards/tech-stack.md`](docs/standards/tech-stack.md) |
 | Where does this file go? | [`docs/standards/frontend-app-layout.md`](docs/standards/frontend-app-layout.md) |
 | How is a game built? | [`docs/standards/game-engine.md`](docs/standards/game-engine.md) |
+| How does a game play online? | [`docs/standards/online-multiplayer.md`](docs/standards/online-multiplayer.md) |
 
 Four things you will get wrong without them, so they are worth stating up front:
 
@@ -109,9 +110,13 @@ node scripts/audit-layout.mjs   # 0 = layout is correct
 
 ## This repo: Engames
 
-- **Two workspaces.** `apps/web` is the portal (React, shadcn, SPA mode).
-  `packages/games` holds the games as framework-free canvas TypeScript. The
-  layout gate audits `apps/web/src` only.
+- **Three workspaces.** `apps/web` is the portal (React, shadcn, SPA mode).
+  `packages/games` holds the games as framework-free canvas TypeScript.
+  `apps/realtime` is the online-room Worker (Durable Objects). The layout gate
+  audits `apps/web/src` only.
+- **Online play is server-authoritative.** A client sends inputs only; the room
+  runs the game's own `logic.ts`. Never trust a client for score or state, never
+  call `reportScore` in an online match. Follow `online-multiplayer.md`.
 - **Games never import React or portal code.** The portal talks to a game only
   through `GameModule.mount(root, ctx)` from `@web-games/games`.
 - **A new game is a new folder** under `packages/games/src/<slug>/` (see README).

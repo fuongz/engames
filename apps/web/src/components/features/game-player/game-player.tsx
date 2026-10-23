@@ -10,9 +10,9 @@ import {
   VolumeOffIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
-import { audioBus, createStorage, type GameManifest, type GameModule, loadGame, type ScoreReport } from "@web-games/games";
+import { audioBus, createStorage, type GameManifest, type GameModule, type OnlineMatch, loadGame, type ScoreReport } from "@web-games/games";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/ui/dialog";
@@ -23,6 +23,8 @@ import { EASE_OUT, FADE, RISE_BLUR, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
 import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
+import { OnlineEntry } from "#/components/features/online/online-entry";
+import { OnlineSession } from "#/components/features/online/online-session";
 import { ScoreDialog, takePendingScore } from "./score-dialog";
 
 /** Give the game's own result screen a moment before the save dialog covers it. */
@@ -39,11 +41,16 @@ export function GamePlayer({
   game,
   details,
   leaderboard,
+  room,
 }: {
   game: GameManifest;
   details: ReactNode;
   leaderboard: ReactNode;
+  /** An online room code (from ?room=) when this game plays online. */
+  room?: string;
 }) {
+  const online = room && game.online ? room : null;
+  const navigate = useNavigate();
   const locale = useLocale();
   const m = useMessages();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -118,12 +125,13 @@ export function GamePlayer({
     else instanceRef.current?.resume?.();
   }, [needsRotate]);
 
-  const mount = useCallback(() => {
+  const mount = useCallback((match?: OnlineMatch) => {
     const stage = stageRef.current;
     if (!module || !stage) return;
     instanceRef.current?.destroy();
     stage.replaceChildren();
     instanceRef.current = module.mount(stage, {
+      online: match,
       storage: createStorage(game.slug),
       audio: audioBus,
       // Read live: games redraw every frame, so a language switch shows at once
@@ -135,6 +143,42 @@ export function GamePlayer({
       },
     });
   }, [module, game.slug]);
+
+  const unmount = useCallback(() => {
+    instanceRef.current?.destroy();
+    instanceRef.current = null;
+    stageRef.current?.replaceChildren();
+  }, []);
+
+  // Online: the room says when a match starts (mount the game with it) and ends
+  const onMatch = useCallback(
+    (match: OnlineMatch | null) => {
+      if (!match) {
+        unmount();
+        setStarted(false);
+        return;
+      }
+      recordPlay(game.slug);
+      setStarted(true);
+      mount(match);
+    },
+    [mount, unmount, recordPlay, game.slug],
+  );
+
+  // Leaving a room any way (button, browser back) unmounts its match: the socket is gone
+  useEffect(() => {
+    if (!online) return;
+    return () => {
+      unmount();
+      setStarted(false);
+    };
+  }, [online, unmount]);
+
+  const leaveRoom = () => {
+    unmount();
+    setStarted(false);
+    void navigate({ to: "/games/$slug", params: { slug: game.slug }, search: {} });
+  };
 
   const start = () => {
     audioBus.unlock(); // this tap is the gesture browsers require before sound
@@ -197,7 +241,7 @@ export function GamePlayer({
           <ToolButton label={muted ? m.player.unmute : m.player.mute} onClick={() => audioBus.setMuted(!muted)}>
             <HugeiconsIcon icon={muted ? VolumeOffIcon : VolumeHighIcon} />
           </ToolButton>
-          <ToolButton label={m.player.restart} disabled={!started} onClick={mount} className="[@media(max-height:500px)]:hidden">
+          <ToolButton label={m.player.restart} disabled={!started || online !== null} onClick={() => mount()} className="[@media(max-height:500px)]:hidden">
             <HugeiconsIcon icon={Refresh01Icon} />
           </ToolButton>
           {/* Phones already get a full-screen view (and iOS has no fullscreen API) */}
@@ -223,7 +267,9 @@ export function GamePlayer({
         />
         {/* Fades off the first frame of the game instead of cutting to it */}
         <AnimatePresence>
-          {!started && <StartScreen game={game} ready={module !== null} failed={failed} onStart={start} />}
+          {online
+            ? module && <OnlineSession game={game} code={online} onMatch={onMatch} onLeave={leaveRoom} />
+            : !started && <StartScreen game={game} ready={module !== null} failed={failed} onStart={start} />}
         </AnimatePresence>
         {needsRotate && <RotateHint />}
       </div>
@@ -362,6 +408,7 @@ function StartScreen({
                 {ready ? m.player.play : m.player.loading}
               </Button>
               {!ready && <Progress value={null} className="w-full max-w-60" aria-label={m.player.loadingLabel} />}
+              {ready && <OnlineEntry game={game} />}
             </>
           )}
         </motion.div>

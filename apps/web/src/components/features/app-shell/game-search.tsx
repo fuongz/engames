@@ -12,6 +12,7 @@ import {
   CommandList,
 } from "#/components/ui/command";
 import { useLocale, useMessages } from "#/hooks/use-messages";
+import { CoopBadge, coopKeywords } from "#/components/shared/games/coop-badge";
 
 /** ⌘K palette: jump to a game, or to the library filtered by category. */
 export function GameSearch({
@@ -49,7 +50,7 @@ export function GameSearch({
             {games.map((g) => (
               <CommandItem
                 key={g.slug}
-                value={`${g.title.vi} ${g.title.en} ${g.tags[locale].join(" ")}`}
+                value={`${g.title.vi} ${g.title.en} ${g.tags[locale].join(" ")} ${coopKeywords(g)}`}
                 className="gap-3 py-2.5"
                 onSelect={() =>
                   go(() =>
@@ -64,7 +65,10 @@ export function GameSearch({
                   className="aspect-square size-11 shrink-0 rounded-lg object-cover object-top outline-1 -outline-offset-1 outline-white/10"
                 />
                 <span className="grid min-w-0 gap-0.5">
-                  <span className="truncate font-medium">{g.title[locale]}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{g.title[locale]}</span>
+                    <CoopBadge game={g} />
+                  </span>
                   <span className="line-clamp-2 text-xs text-muted-foreground">
                     {g.tagline[locale]}
                   </span>

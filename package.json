@@ -14,6 +14,7 @@
   ],
   "scripts": {
     "dev": "bun run --cwd apps/web dev",
+    "dev:realtime": "bun run --cwd apps/realtime dev",
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
     "lint": "biome lint && node scripts/audit-layout.mjs",
@@ -24,6 +25,7 @@
     "test": "bun run --filter '*' test",
     "ui:add": "node scripts/ui-add.mjs",
     "deploy": "bun run --cwd apps/web deploy",
+    "deploy:realtime": "bun run --cwd apps/realtime deploy",
     "secrets": "gitleaks git --redact --no-banner ."
   },
   "//deps": "The root holds ONLY what runs ACROSS the tree. A dependency parked here that one app needs is how versions silently drift: both apps resolve it, only one declares it, and bumping it for one bumps it for both. Everything else lives in apps/*/package.json.",

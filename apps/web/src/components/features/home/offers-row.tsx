@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, createLink } from "@tanstack/react-router";
 import { categories, type GameManifest, games } from "@web-games/games";
 import { motion, useReducedMotion } from "motion/react";
+import { CoopBadge } from "#/components/shared/games/coop-badge";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { FADE, RISE, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
@@ -65,6 +66,7 @@ function WideTile({ game, variants }: { game: GameManifest; variants: Reveal }) 
     <MotionLink variants={variants} to="/games/$slug" params={{ slug: game.slug }} className={cn(TILE, "w-[78%] lg:w-auto")}>
       <img src={game.banner} alt="" className="absolute inset-0 size-full object-cover object-right transition-transform duration-500 ease-out motion-safe:group-hover:scale-105" />
       <div className="absolute inset-0 bg-linear-to-t from-background/85 via-transparent to-transparent" />
+      <CoopBadge game={game} variant="overlay" className="absolute top-3 left-3" />
       <div className="absolute inset-x-4 bottom-4 grid gap-0.5">
         <span className="text-xs font-medium text-primary">{category?.label[locale]}</span>
         <span className="text-xl leading-tight font-bold">{game.title[locale]}</span>
@@ -78,6 +80,7 @@ function PosterTile({ game, variants }: { game: GameManifest; variants: Reveal }
   return (
     <MotionLink variants={variants} to="/games/$slug" params={{ slug: game.slug }} className={cn(TILE, "w-36 lg:w-auto")} aria-label={game.title[locale]}>
       <img src={game.poster[locale]} alt="" className="absolute inset-0 size-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-105" />
+      <CoopBadge game={game} variant="overlay" className="absolute top-2 left-2" />
     </MotionLink>
   );
 }

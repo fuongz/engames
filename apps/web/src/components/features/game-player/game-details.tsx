@@ -1,4 +1,5 @@
 import { categories, type GameManifest } from "@web-games/games";
+import { CoopBadge } from "#/components/shared/games/coop-badge";
 import { Badge } from "#/components/ui/badge";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
@@ -11,6 +12,7 @@ export function GameDetails({ game }: { game: GameManifest }) {
   return (
     <div className="grid gap-4 text-sm">
       <div className="flex flex-wrap gap-1.5">
+        <CoopBadge game={game} variant="long" />
         {category && <Badge>{category.label[locale]}</Badge>}
         {game.tags[locale].map((t) => (
           <Badge key={t} variant="outline">

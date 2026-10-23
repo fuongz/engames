@@ -1,10 +1,12 @@
-import { GameController03Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { GameController03Icon, Search01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { games } from "@web-games/games";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { CategoryChips } from "./category-chips";
+import { coopKeywords } from "#/components/shared/games/coop-badge";
 import { GameCard } from "#/components/shared/games/game-card";
+import { Toggle } from "#/components/ui/toggle";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { useLocale, useMessages } from "#/hooks/use-messages";
@@ -19,7 +21,17 @@ const LEAVE = { ...HIDDEN, transition: { duration: 0.15, ease: EASE_OUT } };
 const CARD = { default: { duration: 0.2, ease: EASE_OUT }, layout: { duration: 0.25, ease: EASE_IN_OUT } };
 
 /** Every game, filterable by category (from the URL) and free text. */
-export function LibraryView({ category, onCategory }: { category: string; onCategory: (c: string) => void }) {
+export function LibraryView({
+  category,
+  coop,
+  onCategory,
+  onCoop,
+}: {
+  category: string;
+  coop: boolean;
+  onCategory: (c: string) => void;
+  onCoop: (on: boolean) => void;
+}) {
   const locale = useLocale();
   const m = useMessages();
   const [query, setQuery] = useState("");
@@ -28,9 +40,10 @@ export function LibraryView({ category, onCategory }: { category: string; onCate
     return games.filter(
       (g) =>
         (category === "all" || g.category === category) &&
-        (!q || [g.title.vi, g.title.en, g.tagline[locale], ...g.tags[locale]].some((s) => s.toLowerCase().includes(q))),
+        (!coop || g.online !== undefined) &&
+        (!q || [g.title.vi, g.title.en, g.tagline[locale], ...g.tags[locale], coopKeywords(g)].some((s) => s.toLowerCase().includes(q))),
     );
-  }, [category, query, locale]);
+  }, [category, coop, query, locale]);
 
   return (
     <main className="grid gap-5 md:gap-6">
@@ -55,7 +68,25 @@ export function LibraryView({ category, onCategory }: { category: string; onCate
         </div>
       </div>
 
-      <CategoryChips value={category} onChange={onCategory} allLabel={m.library.all} />
+      <CategoryChips
+        value={category}
+        onChange={onCategory}
+        allLabel={m.library.all}
+        leading={
+          <>
+            {/* Independent of the category: "co-op puzzle games" is a valid ask */}
+            <Toggle
+              pressed={coop}
+              onPressedChange={onCoop}
+              className="h-10 shrink-0 gap-2 rounded-full border border-primary/40 bg-card px-4 text-sm font-medium text-primary hover:bg-primary/10 hover:text-primary aria-pressed:border-transparent aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+            >
+              <HugeiconsIcon icon={UserGroupIcon} className="size-4.5" />
+              {m.library.coopFilter}
+            </Toggle>
+            <span aria-hidden className="h-6 w-px shrink-0 bg-border" />
+          </>
+        }
+      />
 
       {list.length === 0 ? (
         <Empty className="rounded-2xl border border-dashed">

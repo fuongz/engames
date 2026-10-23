@@ -11,6 +11,7 @@ export {
 } from "./game";
 export { type Locale, type Localized, currentLocale } from "./i18n";
 export * from "./math";
+export { InputLog, approach } from "./net";
 export { type PointerInfo, Stage, type StageHandlers } from "./stage";
 export type { GameStorage } from "./storage";
 export { fitFontSize } from "./text";
@@ -19,5 +20,6 @@ export {
   type GameInstance,
   type GameManifest,
   type GameModule,
+  type OnlineMatch,
   SUMMARY_KEY,
 } from "./types";

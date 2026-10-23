@@ -14,3 +14,7 @@ BETTER_AUTH_SECRET=
 #   https://engames.trinhvaphuong.com/api/auth/callback/google
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# Online rooms: signs join tickets and checks result posts. The SAME value as
+# TICKET_SECRET in apps/realtime/.dev.vars (any long random string).
+TICKET_SECRET=

@@ -14,6 +14,7 @@ import {
   useTransform,
 } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CoopBadge } from "#/components/shared/games/coop-badge";
 import { Button } from "#/components/ui/button";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
@@ -229,6 +230,7 @@ function Slide({ game, active, at, track, parallax }: { game: GameManifest; acti
 
       <motion.div className="absolute inset-0" style={{ transform: textShift }}>
         <div className="absolute top-4 left-4 flex flex-wrap gap-2 md:top-5 md:left-5">
+          <CoopBadge game={game} variant="overlay" className="px-3 py-1 text-xs" />
           {chips.map((c) => (
             <span key={c} className="rounded-full bg-background/60 px-3 py-1 text-xs font-medium backdrop-blur-md">
               {c}
@@ -266,6 +268,11 @@ function InfoCard({ game }: { game: GameManifest }) {
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.div key={game.slug} variants={INFO_SWAP} initial="hidden" animate="shown" exit="exit" className="flex flex-1 flex-col gap-3">
           <motion.h3 variants={piece} className="text-2xl leading-tight font-bold tracking-tight">{game.title[locale]}</motion.h3>
+          {game.online && (
+            <motion.div variants={piece}>
+              <CoopBadge game={game} variant="long" className="bg-background/30 text-foreground" />
+            </motion.div>
+          )}
           <motion.p variants={piece} className="line-clamp-3 text-sm leading-relaxed text-foreground/90 lg:line-clamp-9">{game.description[locale]}</motion.p>
           <motion.div variants={piece} className="mt-auto grid gap-3 pt-2">
             <span className="text-sm font-semibold">{m.home.free}</span>

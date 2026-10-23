@@ -1,6 +1,8 @@
 import "@fontsource/baloo-2/800.css";
 import {
   type GameHooks,
+  InputLog,
+  approach,
   type PointerInfo,
   type Runtime,
   type StageHandlers,
@@ -55,6 +57,9 @@ import {
   maxDoorHp,
   player,
   roomAt,
+  roomOf,
+  type SeatInput,
+  scoreOf,
   roomRect,
   tileAt,
   tileCenter,
@@ -62,6 +67,7 @@ import {
   turretRange,
   turretUpgradeCost,
   update,
+  walkHuman,
 } from "./logic";
 import { STRINGS } from "./strings";
 
@@ -148,8 +154,18 @@ export function setup(rt: Runtime): GameHooks {
   const coarse =
     typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 
-  let state: GameState = createGame();
-  let noticeOpen = true;
+  // Online: the room runs the simulation; this client sends inputs, predicts its
+  // own walk and draws the room's snapshots (docs/standards/online-multiplayer.md §4)
+  const online = rt.game.online ?? null;
+  /** Arrived mid-match: watch seat 0, send nothing. */
+  const spectator = online !== null && online.seat < 0;
+  let state: GameState = online
+    ? createGame(online.seed, online.seats.map((s) => ({ name: s.name })))
+    : createGame();
+  /** This client's seat: always 0 in solo; the room assigns it online. */
+  const me = online ? Math.max(0, online.seat) : 0;
+  // The rules sheet would hide a countdown that is already running online
+  let noticeOpen = !online;
   let paused = false;
   let panel: Panel | null = null;
   let t = 0;
@@ -166,6 +182,74 @@ export function setup(rt: Runtime): GameHooks {
   let lastCoinSound = 0;
   let pending: Action[] = [];
   let wasEnraged = false;
+  const sent = new InputLog<SeatInput>();
+  let inputClock = 0;
+  let incoming: GameEvent[] = [];
+  /** Where the room last put each other occupant (o<id>) and the hunter (h); drawn positions ease toward these. */
+  const targets = new Map<string, Pt>();
+  let team: { seat: number; name: string; score: number }[] | null = null;
+  const stopListening = online?.onMessage((m) => {
+    if (m.t === "snap" && m.state) applySnapshot(m.state as GameState, m.acks[me]);
+    else if (m.t === "ev") incoming.push(...(m.events as GameEvent[]));
+    else if (m.t === "end") team = m.results;
+  });
+
+  /** A far jump (claiming a bed, a fresh match) is shown at once, not eased. */
+  const jumped = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y) > 60;
+
+  function applySnapshot(next: GameState, ack: number | undefined) {
+    const prev = state;
+    for (const o of next.occupants) {
+      if (o.id === me && !spectator) continue;
+      targets.set(`o${o.id}`, { x: o.x, y: o.y });
+      const old = prev.occupants[o.id];
+      if (old && old.asleep === o.asleep && !jumped(old, o)) Object.assign(o, { x: old.x, y: old.y });
+    }
+    if (next.hunter) {
+      targets.set("h", { x: next.hunter.x, y: next.hunter.y });
+      if (prev.hunter && !jumped(prev.hunter, next.hunter)) Object.assign(next.hunter, { x: prev.hunter.x, y: prev.hunter.y });
+    }
+    // Own avatar: the room's position plus the steps it has not applied yet
+    if (online && !spectator) {
+      if (ack !== undefined) sent.ack(ack);
+      const self = next.occupants[me];
+      for (const { input } of sent.unacked) walkHuman(next, self, input.move ?? { x: 0, y: 0 }, 1 / online.tickRate);
+    }
+    next.events = [];
+    state = next;
+  }
+
+  /** One frame online: inputs on the room's clock, events from the room, others eased to the latest snapshot. */
+  function advanceOnline(dt: number, move: Pt) {
+    if (!online) return;
+    const stepDt = 1 / online.tickRate;
+    inputClock = Math.min(inputClock + dt, 0.25);
+    while (inputClock >= stepDt) {
+      inputClock -= stepDt;
+      const moving = Math.hypot(move.x, move.y) >= 0.05;
+      if (spectator || !player(state, me).alive || (!moving && pending.length === 0)) continue;
+      const input: SeatInput = { actions: pending, move: moving ? move : { x: 0, y: 0 } };
+      const seq = sent.push(input);
+      online.send({ seq, move: input.move ?? { x: 0, y: 0 }, actions: pending });
+      walkHuman(state, player(state, me), input.move ?? { x: 0, y: 0 }, stepDt);
+      pending = [];
+    }
+    pending = [];
+    for (const e of incoming) handle(e);
+    incoming = [];
+    for (const o of state.occupants) {
+      const target = targets.get(`o${o.id}`);
+      if (!target || (o.id === me && !spectator)) continue;
+      o.x = approach(o.x, target.x, dt);
+      o.y = approach(o.y, target.y, dt);
+    }
+    const h = state.hunter;
+    const ht = targets.get("h");
+    if (h && ht) {
+      h.x = approach(h.x, ht.x, dt);
+      h.y = approach(h.y, ht.y, dt);
+    }
+  }
   let noticeBottom = 0;
 
   // Camera: `cam` is the world point at stage (0,0); `look` pans away from the focus while in bed
@@ -206,8 +290,8 @@ export function setup(rt: Runtime): GameHooks {
       const r = roomRect(room.index);
       return { x: r.x + r.w / 2 + look.x, y: r.y + r.h / 2 + look.y };
     }
-    const me = player(state);
-    return { x: me.x, y: me.y };
+    const self = player(state, me);
+    return { x: self.x, y: self.y };
   }
 
   /** The part of the screen the dorm may use: below the HUD band, above the buttons (or an open sheet). */
@@ -292,6 +376,14 @@ export function setup(rt: Runtime): GameHooks {
       secondary: { x: W / 2 - 120, y: cy + 128, w: 240, h: 48 },
     };
   };
+  /** Online the result card grows to list the team, and its button moves below the list. */
+  const teamRows = () => (online ? Math.min(6, (team ?? state.occupants.filter((o) => !o.bot)).length) : 0);
+  const resultCardH = () => (online ? 324 + teamRows() * 16 : 330);
+  const resultButton = (): Rect => {
+    if (!online) return overlayButtons().primary;
+    const cardTop = top() + view().h / 2 - resultCardH() / 2;
+    return { x: W / 2 - 120, y: cardTop + 240 + teamRows() * 16, w: 240, h: 56 };
+  };
   const noticeOk = (): Rect => ({
     x: W / 2 - 110,
     y: noticeBottom + 20,
@@ -303,11 +395,10 @@ export function setup(rt: Runtime): GameHooks {
     y: Math.min(bottom(), H + 60) - 130,
   });
 
-  const myRoom = () =>
-    state.playerRoom === null ? null : state.rooms[state.playerRoom];
+  const myRoom = () => roomOf(state, me);
   const canSleepHere = () => {
     if (state.phase !== "setup") return null;
-    const near = bedNear(state);
+    const near = bedNear(state, me);
     return near === null
       ? null
       : { room: near, free: state.rooms[near].owner === null };
@@ -330,7 +421,10 @@ export function setup(rt: Runtime): GameHooks {
       return true;
     }
     if (state.phase === "over") {
-      if (inRect(p, overlayButtons().primary)) restart();
+      if (inRect(p, resultButton())) {
+        if (online) online.backToLobby();
+        else restart();
+      }
       return true;
     }
     if (paused) {
@@ -339,7 +433,8 @@ export function setup(rt: Runtime): GameHooks {
       return true;
     }
     const pb = pauseBtn();
-    if ((p.x - pb.x) ** 2 + (p.y - pb.y) ** 2 <= (pb.r + 10) ** 2) {
+    // Online there is no pause: the room keeps running
+    if (!online && (p.x - pb.x) ** 2 + (p.y - pb.y) ** 2 <= (pb.r + 10) ** 2) {
       paused = true;
       panel = null;
       return true;
@@ -421,7 +516,7 @@ export function setup(rt: Runtime): GameHooks {
     down(p: PointerInfo) {
       if (tapUi(p)) return;
       if (gesture) return;
-      const awake = !player(state).asleep && state.phase === "setup";
+      const awake = !player(state, me).asleep && state.phase === "setup";
       gesture = {
         id: p.id,
         ox: p.x,
@@ -464,11 +559,14 @@ export function setup(rt: Runtime): GameHooks {
     if (e.repeat) return;
     if (e.code === "Escape") {
       if (panel) panel = null;
-      else if (!noticeOpen && state.phase !== "over") paused = !paused;
+      else if (!online && !noticeOpen && state.phase !== "over") paused = !paused;
     }
     if (e.code === "Space" || e.code === "KeyE" || e.code === "Enter") {
       if (noticeOpen) noticeOpen = false;
-      else if (state.phase === "over" && e.code === "Enter") restart();
+      else if (state.phase === "over" && e.code === "Enter") {
+        if (online) online.backToLobby();
+        else restart();
+      }
       else pending.push({ type: "sleep" });
     }
     if (e.code === "KeyR") pending.push({ type: "repair" });
@@ -515,7 +613,7 @@ export function setup(rt: Runtime): GameHooks {
   }
 
   function handle(e: GameEvent) {
-    const mine = (room: number) => room === state.playerRoom;
+    const mine = (room: number) => room === myRoom()?.index;
     switch (e.type) {
       case "tick":
         if (e.n <= 5 && e.n > 0)
@@ -524,7 +622,7 @@ export function setup(rt: Runtime): GameHooks {
           audio.tone({ freq: 440, dur: 0.04, type: "square", vol: 0.025 });
         break;
       case "asleep":
-        if (e.player) {
+        if (e.occupant === me) {
           const c = tileCenter(e.room, bedTile(e.room));
           float("Zzz", c.x, c.y - 24, "#cfe0ff");
           gesture = null;
@@ -539,8 +637,9 @@ export function setup(rt: Runtime): GameHooks {
         }
         break;
       case "roomTaken": {
-        const me = player(state);
-        float(tr().roomTaken, me.x, me.y - 30, "#ff8a8a");
+        if (e.occupant !== me) break;
+        const self = player(state, me);
+        float(tr().roomTaken, self.x, self.y - 30, "#ff8a8a");
         audio.tone({ freq: 220, dur: 0.18, type: "square", vol: 0.07 });
         break;
       }
@@ -550,7 +649,7 @@ export function setup(rt: Runtime): GameHooks {
         audio.tone({ freq: 90, to: 50, dur: 1.4, type: "sawtooth", vol: 0.12 });
         break;
       case "caught":
-        shake = 0.8;
+        if (e.occupant === me) shake = 0.8;
         break;
       case "income":
         if (mine(e.room)) {
@@ -633,7 +732,7 @@ export function setup(rt: Runtime): GameHooks {
       case "doorBroken": {
         const d = doorPos(e.room);
         burst(d.x, d.y, 26, "#c8b8a8");
-        shake = e.player ? 1 : 0.35;
+        shake = e.occupant === me ? 1 : 0.35;
         audio.noise(0.4, 0.16);
         audio.tone({
           freq: 160,
@@ -669,8 +768,9 @@ export function setup(rt: Runtime): GameHooks {
         audio.noise(0.8, 0.18);
         break;
       case "end":
-        reportScore?.({
-          score: state.score,
+        // Online, the room saves scores itself: a client never reports one
+        if (!online) reportScore?.({
+          score: scoreOf(state, me),
           detail: tr().detail(
             e.won,
             fmtTime(state.nightTime),
@@ -702,8 +802,9 @@ export function setup(rt: Runtime): GameHooks {
   function saveResult() {
     if (saved) return;
     saved = true;
-    if (state.score > best) {
-      best = state.score;
+    const score = scoreOf(state, me);
+    if (score > best) {
+      best = score;
       storage.set("best", best);
     }
     storage.set(SUMMARY_KEY, {
@@ -716,14 +817,17 @@ export function setup(rt: Runtime): GameHooks {
 
   function step(dt: number) {
     t += dt;
-    if (!noticeOpen && !paused) {
+    if (online || (!noticeOpen && !paused)) {
       const move = moveVector();
-      const asleep = player(state).asleep;
-      update(state, dt, pending, asleep ? { x: 0, y: 0 } : move);
-      pending = [];
-      for (const e of state.events) handle(e);
-      state.events.length = 0;
-      if (state.phase === "over") saveResult();
+      const asleep = player(state, me).asleep;
+      if (online) advanceOnline(dt, asleep ? { x: 0, y: 0 } : move);
+      else {
+        update(state, dt, { [me]: { actions: pending, move: asleep ? { x: 0, y: 0 } : move } });
+        pending = [];
+        for (const e of state.events) handle(e);
+        state.events.length = 0;
+        if (state.phase === "over") saveResult();
+      }
 
       // In bed, keys pan the view; it drifts home after a moment of no input
       if (asleep) {
@@ -780,7 +884,7 @@ export function setup(rt: Runtime): GameHooks {
     }
     // Ease the camera toward its target (snappy while running, softer in bed)
     const target = cameraTarget();
-    const k = Math.min(1, dt * (player(state).asleep ? 6 : 10));
+    const k = Math.min(1, dt * (player(state, me).asleep ? 6 : 10));
     cam.x += (target.x - cam.x) * k;
     cam.y += (target.y - cam.y) * k;
   }
@@ -813,6 +917,7 @@ export function setup(rt: Runtime): GameHooks {
     if (panel) drawPanel();
     if (noticeOpen) drawNotice();
     if (paused) drawPause();
+    if (online) drawSpectating();
     if (state.phase === "over") drawResult();
     stage.end();
   }
@@ -821,7 +926,7 @@ export function setup(rt: Runtime): GameHooks {
     const s = state;
     for (const room of s.rooms) {
       const r = roomRect(room.index);
-      const mine = room.index === s.playerRoom;
+      const mine = room.index === roomOf(s, me)?.index;
       room.tiles.forEach((b, tile) => {
         if (!b) return;
         const c = tileCenter(room.index, tile);
@@ -878,16 +983,24 @@ export function setup(rt: Runtime): GameHooks {
 
   function nameOf(id: number) {
     const o = state.occupants[id];
-    return o.bot ? tr().bots[o.bot] : tr().you;
+    if (o.bot) return tr().bots[o.bot];
+    return o.id === me ? tr().you : o.name;
   }
+
+  const lastSeen = new Map<number, Pt>();
 
   function drawPeople() {
     const move = moveVector();
     for (const o of state.occupants) {
       if (!o.alive || o.asleep) continue;
+      // Bots walk paths, you walk the stick; teammates walk when their position moves
+      const last = lastSeen.get(o.id);
+      lastSeen.set(o.id, { x: o.x, y: o.y });
       const walking = o.bot
         ? o.path.length > 0
-        : Math.hypot(move.x, move.y) > 0.1;
+        : o.id === me
+          ? Math.hypot(move.x, move.y) > 0.1
+          : last !== undefined && Math.hypot(o.x - last.x, o.y - last.y) > 0.2;
       drawPerson(ctx, o.x, o.y, PALETTES[o.id], t + o.id, walking);
       text(
         ctx,
@@ -895,11 +1008,11 @@ export function setup(rt: Runtime): GameHooks {
         o.x,
         o.y - 28,
         12,
-        o.bot ? "#8aff9a" : "#ffffff",
+        o.bot ? "#8aff9a" : o.id === me ? "#ffffff" : "#9ad8ff",
         "center",
         700,
       );
-      if (!o.bot) {
+      if (o.id === me) {
         const bob = Math.sin(t * 6) * 2;
         ctx.fillStyle = "#ffd36b";
         ctx.beginPath();
@@ -1043,7 +1156,7 @@ export function setup(rt: Runtime): GameHooks {
   /** ad: a joystick on the lower screen. Floating: it appears where the finger lands. */
   function drawStick() {
     const awake =
-      state.phase === "setup" && !player(state).asleep && !noticeOpen;
+      state.phase === "setup" && !player(state, me).asleep && !noticeOpen;
     if (!awake) return;
     const g = gesture?.mode === "stick" ? gesture : null;
     if (!g && !coarse) return;
@@ -1095,14 +1208,17 @@ export function setup(rt: Runtime): GameHooks {
       "#8ae0ff",
       "left",
     );
-    const pb = pauseBtn();
-    ctx.fillStyle = "rgba(10,12,18,0.7)";
-    ctx.beginPath();
-    ctx.arc(pb.x, pb.y, pb.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(pb.x - 7, pb.y - 8, 5, 16);
-    ctx.fillRect(pb.x + 2, pb.y - 8, 5, 16);
+    // Online there is no pause button: the room keeps running
+    if (!online) {
+      const pb = pauseBtn();
+      ctx.fillStyle = "rgba(10,12,18,0.7)";
+      ctx.beginPath();
+      ctx.arc(pb.x, pb.y, pb.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(pb.x - 7, pb.y - 8, 5, 16);
+      ctx.fillRect(pb.x + 2, pb.y - 8, 5, 16);
+    }
 
     // Sleepers row (ad: avatars, "Bạn" under yours)
     const ay = y0 + 50;
@@ -1129,7 +1245,7 @@ export function setup(rt: Runtime): GameHooks {
         ctx.lineTo(x - 10, ay + 10);
         ctx.stroke();
       }
-      if (!o.bot) text(ctx, tr().you, x, ay + 14, 12, "#8aff9a", "center", 700);
+      if (o.id === me) text(ctx, tr().you, x, ay + 14, 12, "#8aff9a", "center", 700);
     }
     // Your door, always in view (you may be looking elsewhere when it is hit)
     if (room && !room.dark) {
@@ -1156,7 +1272,7 @@ export function setup(rt: Runtime): GameHooks {
         56,
         "#ff3a3a",
       );
-      if (!player(s).asleep) {
+      if (!player(s, me).asleep) {
         text(ctx, tr().moveHint, W / 2, ay + 46, 16, "#ffffff", "center", 700);
         if (!coarse)
           text(
@@ -1204,7 +1320,7 @@ export function setup(rt: Runtime): GameHooks {
     }
 
     // Repair button (ad rule 4)
-    if (room && !room.dark && player(s).asleep) {
+    if (room && !room.dark && player(s, me).asleep) {
       const r = repairBtn();
       const cd = room.repairCooldown;
       const full = room.doorHp >= maxDoorHp(room);
@@ -1503,7 +1619,7 @@ export function setup(rt: Runtime): GameHooks {
   function drawResult() {
     const r = state.result;
     if (!r) return;
-    const c = overlayCard(330);
+    const c = overlayCard(resultCardH());
     const l = tr();
     text(
       ctx,
@@ -1516,7 +1632,7 @@ export function setup(rt: Runtime): GameHooks {
     if (!r.won && state.hunter === null)
       text(ctx, l.caught, W / 2, c.y + 84, 16, "#ffb0b0", "center", 700);
     else if (r.won) drawHunter(ctx, W / 2, c.y + 100, t, 0, false, 0.7);
-    text(ctx, l.score(state.score), W / 2, c.y + 150, 34, "#ffd36b");
+    text(ctx, l.score(scoreOf(state, me)), W / 2, c.y + 150, 34, "#ffd36b");
     text(
       ctx,
       l.resultLine(fmtTime(r.nightTime), r.level),
@@ -1527,17 +1643,38 @@ export function setup(rt: Runtime): GameHooks {
       "center",
       700,
     );
-    text(
-      ctx,
-      state.score >= best ? l.newBest : l.best(best),
-      W / 2,
-      c.y + 212,
-      15,
-      "#a8b8e0",
-      "center",
-      700,
-    );
-    button(overlayButtons().primary, l.playAgain, true, "#d8762a");
+    if (online) drawTeam(c.y + 214);
+    else
+      text(
+        ctx,
+        scoreOf(state, me) >= best ? l.newBest : l.best(best),
+        W / 2,
+        c.y + 212,
+        15,
+        "#a8b8e0",
+        "center",
+        700,
+      );
+    button(resultButton(), online ? l.backToLobby : l.playAgain, true, "#d8762a");
+  }
+
+  /** Online result card: every human's score, yours highlighted. */
+  function drawTeam(y: number) {
+    const rows = team ?? state.occupants.filter((o) => !o.bot).map((o) => ({ seat: o.id, name: o.name, score: scoreOf(state, o.id) }));
+    const shown = rows.slice(0, 6);
+    text(ctx, tr().team, W / 2, y, 13, "#a8b8e0", "center", 700);
+    shown.forEach((r, i) => {
+      const ry = y + 18 + i * 16;
+      const color = r.seat === me ? "#ffd36b" : "#dce6ff";
+      text(ctx, r.name || tr().you, W / 2 - 90, ry, 13, color, "left", 700);
+      text(ctx, String(r.score), W / 2 + 90, ry, 13, color, "right", 700);
+    });
+  }
+
+  /** Online: no pause button; once your door falls, a line says you are watching. */
+  function drawSpectating() {
+    if (state.phase === "over" || player(state, me).alive) return;
+    text(ctx, tr().spectating, W / 2, top() + 150, 15, "#ffb0b0", "center", 700);
   }
 
   snapCamera();
@@ -1547,8 +1684,11 @@ export function setup(rt: Runtime): GameHooks {
     pointer,
     keydown: onKeyDown,
     suspend() {
-      if (state.phase !== "over" && !noticeOpen) paused = true;
+      if (!online && state.phase !== "over" && !noticeOpen) paused = true;
       gesture = null;
+    },
+    dispose() {
+      stopListening?.();
     },
   };
 }
