@@ -6,25 +6,29 @@ import { CategoryChips } from "./category-chips";
 import { GameCard } from "#/components/shared/games/game-card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
+import { useLocale, useMessages } from "#/hooks/use-messages";
+import { plural } from "#/lib/i18n";
 
 /** Every game, filterable by category (from the URL) and free text. */
 export function LibraryView({ category, onCategory }: { category: string; onCategory: (c: string) => void }) {
+  const locale = useLocale();
+  const m = useMessages();
   const [query, setQuery] = useState("");
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     return games.filter(
       (g) =>
         (category === "all" || g.category === category) &&
-        (!q || [g.title, g.tagline, ...g.tags].some((s) => s.toLowerCase().includes(q))),
+        (!q || [g.title.vi, g.title.en, g.tagline[locale], ...g.tags[locale]].some((s) => s.toLowerCase().includes(q))),
     );
-  }, [category, query]);
+  }, [category, query, locale]);
 
   return (
     <main className="grid gap-5 md:gap-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="grid gap-1">
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Thư viện</h1>
-          <p className="text-sm text-muted-foreground">{games.length} game, chơi ngay không cần cài.</p>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{m.library.title}</h1>
+          <p className="text-sm text-muted-foreground">{plural(locale, games.length, m.library.count)}</p>
         </div>
         <div className="relative md:w-80">
           <HugeiconsIcon
@@ -35,14 +39,14 @@ export function LibraryView({ category, onCategory }: { category: string; onCate
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm trong thư viện..."
-            aria-label="Tìm trong thư viện"
+            placeholder={m.library.searchPlaceholder}
+            aria-label={m.library.searchLabel}
             className="h-11 rounded-xl bg-card pl-10"
           />
         </div>
       </div>
 
-      <CategoryChips value={category} onChange={onCategory} allLabel="Tất cả" />
+      <CategoryChips value={category} onChange={onCategory} allLabel={m.library.all} />
 
       {list.length === 0 ? (
         <Empty className="rounded-2xl border border-dashed">
@@ -50,8 +54,8 @@ export function LibraryView({ category, onCategory }: { category: string; onCate
             <EmptyMedia variant="icon">
               <HugeiconsIcon icon={GameController03Icon} />
             </EmptyMedia>
-            <EmptyTitle>Chưa có game nào</EmptyTitle>
-            <EmptyDescription>Thử thể loại khác hoặc từ khóa khác nhé.</EmptyDescription>
+            <EmptyTitle>{m.library.emptyTitle}</EmptyTitle>
+            <EmptyDescription>{m.library.emptyDescription}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (

@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { LOCALES } from "@web-games/games/i18n";
+import { z } from "zod";
 import { getDb, schema } from "#/server/db";
 
 // SERVER-ONLY (in `serverOnly`). Sign-in exists for one reason: to put a real
@@ -17,6 +19,12 @@ export function getAuth() {
       provider: "sqlite",
       schema: { user: schema.user, session: schema.session, account: schema.account, verification: schema.verification },
     }),
+    user: {
+      // The UI language follows the account across devices (stores/locale syncs it)
+      additionalFields: {
+        locale: { type: "string", required: false, validator: { input: z.enum(LOCALES) } },
+      },
+    },
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,

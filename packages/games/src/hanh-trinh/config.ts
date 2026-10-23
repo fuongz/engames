@@ -1,3 +1,5 @@
+import type { Localized } from "../core/i18n";
+
 // Numbers marked "ad" were read off the reference recording (RE_NOTES.md); the
 // rest is our tuning, checked by the balance simulation in logic.test.ts.
 
@@ -34,15 +36,24 @@ export interface EnemySpec {
   damage: number;
   /** Arrow damage while standing behind the front (archers only). */
   arrow?: number;
-  label: string;
+  label: Localized<string>;
 }
 
 export const ENEMIES: Record<EnemyKind, EnemySpec> = {
-  grunt: { hp: 14, damage: 5, label: "Lính gậy" }, // ad: 14 HP, hits for 5
-  axe: { hp: 30, damage: 8, label: "Lính rìu" }, // ad: 30 HP, hits 7–9
-  archer: { hp: 10, damage: 3, arrow: 4, label: "Cung thủ" }, // ad: 10 HP, shoots over the line
-  helmet: { hp: 55, damage: 12, label: "Lính mũ sắt" }, // ad: 55 HP
-  chief: { hp: 150, damage: 12, label: "Tù trưởng" }, // ours: every 20th foe
+  grunt: { hp: 14, damage: 5, label: { vi: "Lính gậy", en: "Club Grunt" } }, // ad: 14 HP, hits for 5
+  axe: { hp: 30, damage: 8, label: { vi: "Lính rìu", en: "Axeman" } }, // ad: 30 HP, hits 7–9
+  archer: {
+    hp: 10,
+    damage: 3,
+    arrow: 4,
+    label: { vi: "Cung thủ", en: "Archer" },
+  }, // ad: 10 HP, shoots over the line
+  helmet: {
+    hp: 55,
+    damage: 12,
+    label: { vi: "Lính mũ sắt", en: "Helmet Guard" },
+  }, // ad: 55 HP
+  chief: { hp: 150, damage: 12, label: { vi: "Tù trưởng", en: "Chief" } }, // ours: every 20th foe
 };
 
 export const CHIEF_EVERY = 20;
@@ -58,7 +69,7 @@ export const damageScale = (n: number) => 1 + n * 0.03;
 export const killHeal = (maxHp: number) => Math.round(3 + maxHp * 0.02);
 
 export interface WeaponTier {
-  name: string;
+  name: Localized<string>;
   damage: number;
   /** Price to buy THIS tier (the button shows the next tier's price). */
   cost: number;
@@ -66,18 +77,18 @@ export interface WeaponTier {
 
 /** ad: stick, then an axe for 200. The rest continue the ladder. */
 export const WEAPONS: WeaponTier[] = [
-  { name: "Gậy gỗ", damage: 10, cost: 0 },
-  { name: "Rìu", damage: 18, cost: 200 },
-  { name: "Kiếm sắt", damage: 30, cost: 650 },
-  { name: "Búa chiến", damage: 48, cost: 1600 },
-  { name: "Kiếm lửa", damage: 75, cost: 3800 },
-  { name: "Thần kiếm", damage: 115, cost: 8500 },
-  { name: "Long đao", damage: 175, cost: 19000 },
-  { name: "Thiên kiếm", damage: 265, cost: 42000 },
+  { name: { vi: "Gậy gỗ", en: "Wooden Club" }, damage: 10, cost: 0 },
+  { name: { vi: "Rìu", en: "Axe" }, damage: 18, cost: 200 },
+  { name: { vi: "Kiếm sắt", en: "Iron Sword" }, damage: 30, cost: 650 },
+  { name: { vi: "Búa chiến", en: "War Hammer" }, damage: 48, cost: 1600 },
+  { name: { vi: "Kiếm lửa", en: "Flame Sword" }, damage: 75, cost: 3800 },
+  { name: { vi: "Thần kiếm", en: "Divine Sword" }, damage: 115, cost: 8500 },
+  { name: { vi: "Long đao", en: "Dragon Glaive" }, damage: 175, cost: 19000 },
+  { name: { vi: "Thiên kiếm", en: "Heaven Sword" }, damage: 265, cost: 42000 },
 ];
 
 export interface ShieldTier {
-  name: string;
+  name: Localized<string>;
   /** Extra max HP (also healed on purchase). */
   hp: number;
   block: number;
@@ -86,11 +97,41 @@ export interface ShieldTier {
 
 /** ad: a shield for 600. Each tier adds max HP (healed on buy) and block chance. */
 export const SHIELDS: ShieldTier[] = [
-  { name: "Không khiên", hp: 0, block: 0, cost: 0 },
-  { name: "Khiên gỗ", hp: 60, block: 0.1, cost: 600 },
-  { name: "Khiên sắt", hp: 130, block: 0.15, cost: 1500 },
-  { name: "Khiên vàng", hp: 220, block: 0.2, cost: 3600 },
-  { name: "Khiên rồng", hp: 340, block: 0.25, cost: 8000 },
-  { name: "Khiên thần", hp: 500, block: 0.3, cost: 18000 },
-  { name: "Thiên khiên", hp: 720, block: 0.35, cost: 40000 },
+  { name: { vi: "Không khiên", en: "No Shield" }, hp: 0, block: 0, cost: 0 },
+  {
+    name: { vi: "Khiên gỗ", en: "Wood Shield" },
+    hp: 60,
+    block: 0.1,
+    cost: 600,
+  },
+  {
+    name: { vi: "Khiên sắt", en: "Iron Shield" },
+    hp: 130,
+    block: 0.15,
+    cost: 1500,
+  },
+  {
+    name: { vi: "Khiên vàng", en: "Gold Shield" },
+    hp: 220,
+    block: 0.2,
+    cost: 3600,
+  },
+  {
+    name: { vi: "Khiên rồng", en: "Dragon Shield" },
+    hp: 340,
+    block: 0.25,
+    cost: 8000,
+  },
+  {
+    name: { vi: "Khiên thần", en: "Divine Shield" },
+    hp: 500,
+    block: 0.3,
+    cost: 18000,
+  },
+  {
+    name: { vi: "Thiên khiên", en: "Heaven Shield" },
+    hp: 720,
+    block: 0.35,
+    cost: 40000,
+  },
 ];

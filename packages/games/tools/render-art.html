@@ -4,7 +4,9 @@
     <script type="module">
       import "@fontsource/baloo-2/800.css";
 
-      // Every game may ship src/<slug>/cover.ts exporting renderPoster/renderBanner.
+      // Every game may ship src/<slug>/cover.ts exporting renderPoster(canvas, locale)
+      // and renderBanner(canvas). Posters carry the title, so there is one per
+      // language: poster.webp (vi) and poster-en.webp.
       const covers = import.meta.glob("../src/*/cover.ts");
       await document.fonts.load('800 40px "Baloo 2"');
       const out = {};
@@ -12,10 +14,15 @@
         const slug = path.split("/").at(-2);
         const mod = await load();
         out[slug] = {};
-        for (const [name, fn] of [["poster", mod.renderPoster], ["banner", mod.renderBanner]]) {
+        const jobs = [
+          ["poster", mod.renderPoster, "vi"],
+          ["poster-en", mod.renderPoster, "en"],
+          ["banner", mod.renderBanner],
+        ];
+        for (const [name, fn, locale] of jobs) {
           if (!fn) continue;
           const canvas = document.createElement("canvas");
-          fn(canvas);
+          fn(canvas, locale);
           out[slug][name] = canvas.toDataURL("image/webp", 0.86);
         }
       }

@@ -1,6 +1,11 @@
 import "@fontsource/baloo-2/800.css";
+import { currentLocale } from "../core/i18n";
 import { Loop, type PointerInfo, Stage } from "../core/stage";
-import { type GameContext, type GameInstance, SUMMARY_KEY } from "../core/types";
+import {
+  type GameContext,
+  type GameInstance,
+  SUMMARY_KEY,
+} from "../core/types";
 import {
   blit,
   drawBeam,
@@ -17,9 +22,28 @@ import {
   skillGlyph,
   text,
 } from "./art";
-import { BOSS_WARNING, CUTIN_TIME, ENEMIES, ENERGY_FULL, H, MAX_HEARTS, PICKUP_TEXT, SHARD_GOAL, W } from "./config";
+import {
+  type PickupKind,
+  BOSS_WARNING,
+  CUTIN_TIME,
+  ENEMIES,
+  ENERGY_FULL,
+  H,
+  MAX_HEARTS,
+  SHARD_GOAL,
+  W,
+} from "./config";
 import { joystickDirection } from "./joystick";
-import { type GameEvent, type GameState, type Input, canUseSkill, createGame, timeLeft, update } from "./logic";
+import {
+  type GameEvent,
+  type GameState,
+  type Input,
+  canUseSkill,
+  createGame,
+  timeLeft,
+  update,
+} from "./logic";
+import { STRINGS } from "./strings";
 
 interface Particle {
   x: number;
@@ -47,7 +71,10 @@ interface Button {
 
 const JOY_RADIUS = 60;
 
-export function startGame(root: HTMLElement, { storage, audio, reportScore }: GameContext): GameInstance {
+export function startGame(root: HTMLElement, game: GameContext): GameInstance {
+  const { storage, audio, reportScore } = game;
+  // Read per frame: the player can switch language while the game runs.
+  const tr = () => STRINGS[currentLocale(game)];
   // Canvas text silently falls back until the face is loaded; ask for it up front.
   void document.fonts?.load('800 20px "Baloo 2"');
   const stage = new Stage(root, W, H, { bleed: true });
@@ -60,8 +87,8 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
   let particles: Particle[] = [];
   let booms: Boom[] = [];
   let shardFly: { x: number; y: number; t: number }[] = [];
-  let popup: { text: string; t: number } | null = null;
-  let banner: { text: string; t: number } | null = null;
+  let popup: { kind: PickupKind; t: number } | null = null;
+  let banner: { wave: number; t: number } | null = null;
   let warn = 0;
   let shake = 0;
   let hurtFlash = 0;
@@ -75,19 +102,34 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
   // ---------------------------------------------------------- input
 
   const keys = new Set<string>();
-  let joy: { id: number; ox: number; oy: number; x: number; y: number } | null = null;
+  let joy: { id: number; ox: number; oy: number; x: number; y: number } | null =
+    null;
   let usedTouch = false;
   let joySector: number | null = null;
   let skillQueued = false;
 
   const view = () => stage.view;
-  const pauseBtn = (): Button => ({ x: view().x + view().w - 48, y: 48, r: 24 });
-  const skillBtn = (): Button => ({ x: view().x + view().w - 104, y: H - 100, r: 50 });
+  const pauseBtn = (): Button => ({
+    x: view().x + view().w - 48,
+    y: 48,
+    r: 24,
+  });
+  const skillBtn = (): Button => ({
+    x: view().x + view().w - 104,
+    y: H - 100,
+    r: 50,
+  });
   const joyHome = () => ({ x: view().x + 130, y: H - 112 });
-  const overlayBtns = () => ({ primary: { x: W / 2 - 110, y: 352, w: 220, h: 56 }, secondary: { x: W / 2 - 110, y: 420, w: 220, h: 48 } });
-  const inCircle = (p: { x: number; y: number }, b: Button) => (p.x - b.x) ** 2 + (p.y - b.y) ** 2 <= (b.r + 12) ** 2;
-  const inRect = (p: { x: number; y: number }, r: { x: number; y: number; w: number; h: number }) =>
-    p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  const overlayBtns = () => ({
+    primary: { x: W / 2 - 110, y: 352, w: 220, h: 56 },
+    secondary: { x: W / 2 - 110, y: 420, w: 220, h: 48 },
+  });
+  const inCircle = (p: { x: number; y: number }, b: Button) =>
+    (p.x - b.x) ** 2 + (p.y - b.y) ** 2 <= (b.r + 12) ** 2;
+  const inRect = (
+    p: { x: number; y: number },
+    r: { x: number; y: number; w: number; h: number },
+  ) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
   function restart() {
     state = createGame();
@@ -104,7 +146,12 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
   function togglePause() {
     if (state.phase === "over") return;
     paused = !paused;
-    audio.tone({ freq: paused ? 500 : 700, dur: 0.06, type: "triangle", vol: 0.08 });
+    audio.tone({
+      freq: paused ? 500 : 700,
+      dur: 0.06,
+      type: "triangle",
+      vol: 0.08,
+    });
   }
 
   stage.onPointer({
@@ -155,7 +202,8 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     if (e.code in MOVE_KEYS || e.code === "Space") e.preventDefault();
     keys.add(e.code);
     if (e.repeat) return;
-    if (e.code === "Space" || e.code === "KeyJ" || e.code === "KeyK") skillQueued = true;
+    if (e.code === "Space" || e.code === "KeyJ" || e.code === "KeyK")
+      skillQueued = true;
     if (e.code === "Escape" || e.code === "KeyP") togglePause();
     if (e.code === "Enter" && state.phase === "over") restart();
   };
@@ -194,12 +242,27 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
 
   // ---------------------------------------------------------- effects & sound
 
-  function sparks(x: number, y: number, n: number, color: string, speed: number) {
+  function sparks(
+    x: number,
+    y: number,
+    n: number,
+    color: string,
+    speed: number,
+  ) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const v = speed * (0.3 + Math.random());
       const max = 0.35 + Math.random() * 0.35;
-      particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: max, max, size: 1.5 + Math.random() * 2.5, color });
+      particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v,
+        life: max,
+        max,
+        size: 1.5 + Math.random() * 2.5,
+        color,
+      });
     }
   }
 
@@ -220,7 +283,13 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         break;
       case "shot":
         if (t - lastShot > 0.12) {
-          audio.tone({ freq: 1400, to: 900, dur: 0.03, type: "triangle", vol: 0.02 });
+          audio.tone({
+            freq: 1400,
+            to: 900,
+            dur: 0.03,
+            type: "triangle",
+            vol: 0.02,
+          });
           lastShot = t;
         }
         break;
@@ -232,24 +301,49 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         explode(e.x, e.y, big ? 70 : 44);
         if (big) shake = Math.max(shake, 0.15);
         audio.noise(big ? 0.3 : 0.15, big ? 0.16 : 0.09);
-        audio.tone({ freq: big ? 160 : 240, to: 60, dur: 0.2, type: "triangle", vol: 0.1 });
+        audio.tone({
+          freq: big ? 160 : 240,
+          to: 60,
+          dur: 0.2,
+          type: "triangle",
+          vol: 0.1,
+        });
         break;
       }
       case "hurt":
         shake = 0.35;
         hurtFlash = 0.4;
-        audio.tone({ freq: 180, to: 60, dur: 0.35, type: "sawtooth", vol: 0.14 });
+        audio.tone({
+          freq: 180,
+          to: 60,
+          dur: 0.35,
+          type: "sawtooth",
+          vol: 0.14,
+        });
         break;
       case "pickup":
-        popup = { text: PICKUP_TEXT[e.kind], t: 0 };
-        for (const [i, f] of [784, 988, 1318].entries()) audio.tone({ freq: f, dur: 0.1, type: "sine", vol: 0.1, delay: i * 0.05 });
+        popup = { kind: e.kind, t: 0 };
+        for (const [i, f] of [784, 988, 1318].entries())
+          audio.tone({
+            freq: f,
+            dur: 0.1,
+            type: "sine",
+            vol: 0.1,
+            delay: i * 0.05,
+          });
         break;
       case "charge":
         audio.tone({ freq: 880, to: 1760, dur: 0.25, type: "sine", vol: 0.1 });
         break;
       case "skill":
         joy = null;
-        audio.tone({ freq: 220, to: 1200, dur: CUTIN_TIME, type: "sawtooth", vol: 0.08 });
+        audio.tone({
+          freq: 220,
+          to: 1200,
+          dur: CUTIN_TIME,
+          type: "sawtooth",
+          vol: 0.08,
+        });
         break;
       case "beam":
         shake = 0.5;
@@ -259,8 +353,20 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       case "bossWarning":
         warn = BOSS_WARNING + 1.5;
         for (let i = 0; i < 3; i++) {
-          audio.tone({ freq: 520, dur: 0.22, type: "square", vol: 0.08, delay: i * 0.6 });
-          audio.tone({ freq: 390, dur: 0.22, type: "square", vol: 0.08, delay: i * 0.6 + 0.25 });
+          audio.tone({
+            freq: 520,
+            dur: 0.22,
+            type: "square",
+            vol: 0.08,
+            delay: i * 0.6,
+          });
+          audio.tone({
+            freq: 390,
+            dur: 0.22,
+            type: "square",
+            vol: 0.08,
+            delay: i * 0.6 + 0.25,
+          });
         }
         break;
       case "bossEnter":
@@ -274,28 +380,76 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         }
         break;
       case "bossAttack":
-        if (e.kind === "beam") audio.tone({ freq: 900, dur: 0.6, type: "square", vol: 0.05 });
-        else audio.tone({ freq: 200, to: 120, dur: 0.25, type: "sawtooth", vol: 0.08 });
+        if (e.kind === "beam")
+          audio.tone({ freq: 900, dur: 0.6, type: "square", vol: 0.05 });
+        else
+          audio.tone({
+            freq: 200,
+            to: 120,
+            dur: 0.25,
+            type: "sawtooth",
+            vol: 0.08,
+          });
         break;
       case "bossDie":
         warn = 0;
         shake = 1.2;
-        for (let i = 0; i < 9; i++) booms.push({ x: e.x + (Math.random() - 0.5) * 160, y: e.y + (Math.random() - 0.5) * 300, t: -i * 0.14, size: 80 + Math.random() * 50 });
-        for (let i = 0; i < SHARD_GOAL; i++) shardFly.push({ x: e.x + (Math.random() - 0.5) * 120, y: e.y + (Math.random() - 0.5) * 160, t: -0.4 - i * 0.07 });
+        for (let i = 0; i < 9; i++)
+          booms.push({
+            x: e.x + (Math.random() - 0.5) * 160,
+            y: e.y + (Math.random() - 0.5) * 300,
+            t: -i * 0.14,
+            size: 80 + Math.random() * 50,
+          });
+        for (let i = 0; i < SHARD_GOAL; i++)
+          shardFly.push({
+            x: e.x + (Math.random() - 0.5) * 120,
+            y: e.y + (Math.random() - 0.5) * 160,
+            t: -0.4 - i * 0.07,
+          });
         audio.noise(1.2, 0.22);
-        audio.tone({ freq: 120, to: 40, dur: 1.4, type: "sawtooth", vol: 0.14 });
+        audio.tone({
+          freq: 120,
+          to: 40,
+          dur: 1.4,
+          type: "sawtooth",
+          vol: 0.14,
+        });
         break;
       case "waveClear":
-        banner = { text: `Đã Vượt Qua Đợt ${e.wave}!`, t: 0 };
-        for (const [i, f] of [523, 659, 784, 1046].entries()) audio.tone({ freq: f, dur: 0.18, type: "triangle", vol: 0.12, delay: 0.4 + i * 0.1 });
+        banner = { wave: e.wave, t: 0 };
+        for (const [i, f] of [523, 659, 784, 1046].entries())
+          audio.tone({
+            freq: f,
+            dur: 0.18,
+            type: "triangle",
+            vol: 0.12,
+            delay: 0.4 + i * 0.1,
+          });
         break;
       case "end":
         reportScore?.({
           score: state.score,
-          detail: `${state.result?.stars ?? 0}★ · ${state.shards}/${SHARD_GOAL} mảnh`,
+          detail: `${state.result?.stars ?? 0}★ · ${tr().shardsDetail(state.shards, SHARD_GOAL)}`,
         });
-        if (e.won) for (const [i, f] of [659, 784, 988, 1318].entries()) audio.tone({ freq: f, dur: 0.2, type: "triangle", vol: 0.12, delay: i * 0.12 });
-        else for (const [i, f] of [440, 349, 262].entries()) audio.tone({ freq: f, dur: 0.25, type: "triangle", vol: 0.12, delay: i * 0.18 });
+        if (e.won)
+          for (const [i, f] of [659, 784, 988, 1318].entries())
+            audio.tone({
+              freq: f,
+              dur: 0.2,
+              type: "triangle",
+              vol: 0.12,
+              delay: i * 0.12,
+            });
+        else
+          for (const [i, f] of [440, 349, 262].entries())
+            audio.tone({
+              freq: f,
+              dur: 0.25,
+              type: "triangle",
+              vol: 0.12,
+              delay: i * 0.18,
+            });
         break;
     }
   }
@@ -307,7 +461,10 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       best = state.score;
       storage.set("best", best);
     }
-    storage.set(SUMMARY_KEY, `Kỷ lục ${best} điểm`);
+    storage.set(SUMMARY_KEY, {
+      vi: STRINGS.vi.summary(best),
+      en: STRINGS.en.summary(best),
+    });
   }
 
   // ---------------------------------------------------------- frame
@@ -355,7 +512,11 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     const right = v.x + v.w;
     stage.begin();
     ctx.save();
-    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 14, (Math.random() - 0.5) * shake * 14);
+    if (shake > 0)
+      ctx.translate(
+        (Math.random() - 0.5) * shake * 14,
+        (Math.random() - 0.5) * shake * 14,
+      );
     drawSky(ctx, sky, t, v.x, right, v.y, v.y + v.h);
 
     for (const k of state.pickups) blit(ctx, sprites.pickups[k.kind], k.x, k.y);
@@ -379,26 +540,55 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
 
     const boss = state.boss;
     if (boss) {
-      drawBoss(ctx, boss.x, boss.y, t, boss.flash, boss.mode === "dying" ? boss.dying : 0);
+      drawBoss(
+        ctx,
+        boss.x,
+        boss.y,
+        t,
+        boss.flash,
+        boss.mode === "dying" ? boss.dying : 0,
+      );
       if (boss.attack) drawBossBeam(boss.x - 90, boss.attack.y, boss.attack.t);
     }
-    for (const s of state.shots) blit(ctx, sprites.shot, s.x, s.y, s.radius / 11);
-    for (const b of state.bullets) blit(ctx, b.id % 2 ? sprites.bulletPink : sprites.bulletGold, b.x, b.y);
+    for (const s of state.shots)
+      blit(ctx, sprites.shot, s.x, s.y, s.radius / 11);
+    for (const b of state.bullets)
+      blit(ctx, b.id % 2 ? sprites.bulletPink : sprites.bulletGold, b.x, b.y);
 
     const p = state.player;
-    const blink = p.invuln > 0 && state.skill.beam <= 0 && state.phase === "play" && Math.floor(t * 14) % 2 === 0;
+    const blink =
+      p.invuln > 0 &&
+      state.skill.beam <= 0 &&
+      state.phase === "play" &&
+      Math.floor(t * 14) % 2 === 0;
     if (!blink) drawRider(ctx, p.x, p.y, t, 1.25);
     drawHearts(ctx, p.x - 8, p.y - 72, p.hearts, MAX_HEARTS);
     if (popup) {
       ctx.globalAlpha = Math.min(1, 2 - popup.t);
-      text(ctx, popup.text, p.x - 8, p.y - 94 - popup.t * 10, 17, "#fff", "center", 800, true);
+      text(
+        ctx,
+        tr().pickup[popup.kind],
+        p.x - 8,
+        p.y - 94 - popup.t * 10,
+        17,
+        "#fff",
+        "center",
+        800,
+        true,
+      );
       ctx.globalAlpha = 1;
     }
 
     if (state.skill.beam > 0) {
       const strength = Math.min(1, state.skill.beam * 3);
       drawBeam(ctx, p.x + 70, p.y, right, t, strength);
-      drawPortal(ctx, p.x + 74, p.y, t, Math.min(1, (2.4 - state.skill.beam) * 6 + 0.3) * strength);
+      drawPortal(
+        ctx,
+        p.x + 74,
+        p.y,
+        t,
+        Math.min(1, (2.4 - state.skill.beam) * 6 + 0.3) * strength,
+      );
     }
 
     ctx.save();
@@ -412,19 +602,30 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.restore();
     ctx.restore();
 
-    if (warn > 0 || (boss && boss.mode !== "dying" && boss.age < 1.5)) drawWarning();
+    if (warn > 0 || (boss && boss.mode !== "dying" && boss.age < 1.5))
+      drawWarning();
     if (hurtFlash > 0) vignette(`rgba(255,40,80,${hurtFlash})`);
     drawHud();
-    if (boss && boss.mode === "fight") drawBossBar(ctx, Math.min(boss.x - 30, right - 120), Math.max(96, boss.y - 150), boss.hp / boss.maxHp);
+    if (boss && boss.mode === "fight")
+      drawBossBar(
+        ctx,
+        Math.min(boss.x - 30, right - 120),
+        Math.max(96, boss.y - 150),
+        boss.hp / boss.maxHp,
+      );
     for (const s of shardFly) {
       if (s.t <= 0) continue;
       const k = s.t * s.t;
       const tx = right - 238;
       ctx.globalAlpha = 1 - Math.max(0, s.t - 0.8) * 5;
-      drawShard(s.x + (tx - s.x) * k, s.y + (78 - s.y) * k - Math.sin(s.t * Math.PI) * 60, 9);
+      drawShard(
+        s.x + (tx - s.x) * k,
+        s.y + (78 - s.y) * k - Math.sin(s.t * Math.PI) * 60,
+        9,
+      );
       ctx.globalAlpha = 1;
     }
-    if (banner) drawBanner(banner.text, banner.t);
+    if (banner) drawBanner(tr().waveCleared(banner.wave), banner.t);
     if (state.phase === "cutin") drawCutin(1 - state.skill.cutin / CUTIN_TIME);
     if (state.phase === "countdown") drawCountdown();
     if (paused) drawPause();
@@ -440,7 +641,14 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
 
   function vignette(color: string) {
     const v = view();
-    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, v.w * 0.62);
+    const g = ctx.createRadialGradient(
+      W / 2,
+      H / 2,
+      H * 0.35,
+      W / 2,
+      H / 2,
+      v.w * 0.62,
+    );
     g.addColorStop(0, "rgba(0,0,0,0)");
     g.addColorStop(1, color);
     fillView(g);
@@ -491,7 +699,11 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     }
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    for (const [h, color] of [[34, "rgba(255,70,40,0.5)"], [18, "rgba(255,170,80,0.8)"], [6, "rgba(255,255,230,1)"]] as const) {
+    for (const [h, color] of [
+      [34, "rgba(255,70,40,0.5)"],
+      [18, "rgba(255,170,80,0.8)"],
+      [6, "rgba(255,255,230,1)"],
+    ] as const) {
       const g = ctx.createLinearGradient(0, y - h, 0, y + h);
       g.addColorStop(0, "rgba(0,0,0,0)");
       g.addColorStop(0.5, color);
@@ -515,7 +727,7 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.lineWidth = 2;
     ctx.stroke();
     text(ctx, "!", b.x, b.y + 63, 26, "#fff");
-    if (warn > 0) text(ctx, "CẢNH BÁO: BOSS XUẤT HIỆN", W / 2, 120, 26, "#ff8a9a");
+    if (warn > 0) text(ctx, tr().bossWarning, W / 2, 120, 26, "#ff8a9a");
   }
 
   function drawShard(x: number, y: number, s: number) {
@@ -555,12 +767,39 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.font = `800 30px "Baloo 2", sans-serif`;
     const scoreW = ctx.measureText(String(s.score)).width;
     text(ctx, String(s.score), scoreX, 46, 30, "#ffd36b", "right");
-    text(ctx, "Điểm Hiện Tại:", scoreX - scoreW - 6, 47, 18, "#cfcaff", "right", 600);
+    text(
+      ctx,
+      tr().scoreLabel,
+      scoreX - scoreW - 6,
+      47,
+      18,
+      "#cfcaff",
+      "right",
+      600,
+    );
     drawShard(right - 238, 78, 8);
-    text(ctx, `${s.shards}/${SHARD_GOAL}`, right - 224, 79, 16, "#dcd8ff", "left", 600);
+    text(
+      ctx,
+      `${s.shards}/${SHARD_GOAL}`,
+      right - 224,
+      79,
+      16,
+      "#dcd8ff",
+      "left",
+      600,
+    );
     const left = Math.ceil(timeLeft(s));
     drawHourglass(right - 150, 79);
-    text(ctx, s.phase === "countdown" ? "" : `00:${String(left).padStart(2, "0")}`, right - 138, 79, 16, left <= 10 ? "#ff9aa8" : "#dcd8ff", "left", 600);
+    text(
+      ctx,
+      s.phase === "countdown" ? "" : `00:${String(left).padStart(2, "0")}`,
+      right - 138,
+      79,
+      16,
+      left <= 10 ? "#ff9aa8" : "#dcd8ff",
+      "left",
+      600,
+    );
 
     // Pause button
     const pb = pauseBtn();
@@ -629,11 +868,19 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
   function drawSkillButton() {
     const b = skillBtn();
     const k = state.skill;
-    const ready = canUseSkill(state) || (state.phase === "countdown" && k.charges > 0);
+    const ready =
+      canUseSkill(state) || (state.phase === "countdown" && k.charges > 0);
     if (ready) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      const g = ctx.createRadialGradient(b.x, b.y, b.r, b.x, b.y, b.r + 26 + Math.sin(t * 6) * 4);
+      const g = ctx.createRadialGradient(
+        b.x,
+        b.y,
+        b.r,
+        b.x,
+        b.y,
+        b.r + 26 + Math.sin(t * 6) * 4,
+      );
       g.addColorStop(0, "rgba(255,180,60,0.6)");
       g.addColorStop(1, "rgba(255,120,40,0)");
       ctx.fillStyle = g;
@@ -667,7 +914,16 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.strokeStyle = "#ffe6a8";
     ctx.stroke();
     skillGlyph(ctx, b.x + 2, b.y - 6, 18, "#fff3d6");
-    text(ctx, `${k.charges}/${k.max}`, b.x, b.y + 30, 13, "#ffffff", "center", 700);
+    text(
+      ctx,
+      `${k.charges}/${k.max}`,
+      b.x,
+      b.y + 30,
+      13,
+      "#ffffff",
+      "center",
+      700,
+    );
     ctx.globalAlpha = 1;
   }
 
@@ -717,7 +973,17 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     drawRider(ctx, W / 2 - 60, 300, t, 3.4);
     ctx.restore();
     ctx.globalAlpha = ease * (1 - exit);
-    text(ctx, "TINH TÚ QUANG PHÁO", W / 2 + off * 0.2, 470, 40, "#fff3c4", "center", 800, true);
+    text(
+      ctx,
+      tr().skillName,
+      W / 2 + off * 0.2,
+      470,
+      40,
+      "#fff3c4",
+      "center",
+      800,
+      true,
+    );
     ctx.globalAlpha = 1;
     if (p > 0.9) fillView(`rgba(255,255,255,${(p - 0.9) * 8})`);
   }
@@ -732,7 +998,7 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.moveTo(W / 2 + 130, 96);
     ctx.lineTo(W / 2 + 200, 96);
     ctx.stroke();
-    text(ctx, "Chuẩn Bị Bắt Đầu", W / 2, 96, 26, "#f6e2a8");
+    text(ctx, tr().getReady, W / 2, 96, 26, "#f6e2a8");
     const n = Math.max(1, Math.ceil(state.countdown));
     const pop = 1 + Math.max(0, 0.25 - countPop) * 1.6;
     ctx.save();
@@ -782,7 +1048,11 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     return y;
   }
 
-  function button(r: { x: number; y: number; w: number; h: number }, label: string, primary: boolean) {
+  function button(
+    r: { x: number; y: number; w: number; h: number },
+    label: string,
+    primary: boolean,
+  ) {
     ctx.beginPath();
     ctx.roundRect(r.x, r.y, r.w, r.h, r.h / 2);
     if (primary) {
@@ -794,29 +1064,56 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       ctx.fillStyle = "rgba(255,255,255,0.12)";
     }
     ctx.fill();
-    text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 1, primary ? 24 : 20, "#fff");
+    text(
+      ctx,
+      label,
+      r.x + r.w / 2,
+      r.y + r.h / 2 + 1,
+      primary ? 24 : 20,
+      "#fff",
+    );
   }
 
   function drawPause() {
-    panel("Tạm Dừng", 330);
-    text(ctx, `Điểm hiện tại: ${state.score}`, W / 2, 270, 20, "#dcd8ff", "center", 600);
-    text(ctx, "Phím: WASD/mũi tên di chuyển · Space dùng chiêu", W / 2, 306, 14, "#aaa6e0", "center", 600);
-    button(overlayBtns().primary, "Tiếp tục", true);
-    button(overlayBtns().secondary, "Chơi lại", false);
+    const s = tr();
+    panel(s.paused, 330);
+    text(
+      ctx,
+      s.pauseScore(state.score),
+      W / 2,
+      270,
+      20,
+      "#dcd8ff",
+      "center",
+      600,
+    );
+    text(ctx, s.keyHint, W / 2, 306, 14, "#aaa6e0", "center", 600);
+    button(overlayBtns().primary, s.resume, true);
+    button(overlayBtns().secondary, s.playAgain, false);
   }
 
   function drawResult() {
     const r = state.result;
     if (!r) return;
-    const y = panel(r.won ? "Hoàn Thành!" : "Thất Bại", 360);
+    const s = tr();
+    const y = panel(r.won ? s.won : s.lost, 360);
     for (let i = 0; i < 3; i++) {
       const sx = W / 2 + (i - 1) * 70;
       const sy = y + 112 - (i === 1 ? 10 : 0);
       drawStar(sx, sy, i === 1 ? 30 : 24, i < r.stars);
     }
-    text(ctx, `Điểm: ${state.score}`, W / 2, y + 176, 28, "#ffd36b");
-    text(ctx, `Mảnh tinh tú ${state.shards}/${SHARD_GOAL} · Kỷ lục ${best}`, W / 2, y + 214, 17, "#dcd8ff", "center", 600);
-    button(overlayBtns().primary, "Chơi lại", true);
+    text(ctx, s.resultScore(state.score), W / 2, y + 176, 28, "#ffd36b");
+    text(
+      ctx,
+      s.resultLine(state.shards, SHARD_GOAL, best),
+      W / 2,
+      y + 214,
+      17,
+      "#dcd8ff",
+      "center",
+      600,
+    );
+    button(overlayBtns().primary, s.playAgain, true);
   }
 
   function drawStar(x: number, y: number, r: number, on: boolean) {

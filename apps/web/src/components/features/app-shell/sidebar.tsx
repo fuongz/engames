@@ -4,6 +4,8 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/games";
 import { useEffect, useState } from "react";
 import { AccountButton } from "#/components/shared/auth/account-button";
+import { LanguageMenu } from "#/components/shared/i18n/language-menu";
+import { useMessages } from "#/hooks/use-messages";
 import { useInstallStore } from "#/stores/install";
 import { HelpDialog } from "./help-dialog";
 
@@ -13,6 +15,7 @@ const SIDEBAR_ITEM =
 
 /** Steam-style left rail, desktop only; phones get the bottom tab bar. */
 export function Sidebar() {
+  const m = useMessages();
   const [muted, setMuted] = useState(false);
   const installMode = useInstallStore((s) => s.mode);
   const install = useInstallStore((s) => s.install);
@@ -34,23 +37,24 @@ export function Sidebar() {
         <span className="text-lg font-bold tracking-wide uppercase">Engames</span>
       </Link>
 
-      <nav className="grid gap-1" aria-label="Điều hướng chính">
+      <nav className="grid gap-1" aria-label={m.nav.label}>
         <Link to="/" className={SIDEBAR_ITEM} data-active={mounted && path === "/"}>
           <HugeiconsIcon icon={Store01Icon} className="size-5" />
-          Khám phá
+          {m.nav.discover}
         </Link>
         <Link to="/library" className={SIDEBAR_ITEM} data-active={mounted && path.startsWith("/library")}>
           <HugeiconsIcon icon={LibraryIcon} className="size-5" />
-          Thư viện
+          {m.nav.library}
         </Link>
       </nav>
 
       <div className="mt-auto grid gap-1">
         <button type="button" className={SIDEBAR_ITEM} onClick={() => audioBus.setMuted(!muted)} aria-pressed={!muted}>
           <HugeiconsIcon icon={muted ? VolumeOffIcon : VolumeHighIcon} className="size-5" />
-          Âm thanh: {muted ? "Tắt" : "Bật"}
+          {muted ? m.sidebar.soundOff : m.sidebar.soundOn}
         </button>
         <HelpDialog triggerClassName={SIDEBAR_ITEM} />
+        <LanguageMenu variant="sidebar" triggerClassName={SIDEBAR_ITEM} />
         <AccountButton variant="sidebar" />
       </div>
 
@@ -58,10 +62,10 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => void install()}
-          title="Cài Engames lên điện thoại"
+          title={m.sidebar.installTitle}
           className="flex items-center justify-between gap-2 rounded-2xl border bg-card px-4 py-3.5 text-left text-sm font-medium whitespace-nowrap transition-colors hover:border-primary/50 hover:bg-secondary"
         >
-          Cài app về máy
+          {m.sidebar.install}
           <HugeiconsIcon icon={PlusSignIcon} className="size-5 shrink-0 text-muted-foreground" />
         </button>
       )}

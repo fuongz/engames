@@ -3,17 +3,19 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import type { GameManifest } from "@web-games/games";
 import { GameCard } from "#/components/shared/games/game-card";
+import { useMessages } from "#/hooks/use-messages";
 
 const CELL = "w-36 shrink-0 snap-start lg:w-auto";
 
 /** A titled row of posters: swipeable on phones, a 6-column grid on desktop. */
 export function GameShelf({ title, games }: { title: string; games: GameManifest[] }) {
+  const m = useMessages();
   return (
     <section className="grid gap-3">
       <div className="flex items-end justify-between gap-4">
         <h2 className="text-lg font-semibold tracking-tight md:text-xl">{title}</h2>
         <Link to="/library" className="flex items-center gap-1 text-sm transition-colors hover:text-primary">
-          Xem tất cả
+          {m.home.seeAll}
           <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
         </Link>
       </div>

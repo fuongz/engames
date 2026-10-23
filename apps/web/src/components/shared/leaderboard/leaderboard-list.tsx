@@ -2,10 +2,10 @@ import { Crown02Icon, RankingIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
+import { useLocale, useMessages } from "#/hooks/use-messages";
+import { intlTag } from "#/lib/i18n";
 import { cn } from "#/lib/utils";
 import type { LeaderboardEntry } from "#/server/leaderboard";
-
-const SCORE = new Intl.NumberFormat("vi-VN");
 
 /** Ranked rows: medal colours for the podium, the player's own row highlighted. */
 export function LeaderboardList({
@@ -17,6 +17,8 @@ export function LeaderboardList({
   highlightId?: number;
   className?: string;
 }) {
+  const m = useMessages();
+  const score = new Intl.NumberFormat(intlTag(useLocale()));
   if (entries.length === 0) {
     return (
       <Empty className="rounded-xl border border-dashed py-8">
@@ -24,8 +26,8 @@ export function LeaderboardList({
           <EmptyMedia variant="icon">
             <HugeiconsIcon icon={RankingIcon} />
           </EmptyMedia>
-          <EmptyTitle>Chưa có ai trên bảng</EmptyTitle>
-          <EmptyDescription>Chơi một ván và ghi tên mình đầu tiên nhé!</EmptyDescription>
+          <EmptyTitle>{m.leaderboard.emptyTitle}</EmptyTitle>
+          <EmptyDescription>{m.leaderboard.emptyDescription}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -59,7 +61,7 @@ export function LeaderboardList({
               <span className="truncate text-sm font-medium">{e.name}</span>
               {e.detail && <span className="truncate text-xs text-muted-foreground">{e.detail}</span>}
             </span>
-            <span className="shrink-0 text-sm font-semibold tabular-nums">{SCORE.format(e.score)}</span>
+            <span className="shrink-0 text-sm font-semibold tabular-nums">{score.format(e.score)}</span>
           </li>
         );
       })}

@@ -1,5 +1,10 @@
 import "@fontsource/baloo-2/800.css";
-import { type GameContext, type GameInstance, SUMMARY_KEY } from "../core/types";
+import { currentLocale } from "../core/i18n";
+import {
+  type GameContext,
+  type GameInstance,
+  SUMMARY_KEY,
+} from "../core/types";
 import { Loop, Stage, type PointerInfo } from "../core/stage";
 import {
   CENTER,
@@ -48,6 +53,7 @@ import {
   type GameState,
   type Vec,
 } from "./logic";
+import { STRINGS } from "./strings";
 
 interface Particle {
   x: number;
@@ -71,8 +77,14 @@ interface Evolution {
   t: number;
 }
 
-const KID = { x: CENTER.x + Math.cos(PATH_END) * TRACK_R + 2, y: CENTER.y + Math.sin(PATH_END) * TRACK_R - 4 };
-const GATE = { x: CENTER.x + Math.cos(PATH_START - 0.05) * TRACK_R, y: KID.y + 52 };
+const KID = {
+  x: CENTER.x + Math.cos(PATH_END) * TRACK_R + 2,
+  y: CENTER.y + Math.sin(PATH_END) * TRACK_R - 4,
+};
+const GATE = {
+  x: CENTER.x + Math.cos(PATH_START - 0.05) * TRACK_R,
+  y: KID.y + 52,
+};
 const EGG_HUD = { x: 222, y: 40 };
 const BUTTON = { x: 270 - 120, y: 800, w: 240, h: 72 };
 const RESTART = { x: 270 - 110, y: 600, w: 220, h: 66 };
@@ -80,9 +92,16 @@ const EVOLVE_REVEAL = 1.9;
 /** Matches the tree line at the top and bottom of the background. */
 const FOREST = "#2f8a3c";
 
-const inRect = (p: Vec, r: { x: number; y: number; w: number; h: number }) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+const inRect = (p: Vec, r: { x: number; y: number; w: number; h: number }) =>
+  p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
-export function startGame(root: HTMLElement, { storage, audio, reportScore }: GameContext): GameInstance {
+export function startGame(
+  root: HTMLElement,
+  gameCtx: GameContext,
+): GameInstance {
+  const { storage, audio, reportScore } = gameCtx;
+  // The player can flip the language mid-run, so look the catalog up per use.
+  const tr = () => STRINGS[currentLocale(gameCtx)];
   // Canvas text silently falls back until the face is loaded; ask for it up front.
   void document.fonts?.load('800 20px "Baloo 2"');
   const stage = new Stage(root, W, H, { bleed: true });
@@ -93,7 +112,7 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
   let particles: Particle[] = [];
   let eggs: FlyingEgg[] = [];
   let beams: { slot: number; t: number }[] = [];
-  let banner: { text: string; color: string; t: number } | null = null;
+  let banner: { wave: number; boss: boolean; t: number } | null = null;
   let evolution: Evolution | null = null;
   let display = new Map<number, Vec>();
   let drag: { id: number; x: number; y: number } | null = null;
@@ -121,12 +140,29 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
 
   // ---------------------------------------------------------- effects & sound
 
-  function burst(x: number, y: number, n: number, color: string, kind: Particle["kind"], speed = 120) {
+  function burst(
+    x: number,
+    y: number,
+    n: number,
+    color: string,
+    kind: Particle["kind"],
+    speed = 120,
+  ) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const v = speed * (0.4 + Math.random() * 0.8);
       const max = kind === "smoke" ? 0.55 : 0.45;
-      particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (kind === "smoke" ? 30 : 0), life: max, max, size: kind === "smoke" ? 9 + Math.random() * 7 : 3 + Math.random() * 3, color, kind });
+      particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v - (kind === "smoke" ? 30 : 0),
+        life: max,
+        max,
+        size: kind === "smoke" ? 9 + Math.random() * 7 : 3 + Math.random() * 3,
+        color,
+        kind,
+      });
     }
   }
 
@@ -135,7 +171,13 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       case "hit": {
         burst(e.x, e.y - 10, 3, LEVEL_COLORS[e.level - 1], "spark", 140);
         if (t - lastHitSound > 0.05) {
-          audio.tone({ freq: 620, to: 320, dur: 0.05, type: "square", vol: 0.05 });
+          audio.tone({
+            freq: 620,
+            to: 320,
+            dur: 0.05,
+            type: "square",
+            vol: 0.05,
+          });
           lastHitSound = t;
         }
         break;
@@ -144,22 +186,42 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         burst(e.x, e.y - 8, 7, "rgba(240,240,235,0.9)", "smoke", 70);
         burst(e.x, e.y - 8, 6, "#ffe066", "star", 160);
         audio.noise(0.12, 0.1);
-        audio.tone({ freq: 340, to: 110, dur: 0.14, type: "triangle", vol: 0.12 });
+        audio.tone({
+          freq: 340,
+          to: 110,
+          dur: 0.14,
+          type: "triangle",
+          vol: 0.12,
+        });
         break;
       case "egg":
-        for (let i = 0; i < e.amount; i++) eggs.push({ from: { x: e.x + i * 10, y: e.y }, t: -i * 0.12 });
+        for (let i = 0; i < e.amount; i++)
+          eggs.push({ from: { x: e.x + i * 10, y: e.y }, t: -i * 0.12 });
         break;
       case "leak":
         kidHurt = 0.5;
         shake = 0.25;
-        audio.tone({ freq: 220, to: 70, dur: 0.3, type: "sawtooth", vol: 0.15 });
+        audio.tone({
+          freq: 220,
+          to: 70,
+          dur: 0.3,
+          type: "sawtooth",
+          vol: 0.15,
+        });
         break;
       case "merge": {
         const s = SLOTS[e.slot];
         burst(s.x, s.y, 18, "#fff8b0", "star", 220);
         burst(s.x, s.y, 10, LEVEL_COLORS[e.level - 1], "spark", 180);
         shake = 0.12;
-        for (const [i, f] of [523, 659, 784].entries()) audio.tone({ freq: f, dur: 0.12, type: "square", vol: 0.1, delay: i * 0.06 });
+        for (const [i, f] of [523, 659, 784].entries())
+          audio.tone({
+            freq: f,
+            dur: 0.12,
+            type: "square",
+            vol: 0.1,
+            delay: i * 0.06,
+          });
         if (tutorial) {
           tutorial = false;
           storage.set("tutorialDone", true);
@@ -173,7 +235,13 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
           evolution = { level: e.level, t: 0 };
           drag = null;
           state.held = null;
-          audio.tone({ freq: 200, to: 900, dur: EVOLVE_REVEAL, type: "sine", vol: 0.12 });
+          audio.tone({
+            freq: 200,
+            to: 900,
+            dur: EVOLVE_REVEAL,
+            type: "sine",
+            vol: 0.12,
+          });
         }
         break;
       case "summon":
@@ -181,21 +249,40 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         audio.tone({ freq: 380, to: 900, dur: 0.25, type: "sine", vol: 0.15 });
         break;
       case "move":
-        audio.tone({ freq: 300, to: 260, dur: 0.06, type: "triangle", vol: 0.08 });
+        audio.tone({
+          freq: 300,
+          to: 260,
+          dur: 0.06,
+          type: "triangle",
+          vol: 0.08,
+        });
         break;
       case "wave": {
         const boss = e.wave % 5 === 0;
-        banner = { text: boss ? `ĐỢT ${e.wave} · BOSS!` : `ĐỢT ${e.wave}`, color: boss ? "#ff5a5a" : "#fff", t: 0 };
+        banner = { wave: e.wave, boss, t: 0 };
         audio.tone({ freq: 440, dur: 0.1, type: "square", vol: 0.1 });
-        audio.tone({ freq: 660, dur: 0.18, type: "square", vol: 0.1, delay: 0.1 });
+        audio.tone({
+          freq: 660,
+          dur: 0.18,
+          type: "square",
+          vol: 0.1,
+          delay: 0.1,
+        });
         break;
       }
       case "waveClear":
         eggs.push({ from: { x: CENTER.x, y: CENTER.y }, t: 0 });
         break;
       case "gameover":
-        reportScore?.({ score: state.score, detail: `Đợt ${state.wave}` });
-        for (const [i, f] of [440, 349, 262, 196].entries()) audio.tone({ freq: f, dur: 0.22, type: "triangle", vol: 0.15, delay: i * 0.18 });
+        reportScore?.({ score: state.score, detail: tr().wave(state.wave) });
+        for (const [i, f] of [440, 349, 262, 196].entries())
+          audio.tone({
+            freq: f,
+            dur: 0.22,
+            type: "triangle",
+            vol: 0.15,
+            delay: i * 0.18,
+          });
         break;
     }
   }
@@ -204,9 +291,15 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     if (savedRun) return;
     savedRun = true;
     if (state.score > best.score || state.wave > best.wave) {
-      best = { wave: Math.max(best.wave, state.wave), score: Math.max(best.score, state.score) };
+      best = {
+        wave: Math.max(best.wave, state.wave),
+        score: Math.max(best.score, state.score),
+      };
       storage.set("best", best);
-      storage.set(SUMMARY_KEY, `Đợt ${best.wave} · ${best.score} điểm`);
+      storage.set(SUMMARY_KEY, {
+        vi: STRINGS.vi.summary(best.wave, best.score),
+        en: STRINGS.en.summary(best.wave, best.score),
+      });
     }
   }
 
@@ -250,7 +343,8 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       buttonDown = false;
       if (!drag) return;
       const result = dropCritter(state, drag.id, slotAt(p.x, p.y, SLOT_R + 16));
-      if (result === "move" || result === "swap" || result === "none") display.set(drag.id, { x: drag.x, y: drag.y });
+      if (result === "move" || result === "swap" || result === "none")
+        display.set(drag.id, { x: drag.x, y: drag.y });
       drag = null;
       state.held = null;
     },
@@ -300,7 +394,10 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     for (const c of state.critters) {
       const target = SLOTS[c.slot];
       const cur = display.get(c.id) ?? { x: target.x, y: target.y };
-      display.set(c.id, { x: cur.x + (target.x - cur.x) * k, y: cur.y + (target.y - cur.y) * k });
+      display.set(c.id, {
+        x: cur.x + (target.x - cur.x) * k,
+        y: cur.y + (target.y - cur.y) * k,
+      });
     }
 
     draw();
@@ -314,7 +411,11 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
   function draw() {
     stage.begin();
     ctx.save();
-    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 30, (Math.random() - 0.5) * shake * 30);
+    if (shake > 0)
+      ctx.translate(
+        (Math.random() - 0.5) * shake * 30,
+        (Math.random() - 0.5) * shake * 30,
+      );
     // Bleed: continue the forest above and below the play area on tall phones
     const v = stage.view;
     ctx.fillStyle = FOREST;
@@ -326,7 +427,13 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       const heldId = drag.id;
       const held = state.critters.find((c) => c.id === heldId);
       for (const c of state.critters) {
-        if (!held || c === held || c.level !== held.level || c.level >= MAX_LEVEL) continue;
+        if (
+          !held ||
+          c === held ||
+          c.level !== held.level ||
+          c.level >= MAX_LEVEL
+        )
+          continue;
         const s = SLOTS[c.slot];
         ctx.save();
         ctx.globalAlpha = 0.5 + Math.sin(t * 10) * 0.3;
@@ -348,7 +455,9 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     }
 
     // Enemies, back to front
-    const sorted = [...state.enemies].sort((a, b) => enemyPos(a).y - enemyPos(b).y);
+    const sorted = [...state.enemies].sort(
+      (a, b) => enemyPos(a).y - enemyPos(b).y,
+    );
     for (const e of sorted) {
       const pos = enemyPos(e);
       // Walking direction is the path tangent; face left or right accordingly
@@ -359,25 +468,63 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     drawKid(ctx, KID.x, KID.y, t, kidHurt);
 
     // Critters and their spinning blades
-    const critters = [...state.critters].sort((a, b) => (drag?.id === a.id ? 1 : drag?.id === b.id ? -1 : SLOTS[a.slot].y - SLOTS[b.slot].y));
+    const critters = [...state.critters].sort((a, b) =>
+      drag?.id === a.id
+        ? 1
+        : drag?.id === b.id
+          ? -1
+          : SLOTS[a.slot].y - SLOTS[b.slot].y,
+    );
     for (const c of critters) {
       const pos = critterPos(c.id, c.slot);
       const sp = speciesFor(c.level);
-      const trail = sp.blade === "leek" ? "#7cf05a" : sp.blade === "gold" ? "#ffe14a" : "#5dffa8";
-      for (const b of blades(c, pos)) drawBladeTrail(ctx, pos.x, pos.y, bladeOrbit(c.level), bladeHalf(c.level) * 0.9, b.angle, trail);
+      const trail =
+        sp.blade === "leek"
+          ? "#7cf05a"
+          : sp.blade === "gold"
+            ? "#ffe14a"
+            : "#5dffa8";
+      for (const b of blades(c, pos))
+        drawBladeTrail(
+          ctx,
+          pos.x,
+          pos.y,
+          bladeOrbit(c.level),
+          bladeHalf(c.level) * 0.9,
+          b.angle,
+          trail,
+        );
       const pop = c.pop > 0 ? 1 + Math.sin((c.pop / 0.45) * Math.PI) * 0.35 : 1;
-      drawCritter(ctx, c.level, pos.x, pos.y, { t, scale: (drag?.id === c.id ? 1.15 : 1) * pop, glow: c.level >= 2 });
-      for (const b of blades(c, pos)) drawBlade(ctx, sp.blade, b.x1, b.y1, b.x2, b.y2);
+      drawCritter(ctx, c.level, pos.x, pos.y, {
+        t,
+        scale: (drag?.id === c.id ? 1.15 : 1) * pop,
+        glow: c.level >= 2,
+      });
+      for (const b of blades(c, pos))
+        drawBlade(ctx, sp.blade, b.x1, b.y1, b.x2, b.y2);
     }
 
     // HP numbers above enemies, level numbers above critters
     for (const e of sorted) {
       const pos = enemyPos(e);
-      text(ctx, String(Math.max(0, e.hp)), pos.x, pos.y - ENEMIES[e.kind].radius * 2.9 - 6, 20);
+      text(
+        ctx,
+        String(Math.max(0, e.hp)),
+        pos.x,
+        pos.y - ENEMIES[e.kind].radius * 2.9 - 6,
+        20,
+      );
     }
     for (const c of critters) {
       const pos = critterPos(c.id, c.slot);
-      text(ctx, String(c.level), pos.x + 4, pos.y - critterSize(c.level) * 1.45, 22, LEVEL_COLORS[c.level - 1]);
+      text(
+        ctx,
+        String(c.level),
+        pos.x + 4,
+        pos.y - critterSize(c.level) * 1.45,
+        22,
+        LEVEL_COLORS[c.level - 1],
+      );
     }
 
     // Hatch beams
@@ -408,7 +555,13 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         ctx.restore();
       } else {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.kind === "smoke" ? p.size * (1.6 - a * 0.6) : p.size, 0, Math.PI * 2);
+        ctx.arc(
+          p.x,
+          p.y,
+          p.kind === "smoke" ? p.size * (1.6 - a * 0.6) : p.size,
+          0,
+          Math.PI * 2,
+        );
         ctx.fillStyle = p.color;
         ctx.fill();
       }
@@ -420,7 +573,10 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       if (egg.t < 0) continue;
       const k = egg.t * egg.t;
       const x = egg.from.x + (EGG_HUD.x - egg.from.x) * k;
-      const y = egg.from.y + (EGG_HUD.y - egg.from.y) * k - Math.sin(egg.t * Math.PI) * 60;
+      const y =
+        egg.from.y +
+        (EGG_HUD.y - egg.from.y) * k -
+        Math.sin(egg.t * Math.PI) * 60;
       drawEgg(ctx, x, y, 12 + (1 - egg.t) * 4);
     }
 
@@ -451,51 +607,133 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       ctx.globalAlpha = 1;
     }
     drawHand(ctx, x + 6, y + 8, cycle > 0.15 && cycle < 0.8);
-    text(ctx, "Kéo 2 thú cùng cấp để ghép!", CENTER.x, CENTER.y + 230 + 52, 20, "#fff");
+    text(ctx, tr().tutorial, CENTER.x, CENTER.y + 230 + 52, 20, "#fff");
   }
 
   function drawHud() {
     // Egg counter pill, like the ad
-    roundRect(ctx, EGG_HUD.x - 30, EGG_HUD.y - 22, 140, 44, 22, "rgba(30,60,25,0.6)", null);
+    roundRect(
+      ctx,
+      EGG_HUD.x - 30,
+      EGG_HUD.y - 22,
+      140,
+      44,
+      22,
+      "rgba(30,60,25,0.6)",
+      null,
+    );
     const bump = 1 + eggBump * 1.2;
     ctx.save();
     ctx.translate(EGG_HUD.x, EGG_HUD.y);
     ctx.scale(bump, bump);
     drawEgg(ctx, 0, 0, 16);
     ctx.restore();
-    text(ctx, String(state.eggs), EGG_HUD.x + 55, EGG_HUD.y + 1, 28 * (1 + eggBump * 0.4));
+    text(
+      ctx,
+      String(state.eggs),
+      EGG_HUD.x + 55,
+      EGG_HUD.y + 1,
+      28 * (1 + eggBump * 0.4),
+    );
 
     roundRect(ctx, 14, 18, 92, 40, 20, "rgba(30,60,25,0.6)", null);
-    text(ctx, `Đợt ${Math.max(1, state.wave)}`, 60, 39, 20);
+    text(ctx, tr().wave(Math.max(1, state.wave)), 60, 39, 20);
     roundRect(ctx, W - 136, 18, 122, 40, 20, "rgba(30,60,25,0.6)", null);
     text(ctx, `★ ${state.score}`, W - 75, 39, 20, "#ffe066");
 
     // Hatch button
     const enabled = canSummon(state);
     const press = buttonDown && enabled ? 4 : 0;
-    roundRect(ctx, BUTTON.x, BUTTON.y + 6, BUTTON.w, BUTTON.h, 22, enabled ? "#b8520f" : "#555", OUTLINE, 3.5);
+    roundRect(
+      ctx,
+      BUTTON.x,
+      BUTTON.y + 6,
+      BUTTON.w,
+      BUTTON.h,
+      22,
+      enabled ? "#b8520f" : "#555",
+      OUTLINE,
+      3.5,
+    );
     const g = ctx.createLinearGradient(0, BUTTON.y, 0, BUTTON.y + BUTTON.h);
     g.addColorStop(0, enabled ? "#ffd04a" : "#bbb");
     g.addColorStop(1, enabled ? "#ff8a1f" : "#888");
-    roundRect(ctx, BUTTON.x, BUTTON.y + press, BUTTON.w, BUTTON.h, 22, g, OUTLINE, 3.5);
-    roundRect(ctx, BUTTON.x + 12, BUTTON.y + 6 + press, BUTTON.w - 24, 14, 7, "rgba(255,255,255,0.35)", null);
-    text(ctx, "ẤP TRỨNG", BUTTON.x + 96, BUTTON.y + BUTTON.h / 2 + press + 1, 28);
+    roundRect(
+      ctx,
+      BUTTON.x,
+      BUTTON.y + press,
+      BUTTON.w,
+      BUTTON.h,
+      22,
+      g,
+      OUTLINE,
+      3.5,
+    );
+    roundRect(
+      ctx,
+      BUTTON.x + 12,
+      BUTTON.y + 6 + press,
+      BUTTON.w - 24,
+      14,
+      7,
+      "rgba(255,255,255,0.35)",
+      null,
+    );
+    text(
+      ctx,
+      tr().hatch,
+      BUTTON.x + 96,
+      BUTTON.y + BUTTON.h / 2 + press + 1,
+      28,
+    );
     drawEgg(ctx, BUTTON.x + 182, BUTTON.y + BUTTON.h / 2 + press, 15);
-    text(ctx, `×${summonPrice(state)}`, BUTTON.x + 214, BUTTON.y + BUTTON.h / 2 + press + 2, 20);
+    text(
+      ctx,
+      `×${summonPrice(state)}`,
+      BUTTON.x + 214,
+      BUTTON.y + BUTTON.h / 2 + press + 2,
+      20,
+    );
     if (enabled && !tutorial) {
       ctx.globalAlpha = 0.25 + Math.sin(t * 5) * 0.2;
-      roundRect(ctx, BUTTON.x - 4, BUTTON.y - 4 + press, BUTTON.w + 8, BUTTON.h + 8, 26, "rgba(0,0,0,0)", "#fff7a8", 4);
+      roundRect(
+        ctx,
+        BUTTON.x - 4,
+        BUTTON.y - 4 + press,
+        BUTTON.w + 8,
+        BUTTON.h + 8,
+        26,
+        "rgba(0,0,0,0)",
+        "#fff7a8",
+        4,
+      );
       ctx.globalAlpha = 1;
     }
   }
 
-  function drawBanner(b: { text: string; color: string; t: number }) {
+  function drawBanner(b: { wave: number; boss: boolean; t: number }) {
     const inT = Math.min(1, b.t / 0.25);
     const outT = Math.max(0, (b.t - 1.4) / 0.4);
     const x = CENTER.x + (1 - inT) * -300 + outT * 300;
     ctx.globalAlpha = 1 - outT;
-    roundRect(ctx, x - 150, CENTER.y - 34, 300, 68, 18, "rgba(20,30,15,0.65)", null);
-    text(ctx, b.text, x, CENTER.y, 40, b.color);
+    roundRect(
+      ctx,
+      x - 150,
+      CENTER.y - 34,
+      300,
+      68,
+      18,
+      "rgba(20,30,15,0.65)",
+      null,
+    );
+    text(
+      ctx,
+      b.boss ? tr().bossBanner(b.wave) : tr().waveBanner(b.wave),
+      x,
+      CENTER.y,
+      40,
+      b.boss ? "#ff5a5a" : "#fff",
+    );
     ctx.globalAlpha = 1;
   }
 
@@ -535,8 +773,16 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(wobble);
-    const scale = 2.6 + (revealed ? Math.max(0, 0.6 - (ev.t - EVOLVE_REVEAL) * 2) : Math.sin(ev.t * 6) * 0.15);
-    drawCritter(ctx, ev.level, 0, 0, { t, scale: scale * appear, silhouette: !revealed });
+    const scale =
+      2.6 +
+      (revealed
+        ? Math.max(0, 0.6 - (ev.t - EVOLVE_REVEAL) * 2)
+        : Math.sin(ev.t * 6) * 0.15);
+    drawCritter(ctx, ev.level, 0, 0, {
+      t,
+      scale: scale * appear,
+      silhouette: !revealed,
+    });
     ctx.restore();
 
     if (!revealed) {
@@ -560,19 +806,34 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       ctx.stroke();
       for (let i = 0; i < 3; i++) {
         const sa = t * 5 + i * 2.1;
-        text(ctx, "✦", cx + Math.cos(sa) * 120, cy + Math.sin(sa * 1.3) * 110, 22, "#ffe680", "rgba(0,0,0,0)");
+        text(
+          ctx,
+          "✦",
+          cx + Math.cos(sa) * 120,
+          cy + Math.sin(sa * 1.3) * 110,
+          22,
+          "#ffe680",
+          "rgba(0,0,0,0)",
+        );
       }
-      text(ctx, "Đang tiến hóa", cx, 230, 44, "#fff3c4");
+      text(ctx, tr().evolving, cx, 230, 44, "#fff3c4");
       text(ctx, "???", cx, cy + 170, 40, "#fff");
     } else {
       const flash = Math.max(0, 1 - (ev.t - EVOLVE_REVEAL) * 3);
       if (flash > 0) fillView(`rgba(255,255,240,${flash})`);
-      text(ctx, "Tiến hóa thành công!", cx, 230, 38, "#fff3c4");
-      text(ctx, speciesFor(ev.level).name, cx, cy + 165, 40, LEVEL_COLORS[ev.level - 1]);
-      text(ctx, `Cấp ${ev.level}`, cx, cy + 210, 24, "#fff");
+      text(ctx, tr().evolved, cx, 230, 38, "#fff3c4");
+      text(
+        ctx,
+        speciesFor(ev.level).name[currentLocale(gameCtx)],
+        cx,
+        cy + 165,
+        40,
+        LEVEL_COLORS[ev.level - 1],
+      );
+      text(ctx, tr().level(ev.level), cx, cy + 210, 24, "#fff");
       if (ev.t > EVOLVE_REVEAL + 0.4) {
         ctx.globalAlpha = 0.6 + Math.sin(t * 5) * 0.4;
-        text(ctx, "Chạm để tiếp tục", cx, H - 150, 22, "#fff");
+        text(ctx, tr().tapToContinue, cx, H - 150, 22, "#fff");
         ctx.globalAlpha = 1;
       }
     }
@@ -597,17 +858,45 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.fillRect(70, 300, 400, 80);
     ctx.restore();
     roundRect(ctx, 70, 300, 400, 400, 28, "rgba(0,0,0,0)", OUTLINE, 5);
-    text(ctx, "THUA RỒI!", W / 2, 342, 44, "#fff");
-    text(ctx, `Trụ được tới đợt ${state.wave}`, W / 2, 425, 26, "#5a3a1a", "#fff4d6");
-    text(ctx, `Điểm: ${state.score}`, W / 2, 470, 30, "#ff7a3d", "#fff4d6");
-    text(ctx, `Kỷ lục: đợt ${best.wave} · ${best.score} điểm`, W / 2, 520, 20, "#7a5a3a", "#fff4d6");
-    text(ctx, `Hạ gục ${state.kills} zombie`, W / 2, 555, 20, "#7a5a3a", "#fff4d6");
+    text(ctx, tr().gameOver, W / 2, 342, 44, "#fff");
+    text(ctx, tr().survived(state.wave), W / 2, 425, 26, "#5a3a1a", "#fff4d6");
+    text(ctx, tr().score(state.score), W / 2, 470, 30, "#ff7a3d", "#fff4d6");
+    text(
+      ctx,
+      tr().best(best.wave, best.score),
+      W / 2,
+      520,
+      20,
+      "#7a5a3a",
+      "#fff4d6",
+    );
+    text(ctx, tr().kills(state.kills), W / 2, 555, 20, "#7a5a3a", "#fff4d6");
     const g = ctx.createLinearGradient(0, RESTART.y, 0, RESTART.y + RESTART.h);
     g.addColorStop(0, "#7ee05a");
     g.addColorStop(1, "#3fae3a");
-    roundRect(ctx, RESTART.x, RESTART.y + 5, RESTART.w, RESTART.h, 20, "#25702a", OUTLINE, 3.5);
-    roundRect(ctx, RESTART.x, RESTART.y, RESTART.w, RESTART.h, 20, g, OUTLINE, 3.5);
-    text(ctx, "CHƠI LẠI", W / 2, RESTART.y + RESTART.h / 2 + 1, 30);
+    roundRect(
+      ctx,
+      RESTART.x,
+      RESTART.y + 5,
+      RESTART.w,
+      RESTART.h,
+      20,
+      "#25702a",
+      OUTLINE,
+      3.5,
+    );
+    roundRect(
+      ctx,
+      RESTART.x,
+      RESTART.y,
+      RESTART.w,
+      RESTART.h,
+      20,
+      g,
+      OUTLINE,
+      3.5,
+    );
+    text(ctx, tr().playAgain, W / 2, RESTART.y + RESTART.h / 2 + 1, 30);
   }
 
   const loop = new Loop(step);
@@ -626,4 +915,3 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     },
   };
 }
-

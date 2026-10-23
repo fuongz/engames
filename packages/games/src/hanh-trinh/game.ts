@@ -1,6 +1,11 @@
 import "@fontsource/baloo-2/800.css";
+import { type Locale, currentLocale } from "../core/i18n";
 import { Loop, type PointerInfo, Stage } from "../core/stage";
-import { type GameContext, type GameInstance, SUMMARY_KEY } from "../core/types";
+import {
+  type GameContext,
+  type GameInstance,
+  SUMMARY_KEY,
+} from "../core/types";
 import {
   HERO_WEAPONS,
   OUTLINE,
@@ -17,8 +22,29 @@ import {
   roundRect,
   text,
 } from "./art";
-import { GROUND_Y, H, HERO_X, SHIELDS, SPACING, W, WALK_SPEED, WEAPONS, type EnemyKind } from "./config";
-import { type GameEvent, type GameState, type Upgrade, buy, canBuy, createGame, nextShield, nextWeapon, update } from "./logic";
+import {
+  GROUND_Y,
+  H,
+  HERO_X,
+  SHIELDS,
+  SPACING,
+  W,
+  WALK_SPEED,
+  WEAPONS,
+  type EnemyKind,
+} from "./config";
+import {
+  type GameEvent,
+  type GameState,
+  type Upgrade,
+  buy,
+  canBuy,
+  createGame,
+  nextShield,
+  nextWeapon,
+  update,
+} from "./logic";
+import { STRINGS } from "./strings";
 
 const SWING_TIME = 0.32;
 const KILLS_HUD = { x: 178, y: 46 };
@@ -30,7 +56,8 @@ const BUTTONS: Record<Upgrade, { x: number; y: number; s: number }> = {
 const RESTART = { x: W / 2 - 110, y: 690, w: 220, h: 64 };
 
 interface Floater {
-  text: string;
+  /** Resolved at draw time, so a language switch also relabels popups in flight. */
+  text: (locale: Locale) => string;
   x: number;
   y: number;
   t: number;
@@ -53,9 +80,17 @@ interface Ghost {
   t: number;
 }
 
-const SCORE = new Intl.NumberFormat("vi-VN");
+const SCORE: Record<Locale, Intl.NumberFormat> = {
+  vi: new Intl.NumberFormat(STRINGS.vi.numberLocale),
+  en: new Intl.NumberFormat(STRINGS.en.numberLocale),
+};
 
-export function startGame(root: HTMLElement, { storage, audio, reportScore }: GameContext): GameInstance {
+export function startGame(root: HTMLElement, game: GameContext): GameInstance {
+  const { storage, audio, reportScore } = game;
+  // The player can switch language mid-run, so look it up whenever we draw
+  const locale = () => currentLocale(game);
+  const tr = () => STRINGS[locale()];
+  const fmt = (n: number) => SCORE[locale()].format(n);
   void document.fonts?.load('800 20px "Baloo 2"');
   const stage = new Stage(root, W, H, { bleed: true });
   const { ctx } = stage;
@@ -101,13 +136,32 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         break;
       case "heroHit":
         flashes.set(e.targetId, 0.14);
-        float({ text: String(e.damage), x: e.x + 4, y: GROUND_Y - 112, color: e.crit ? "#ffd23f" : "#ffffff", crit: e.crit, size: e.crit ? 34 : 28 });
+        float({
+          text: () => String(e.damage),
+          x: e.x + 4,
+          y: GROUND_Y - 112,
+          color: e.crit ? "#ffd23f" : "#ffffff",
+          crit: e.crit,
+          size: e.crit ? 34 : 28,
+        });
         shake = Math.max(shake, e.crit ? 0.18 : 0.06);
         audio.noise(0.06, e.crit ? 0.14 : 0.08);
-        audio.tone({ freq: e.crit ? 320 : 220, to: 90, dur: 0.1, type: "triangle", vol: 0.12 });
+        audio.tone({
+          freq: e.crit ? 320 : 220,
+          to: 90,
+          dur: 0.1,
+          type: "triangle",
+          vol: 0.12,
+        });
         break;
       case "heroMiss":
-        float({ text: "MISS", x: e.x, y: GROUND_Y - 112, color: "#d9d9d9", size: 22 });
+        float({
+          text: (l) => STRINGS[l].miss,
+          x: e.x,
+          y: GROUND_Y - 112,
+          color: "#d9d9d9",
+          size: 22,
+        });
         audio.tone({ freq: 700, to: 300, dur: 0.12, type: "sine", vol: 0.05 });
         break;
       case "enemySwing":
@@ -115,15 +169,45 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         break;
       case "hurt":
         flashes.set("hero", 0.12);
-        float({ text: String(e.damage), x: HERO_X, y: GROUND_Y - 112, color: "#ffffff", size: 28 });
-        audio.tone({ freq: e.source === "arrow" ? 500 : 160, to: 70, dur: 0.12, type: "square", vol: 0.07 });
+        float({
+          text: () => String(e.damage),
+          x: HERO_X,
+          y: GROUND_Y - 112,
+          color: "#ffffff",
+          size: 28,
+        });
+        audio.tone({
+          freq: e.source === "arrow" ? 500 : 160,
+          to: 70,
+          dur: 0.12,
+          type: "square",
+          vol: 0.07,
+        });
         break;
       case "enemyMiss":
-        float({ text: "MISS", x: HERO_X, y: GROUND_Y - 112, color: "#d9d9d9", size: 22 });
+        float({
+          text: (l) => STRINGS[l].miss,
+          x: HERO_X,
+          y: GROUND_Y - 112,
+          color: "#d9d9d9",
+          size: 22,
+        });
         break;
       case "block":
-        float({ text: "CHẶN", x: HERO_X, y: GROUND_Y - 112, color: "#9fd8ff", size: 22 });
-        audio.tone({ freq: 1250, to: 900, dur: 0.12, type: "triangle", vol: 0.08 });
+        float({
+          text: (l) => STRINGS[l].block,
+          x: HERO_X,
+          y: GROUND_Y - 112,
+          color: "#9fd8ff",
+          size: 22,
+        });
+        audio.tone({
+          freq: 1250,
+          to: 900,
+          dur: 0.12,
+          type: "triangle",
+          vol: 0.08,
+        });
         break;
       case "arrowFired":
         audio.tone({ freq: 900, to: 1400, dur: 0.06, type: "sine", vol: 0.04 });
@@ -133,11 +217,31 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         pendingScroll += SPACING;
         for (let i = 0; i < 10; i++) {
           const a = Math.random() * Math.PI * 2;
-          dust.push({ x: e.x, y: GROUND_Y - 20, vx: Math.cos(a) * 90, vy: Math.sin(a) * 60 - 30, t: 0 });
+          dust.push({
+            x: e.x,
+            y: GROUND_Y - 20,
+            vx: Math.cos(a) * 90,
+            vy: Math.sin(a) * 60 - 30,
+            t: 0,
+          });
         }
         const n = e.kind === "chief" ? 8 : e.gold > 250 ? 4 : 3;
-        for (let i = 0; i < n; i++) coins.push({ x: e.x, y: GROUND_Y - 40, vx: (Math.random() - 0.3) * 160, vy: -260 - Math.random() * 120, t: -i * 0.05 });
-        if (e.heal > 0) float({ text: `+${e.heal}`, x: HERO_X, y: GROUND_Y - 140, color: "#7dff7d", size: 22 });
+        for (let i = 0; i < n; i++)
+          coins.push({
+            x: e.x,
+            y: GROUND_Y - 40,
+            vx: (Math.random() - 0.3) * 160,
+            vy: -260 - Math.random() * 120,
+            t: -i * 0.05,
+          });
+        if (e.heal > 0)
+          float({
+            text: () => `+${e.heal}`,
+            x: HERO_X,
+            y: GROUND_Y - 140,
+            color: "#7dff7d",
+            size: 22,
+          });
         audio.noise(0.12, 0.08);
         break;
       }
@@ -145,16 +249,36 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         const isWeapon = e.upgrade === "weapon";
         const tier = isWeapon ? WEAPONS[e.tier] : SHIELDS[e.tier];
         const gain = isWeapon
-          ? `+${WEAPONS[e.tier].damage - WEAPONS[e.tier - 1].damage} sát thương`
-          : `+${SHIELDS[e.tier].hp - SHIELDS[e.tier - 1].hp} máu`;
+          ? WEAPONS[e.tier].damage - WEAPONS[e.tier - 1].damage
+          : SHIELDS[e.tier].hp - SHIELDS[e.tier - 1].hp;
         // Up on the grass, clear of the damage numbers over the road
-        float({ text: `${tier.name}!`, x: W / 2, y: 250, color: "#ffe680", size: 34 });
-        float({ text: gain, x: W / 2, y: 290, color: "#7dff7d", size: 22 });
+        float({
+          text: (l) => `${tier.name[l]}!`,
+          x: W / 2,
+          y: 250,
+          color: "#ffe680",
+          size: 34,
+        });
+        float({
+          text: (l) =>
+            isWeapon ? STRINGS[l].damageGain(gain) : STRINGS[l].hpGain(gain),
+          x: W / 2,
+          y: 290,
+          color: "#7dff7d",
+          size: 22,
+        });
         if (tutorial) {
           tutorial = false;
           storage.set("tutorialDone", true);
         }
-        for (const [i, f] of [523, 659, 784, 1046].entries()) audio.tone({ freq: f, dur: 0.1, type: "square", vol: 0.08, delay: i * 0.06 });
+        for (const [i, f] of [523, 659, 784, 1046].entries())
+          audio.tone({
+            freq: f,
+            dur: 0.1,
+            type: "square",
+            vol: 0.08,
+            delay: i * 0.06,
+          });
         break;
       }
       case "defeat":
@@ -163,26 +287,47 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
           best = state.kills;
           storage.set("best", best);
         }
-        storage.set(SUMMARY_KEY, `Kỷ lục ${best} quái`);
+        storage.set(SUMMARY_KEY, {
+          vi: STRINGS.vi.summary(best),
+          en: STRINGS.en.summary(best),
+        });
         if (!reported) {
           reported = true;
-          reportScore?.({ score: state.kills, detail: `${WEAPONS[state.weapon].name} · ${SHIELDS[state.shield].name}` });
+          reportScore?.({
+            score: state.kills,
+            detail: `${WEAPONS[state.weapon].name[locale()]} · ${SHIELDS[state.shield].name[locale()]}`,
+          });
         }
-        for (const [i, f] of [392, 330, 262, 196].entries()) audio.tone({ freq: f, dur: 0.25, type: "triangle", vol: 0.12, delay: i * 0.16 });
+        for (const [i, f] of [392, 330, 262, 196].entries())
+          audio.tone({
+            freq: f,
+            dur: 0.25,
+            type: "triangle",
+            vol: 0.12,
+            delay: i * 0.16,
+          });
         break;
     }
   }
 
   // ---------------------------------------------------------- input
 
-  const inButton = (p: { x: number; y: number }, b: { x: number; y: number; s: number }) =>
-    p.x >= b.x && p.x <= b.x + b.s && p.y >= b.y && p.y <= b.y + b.s;
+  const inButton = (
+    p: { x: number; y: number },
+    b: { x: number; y: number; s: number },
+  ) => p.x >= b.x && p.x <= b.x + b.s && p.y >= b.y && p.y <= b.y + b.s;
 
   stage.onPointer({
     down(p: PointerInfo) {
       audio.unlock();
       if (state.over) {
-        if (defeatT > 0.8 && p.x >= RESTART.x && p.x <= RESTART.x + RESTART.w && p.y >= RESTART.y && p.y <= RESTART.y + RESTART.h) {
+        if (
+          defeatT > 0.8 &&
+          p.x >= RESTART.x &&
+          p.x <= RESTART.x + RESTART.w &&
+          p.y >= RESTART.y &&
+          p.y <= RESTART.y + RESTART.h
+        ) {
           restart();
         }
         return;
@@ -190,7 +335,8 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       for (const u of ["weapon", "shield"] as const) {
         if (!inButton(p, BUTTONS[u])) continue;
         pressed = u;
-        if (!buy(state, u)) audio.tone({ freq: 150, dur: 0.08, type: "square", vol: 0.06 });
+        if (!buy(state, u))
+          audio.tone({ freq: 150, dur: 0.08, type: "square", vol: 0.06 });
       }
     },
     up() {
@@ -243,7 +389,11 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         c.y += (GOLD_HUD.y - c.y) * k;
       }
     }
-    const arrived = coins.filter((c) => c.t > 0.35 && Math.hypot(c.x - (GOLD_HUD.x - 44), c.y - GOLD_HUD.y) < 12);
+    const arrived = coins.filter(
+      (c) =>
+        c.t > 0.35 &&
+        Math.hypot(c.x - (GOLD_HUD.x - 44), c.y - GOLD_HUD.y) < 12,
+    );
     if (arrived.length) {
       goldBump = 0.2;
       audio.tone({ freq: 1320, to: 1760, dur: 0.06, type: "sine", vol: 0.05 });
@@ -259,7 +409,11 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     const v = stage.view;
     stage.begin();
     ctx.save();
-    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 20, (Math.random() - 0.5) * shake * 10);
+    if (shake > 0)
+      ctx.translate(
+        (Math.random() - 0.5) * shake * 20,
+        (Math.random() - 0.5) * shake * 10,
+      );
     drawScene(ctx, scroll, v.x, v.x + v.w, v.y, v.y + v.h);
 
     // Back to front so the front foe overlaps the one behind it
@@ -270,26 +424,40 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         t,
         swing,
         flash: flashes.get(e.id) ?? 0,
-        lunge: swing > 0.45 ? Math.sin(((swing - 0.45) / 0.55) * Math.PI) * 14 : 0,
+        lunge:
+          swing > 0.45 ? Math.sin(((swing - 0.45) / 0.55) * Math.PI) * 14 : 0,
       });
     }
     for (const g of ghosts) {
       ctx.globalAlpha = 1 - g.t / 0.4;
-      drawEnemy(ctx, g.kind, g.x, GROUND_Y - g.t * 30, { t, swing: 0, flash: 0.1, lunge: 0 });
+      drawEnemy(ctx, g.kind, g.x, GROUND_Y - g.t * 30, {
+        t,
+        swing: 0,
+        flash: 0.1,
+        lunge: 0,
+      });
       ctx.globalAlpha = 1;
     }
     const hs = swings.get("hero") ?? 0;
     const walking = pendingScroll > 0;
-    drawHero(ctx, HERO_X, GROUND_Y - (walking ? Math.abs(Math.sin(t * 14)) * 4 : 0), state.weapon, {
-      t,
-      swing: hs,
-      flash: flashes.get("hero") ?? 0,
-      lunge: hs > 0.45 ? Math.sin(((hs - 0.45) / 0.55) * Math.PI) * 16 : 0,
-    });
+    drawHero(
+      ctx,
+      HERO_X,
+      GROUND_Y - (walking ? Math.abs(Math.sin(t * 14)) * 4 : 0),
+      state.weapon,
+      {
+        t,
+        swing: hs,
+        flash: flashes.get("hero") ?? 0,
+        lunge: hs > 0.45 ? Math.sin(((hs - 0.45) / 0.55) * Math.PI) * 16 : 0,
+      },
+    );
     for (const a of state.arrows) drawArrow(ctx, a.x, GROUND_Y - 50);
 
     drawHpBar(ctx, HERO_X, GROUND_Y + 14, state.hp, state.maxHp, true);
-    for (const e of state.queue) if (e.x < v.x + v.w + 40) drawHpBar(ctx, e.x, GROUND_Y + 14, e.hp, e.maxHp, false);
+    for (const e of state.queue)
+      if (e.x < v.x + v.w + 40)
+        drawHpBar(ctx, e.x, GROUND_Y + 14, e.hp, e.maxHp, false);
 
     for (const d of dust) {
       ctx.globalAlpha = 1 - d.t / 0.5;
@@ -301,6 +469,7 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.globalAlpha = 1;
 
     // Damage numbers rise, then settle into grey (as in the ad)
+    const l = locale();
     for (const f of floaters) {
       const k = Math.min(1, f.t / 0.25);
       const y = f.y - k * 18 - f.t * 6;
@@ -308,7 +477,7 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
       const pop = f.t < 0.12 ? 1 + (0.12 - f.t) * 3 : 1;
       const color = f.t > 0.6 && !f.crit ? "#bdbdbd" : f.color;
       if (f.crit) drawFlame(ctx, f.x - f.size * 0.75, y, f.size * 0.4);
-      text(ctx, f.text, f.x + (f.crit ? 10 : 0), y, f.size * pop, color);
+      text(ctx, f.text(l), f.x + (f.crit ? 10 : 0), y, f.size * pop, color);
       ctx.globalAlpha = 1;
     }
     for (const c of coins) if (c.t > 0) drawCoin(ctx, c.x, c.y, 11);
@@ -321,15 +490,29 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     stage.end();
   }
 
-  function pill(x: number, y: number, label: string, icon: () => void, bump = 0) {
+  function pill(
+    x: number,
+    y: number,
+    label: string,
+    icon: () => void,
+    bump = 0,
+  ) {
     roundRect(ctx, x - 70, y - 22, 140, 44, 12, "rgba(20,32,20,0.62)");
     icon();
     text(ctx, label, x + 14, y + 2, 26 * (1 + bump));
   }
 
   function drawHud() {
-    pill(KILLS_HUD.x, KILLS_HUD.y, String(state.kills), () => drawSkull(ctx, KILLS_HUD.x - 44, KILLS_HUD.y, 14));
-    pill(GOLD_HUD.x, GOLD_HUD.y, SCORE.format(state.gold), () => drawCoin(ctx, GOLD_HUD.x - 44, GOLD_HUD.y, 14), goldBump);
+    pill(KILLS_HUD.x, KILLS_HUD.y, String(state.kills), () =>
+      drawSkull(ctx, KILLS_HUD.x - 44, KILLS_HUD.y, 14),
+    );
+    pill(
+      GOLD_HUD.x,
+      GOLD_HUD.y,
+      fmt(state.gold),
+      () => drawCoin(ctx, GOLD_HUD.x - 44, GOLD_HUD.y, 14),
+      goldBump,
+    );
   }
 
   function drawButtons() {
@@ -361,23 +544,40 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
         drawWeapon(ctx, HERO_WEAPONS[next ? state.weapon + 1 : state.weapon]);
         ctx.restore();
       } else {
-        drawShieldIcon(ctx, cx, b.y + 54, 30, next ? state.shield + 1 : state.shield);
+        drawShieldIcon(
+          ctx,
+          cx,
+          b.y + 54,
+          30,
+          next ? state.shield + 1 : state.shield,
+        );
       }
       ctx.globalAlpha = 1;
       if (next) {
         drawCoin(ctx, cx - 30, b.y + b.s - 24, 11);
-        text(ctx, SCORE.format(next.cost), cx + 12, b.y + b.s - 23, 24, enabled ? "#fff" : "#c8c8c8");
+        text(
+          ctx,
+          fmt(next.cost),
+          cx + 12,
+          b.y + b.s - 23,
+          24,
+          enabled ? "#fff" : "#c8c8c8",
+        );
       } else {
-        text(ctx, "MAX", cx, b.y + b.s - 23, 24, "#ffd23f");
+        text(ctx, tr().max, cx, b.y + b.s - 23, 24, "#ffd23f");
       }
       ctx.restore();
-      const current = u === "weapon" ? WEAPONS[state.weapon].name : SHIELDS[state.shield].name;
+      const current = (
+        u === "weapon" ? WEAPONS[state.weapon] : SHIELDS[state.shield]
+      ).name[locale()];
       text(ctx, current, cx, b.y + b.s + 30, 16, "#e8f5e0");
     }
   }
 
   function drawTutorial() {
-    const target = (["weapon", "shield"] as const).find((u) => canBuy(state, u));
+    const target = (["weapon", "shield"] as const).find((u) =>
+      canBuy(state, u),
+    );
     if (!target) return;
     const b = BUTTONS[target];
     const k = (Math.sin(t * 6) + 1) / 2;
@@ -398,7 +598,7 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     ctx.restore();
-    text(ctx, "Chạm để nâng cấp!", W / 2, b.y - 26, 22, "#fff7b0");
+    text(ctx, tr().tapToUpgrade, W / 2, b.y - 26, 22, "#fff7b0");
   }
 
   function drawDefeat(k: number) {
@@ -439,15 +639,24 @@ export function startGame(root: HTMLElement, { storage, audio, reportScore }: Ga
     // Ribbon banner
     roundRect(ctx, W / 2 - 190, cy + 86, 380, 70, 10, "#6b6b6b", 4);
     roundRect(ctx, W / 2 - 176, cy + 94, 352, 54, 8, "#8a8a8a", 0);
-    text(ctx, "THẤT BẠI", W / 2, cy + 122, 40, "#f2f2f2");
-    text(ctx, `Hạ gục ${state.kills} quái`, W / 2, cy + 200, 30, "#ffffff");
-    text(ctx, `Kỷ lục: ${best} quái`, W / 2, cy + 240, 20, "#cfe8c4");
+    const s = tr();
+    text(ctx, s.defeat, W / 2, cy + 122, 40, "#f2f2f2");
+    text(ctx, s.kills(state.kills), W / 2, cy + 200, 30, "#ffffff");
+    text(ctx, s.best(best), W / 2, cy + 240, 20, "#cfe8c4");
     const g = ctx.createLinearGradient(0, RESTART.y, 0, RESTART.y + RESTART.h);
     g.addColorStop(0, "#ffd04a");
     g.addColorStop(1, "#ff8a1f");
-    roundRect(ctx, RESTART.x, RESTART.y + 5, RESTART.w, RESTART.h, 22, "#b8520f");
+    roundRect(
+      ctx,
+      RESTART.x,
+      RESTART.y + 5,
+      RESTART.w,
+      RESTART.h,
+      22,
+      "#b8520f",
+    );
     roundRect(ctx, RESTART.x, RESTART.y, RESTART.w, RESTART.h, 22, g, 3.5);
-    text(ctx, "CHƠI LẠI", W / 2, RESTART.y + RESTART.h / 2 + 1, 28);
+    text(ctx, s.playAgain, W / 2, RESTART.y + RESTART.h / 2 + 1, 28);
     ctx.restore();
   }
 

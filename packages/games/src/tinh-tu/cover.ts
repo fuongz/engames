@@ -1,6 +1,8 @@
 // Key art for the portal, composed from the game's own drawing code. Not
 // imported by the game: `bun run art` renders it to poster.webp / banner.webp.
-import { blit, drawBeam, drawBoss, drawFlames, drawPortal, drawRider, drawSky, makeSky, makeSprites, text } from "./art";
+import type { Locale, Localized } from "../core/i18n";
+import { fitFontSize } from "../core/text";
+import { blit, drawBeam, drawBoss, drawFlames, drawPortal, drawRider, drawSky, makeSky, makeSprites, FONT, text } from "./art";
 import { H, W } from "./config";
 
 function scene(ctx: CanvasRenderingContext2D, beam: boolean) {
@@ -20,8 +22,14 @@ function scene(ctx: CanvasRenderingContext2D, beam: boolean) {
   drawRider(ctx, 230, 270, 0.6, 1.5);
 }
 
+/** The poster's two title lines; the manifest holds the same name as one string. */
+const POSTER_TITLE: Localized<[string, string]> = {
+  vi: ["TINH TÚ", "PHI HÀNH"],
+  en: ["STARLIGHT", "FLIGHT"],
+};
+
 /** 600×800 poster with the title baked in. */
-export function renderPoster(canvas: HTMLCanvasElement) {
+export function renderPoster(canvas: HTMLCanvasElement, locale: Locale = "vi") {
   canvas.width = 600;
   canvas.height = 800;
   const ctx = canvas.getContext("2d");
@@ -38,8 +46,9 @@ export function renderPoster(canvas: HTMLCanvasElement) {
   fade.addColorStop(1, "rgba(8,6,40,0.9)");
   ctx.fillStyle = fade;
   ctx.fillRect(0, 520, 600, 280);
-  text(ctx, "TINH TÚ", 300, 660, 96, "#ffe7a6");
-  text(ctx, "PHI HÀNH", 300, 738, 58, "#ffb8ea");
+  const [line1, line2] = POSTER_TITLE[locale];
+  text(ctx, line1, 300, 660, fitFontSize(ctx, line1, 96, 540, FONT), "#ffe7a6");
+  text(ctx, line2, 300, 738, fitFontSize(ctx, line2, 58, 540, FONT), "#ffb8ea");
 }
 
 /** 1200×600 banner: rider and beam on the right half, calm left for the HTML title. */

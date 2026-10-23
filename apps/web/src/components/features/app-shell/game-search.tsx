@@ -11,6 +11,7 @@ import {
   CommandItem,
   CommandList,
 } from "#/components/ui/command";
+import { useLocale, useMessages } from "#/hooks/use-messages";
 
 /** ⌘K palette: jump to a game, or to the library filtered by category. */
 export function GameSearch({
@@ -21,6 +22,8 @@ export function GameSearch({
   onOpenChange: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
+  const locale = useLocale();
+  const m = useMessages();
   const go = (to: () => void) => {
     onOpenChange(false);
     to();
@@ -30,20 +33,20 @@ export function GameSearch({
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Tìm game"
-      description="Tìm theo tên, thể loại hoặc từ khóa"
+      title={m.search.title}
+      description={m.search.description}
     >
       {/* CommandDialog only supplies the dialog; cmdk's store lives in <Command>,
           and CommandInput/Item crash ("reading 'subscribe'") without it. */}
       <Command>
-        <CommandInput placeholder="Tìm game, thể loại..." />
+        <CommandInput placeholder={m.search.placeholder} />
         <CommandList className="max-h-[min(70dvh,480px)]">
-          <CommandEmpty>Không thấy game nào.</CommandEmpty>
-          <CommandGroup heading="Game" className="**:[[cmdk-group-items]]:grid **:[[cmdk-group-items]]:gap-1">
+          <CommandEmpty>{m.search.empty}</CommandEmpty>
+          <CommandGroup heading={m.search.games} className="**:[[cmdk-group-items]]:grid **:[[cmdk-group-items]]:gap-1">
             {games.map((g) => (
               <CommandItem
                 key={g.slug}
-                value={`${g.title} ${g.tags.join(" ")}`}
+                value={`${g.title.vi} ${g.title.en} ${g.tags[locale].join(" ")}`}
                 className="gap-3 py-2.5"
                 onSelect={() =>
                   go(() =>
@@ -53,27 +56,27 @@ export function GameSearch({
               >
                 {/* shrink-0 + aspect-square: flex would otherwise squash the art */}
                 <img
-                  src={g.poster}
+                  src={g.poster[locale]}
                   alt=""
                   className="aspect-square size-11 shrink-0 rounded-lg object-cover object-top"
                 />
                 <span className="grid min-w-0 gap-0.5">
-                  <span className="truncate font-medium">{g.title}</span>
+                  <span className="truncate font-medium">{g.title[locale]}</span>
                   <span className="line-clamp-2 text-xs text-muted-foreground">
-                    {g.tagline}
+                    {g.tagline[locale]}
                   </span>
                 </span>
               </CommandItem>
             ))}
           </CommandGroup>
           <CommandGroup
-            heading="Thể loại"
+            heading={m.search.categories}
             className="**:[[cmdk-group-items]]:grid **:[[cmdk-group-items]]:grid-cols-3 **:[[cmdk-group-items]]:gap-2 **:[[cmdk-group-items]]:pb-1"
           >
             {categories.map((c) => (
               <CommandItem
                 key={c.id}
-                value={`thể loại ${c.label}`}
+                value={`${m.search.categories} ${c.label[locale]}`}
                 className="justify-center gap-1.5 rounded-full! border bg-card px-2 py-2 text-xs font-medium whitespace-nowrap data-selected:border-primary/60"
                 onSelect={() =>
                   go(() =>
@@ -82,7 +85,7 @@ export function GameSearch({
                 }
               >
                 <HugeiconsIcon icon={categoryIcon(c.id)} className="size-4" />
-                {c.label}
+                {c.label[locale]}
               </CommandItem>
             ))}
           </CommandGroup>

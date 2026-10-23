@@ -1,0 +1,135 @@
+// Portal copy in Vietnamese: the source catalog. `en.ts` must mirror every key
+// (it is typed against this one). `{name}` placeholders are filled by lib/i18n
+// `fmt`; `**bold**` and `[[⌘K]]` are rendered by RichText.
+
+export const vi = {
+  app: {
+    title: "Engames — Chơi game ngay trên trình duyệt",
+    description: "Kho game nhỏ chơi ngay trên điện thoại và máy tính, không cần cài đặt.",
+  },
+  language: { label: "Ngôn ngữ", vi: "Tiếng Việt", en: "English" },
+  nav: {
+    label: "Điều hướng chính",
+    discover: "Khám phá",
+    library: "Thư viện",
+    search: "Tìm kiếm",
+  },
+  sidebar: {
+    soundOn: "Âm thanh: Bật",
+    soundOff: "Âm thanh: Tắt",
+    installTitle: "Cài Engames lên điện thoại",
+    install: "Cài app về máy",
+  },
+  search: {
+    open: "Tìm game",
+    placeholder: "Tìm game, thể loại...",
+    title: "Tìm game",
+    description: "Tìm theo tên, thể loại hoặc từ khóa",
+    empty: "Không thấy game nào.",
+    games: "Game",
+    categories: "Thể loại",
+  },
+  help: {
+    trigger: "Hướng dẫn",
+    title: "Chơi Engames thế nào?",
+    description: "Game chạy ngay trong trình duyệt, không cần tài khoản hay cài đặt.",
+    tips: [
+      {
+        title: "Chọn game",
+        body: "Bấm vào một game rồi bấm **Chơi**. Cách điều khiển của từng game nằm ngay trên trang game.",
+      },
+      { title: "Tìm nhanh", body: "Gõ vào ô tìm kiếm hoặc nhấn [[⌘K]] để nhảy tới game hay thể loại." },
+      {
+        title: "Cài lên điện thoại",
+        body: "Android: bấm **Cài Engames**. iPhone: trong Safari bấm **Chia sẻ** rồi **Thêm vào MH chính**.",
+      },
+      {
+        title: "Chơi offline",
+        body: "Game đã mở một lần sẽ chơi được cả khi mất mạng. Kỷ lục được lưu trên máy của bạn.",
+      },
+      {
+        title: "Ngôn ngữ",
+        body: "Đổi Tiếng Việt / English ở menu ngôn ngữ. Khi đăng nhập, lựa chọn được lưu theo tài khoản.",
+      },
+    ],
+  },
+  installHelp: {
+    title: "Thêm Engames vào màn hình chính",
+    description: "Chơi toàn màn hình như app thật, mở nhanh từ màn hình chính và chơi được cả khi offline.",
+    steps: [
+      "Bấm nút **Chia sẻ** trên thanh Safari",
+      "Chọn **Thêm vào MH chính**",
+      "Bấm **Thêm** rồi mở Engames từ màn hình chính",
+    ],
+  },
+  account: {
+    signIn: "Đăng nhập Google",
+    signInHint: "Lưu tên trên bảng xếp hạng",
+    signOut: "Đăng xuất",
+  },
+  home: {
+    featured: "Game nổi bật",
+    best: "Kỷ lục: {summary}",
+    free: "Miễn phí · Chơi ngay trên trình duyệt",
+    playNow: "Chơi ngay",
+    recommended: "Gợi ý cho bạn",
+    seeAll: "Xem tất cả",
+    comingSoon: "Sắp ra mắt",
+    continue: "Chơi tiếp",
+  },
+  library: {
+    title: "Thư viện",
+    pageTitle: "Thư viện · Engames",
+    count: { one: "{n} game, chơi ngay không cần cài.", other: "{n} game, chơi ngay không cần cài." },
+    searchPlaceholder: "Tìm trong thư viện...",
+    searchLabel: "Tìm trong thư viện",
+    all: "Tất cả",
+    featured: "Nổi bật",
+    categories: "Thể loại",
+    emptyTitle: "Chưa có game nào",
+    emptyDescription: "Thử thể loại khác hoặc từ khóa khác nhé.",
+  },
+  player: {
+    back: "Về trang chủ",
+    leaderboard: "Bảng xếp hạng",
+    help: "Hướng dẫn",
+    unmute: "Bật âm thanh",
+    mute: "Tắt âm thanh",
+    restart: "Chơi lại từ đầu",
+    fullscreen: "Toàn màn hình",
+    rotateTitle: "Xoay ngang điện thoại để chơi",
+    rotateHint: "Game này chơi ở màn hình ngang. Nhớ tắt khóa xoay màn hình nếu đang bật.",
+    loadFailed: "Không tải được game. Kiểm tra mạng rồi thử lại nhé.",
+    play: "Chơi",
+    loading: "Đang tải...",
+    loadingLabel: "Đang tải game",
+    boardOffline: "Không tải được bảng xếp hạng (đang offline?).",
+    moreGames: "Game khác",
+    howToPlay: "Cách chơi",
+    inspiredBy: "Lấy cảm hứng từ {source}",
+  },
+  leaderboard: {
+    emptyTitle: "Chưa có ai trên bảng",
+    emptyDescription: "Chơi một ván và ghi tên mình đầu tiên nhé!",
+  },
+  score: {
+    savedTitle: "Đã lưu lên bảng xếp hạng!",
+    saveTitle: "Lưu điểm lên bảng xếp hạng",
+    rank: "Hạng #{rank}",
+    stillBest: " · kỷ lục của bạn vẫn là {best}",
+    savingAs: "Đang lưu dưới tên {name}...",
+    nameLabel: "Tên hiển thị",
+    namePlaceholder: "Nhập tên của bạn",
+    nameTooShort: "Tên cần ít nhất 2 ký tự.",
+    saveFailed: "Không lưu được điểm. Kiểm tra mạng rồi thử lại nhé.",
+    saving: "Đang lưu...",
+    save: "Lưu điểm",
+    signInToSave: "Đăng nhập Google để lưu tự động",
+    playAgain: "Chơi lại",
+    close: "Đóng",
+    skip: "Bỏ qua",
+  },
+  notFound: "Không tìm thấy trang này.",
+};
+
+export type Messages = typeof vi;

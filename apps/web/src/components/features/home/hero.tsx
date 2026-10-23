@@ -1,9 +1,11 @@
 import { PlayIcon, StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
-import { SUMMARY_KEY, categories, createStorage, type GameManifest, games } from "@web-games/games";
+import { SUMMARY_KEY, categories, createStorage, type GameManifest, games, summaryText } from "@web-games/games";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "#/components/ui/button";
+import { useLocale, useMessages } from "#/hooks/use-messages";
+import { fmt } from "#/lib/i18n";
 import { cn } from "#/lib/utils";
 
 const ADVANCE_MS = 6500;
@@ -15,6 +17,8 @@ const SWIPE_PX = 40;
  */
 export function Hero() {
   const [index, setIndex] = useState(0);
+  const locale = useLocale();
+  const m = useMessages();
   const game = games[index % Math.max(1, games.length)];
 
   // Re-armed on every change, so picking a slide (dot or swipe) gets a full
@@ -30,7 +34,7 @@ export function Hero() {
     <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="grid gap-3">
         <Carousel index={index} onIndex={setIndex} />
-        <div className="flex justify-center" role="tablist" aria-label="Game nổi bật">
+        <div className="flex justify-center" role="tablist" aria-label={m.home.featured}>
           {games.map((g, i) => (
             // The padding is the hit area (~24px); the pill inside is the visible dot
             <button
@@ -38,7 +42,7 @@ export function Hero() {
               type="button"
               role="tab"
               aria-selected={i === index}
-              aria-label={g.title}
+              aria-label={g.title[locale]}
               onClick={() => setIndex(i)}
               className="group grid cursor-pointer place-items-center rounded-full px-1.5 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -93,10 +97,12 @@ function Carousel({ index, onIndex }: { index: number; onIndex: (i: number) => v
 }
 
 function Slide({ game, active }: { game: GameManifest; active: boolean }) {
+  const locale = useLocale();
+  const m = useMessages();
   const [summary, setSummary] = useState<string | null>(null);
-  useEffect(() => setSummary(createStorage(game.slug).get<string | null>(SUMMARY_KEY, null)), [game.slug]);
+  useEffect(() => setSummary(summaryText(createStorage(game.slug).get<unknown>(SUMMARY_KEY, null), locale)), [game.slug, locale]);
   const category = categories.find((c) => c.id === game.category);
-  const chips = [category?.label, ...game.tags].filter(Boolean).slice(0, 3);
+  const chips = [category?.label[locale], ...game.tags[locale]].filter(Boolean).slice(0, 3);
 
   return (
     <Link
@@ -126,12 +132,12 @@ function Slide({ game, active }: { game: GameManifest; active: boolean }) {
 
       <div className="absolute inset-x-4 bottom-4 grid gap-2 md:inset-x-6 md:bottom-6">
         <h2 className="max-w-[14ch] text-3xl leading-[0.95] font-black tracking-tight text-balance uppercase drop-shadow-lg md:text-5xl lg:text-6xl">
-          {game.title}
+          {game.title[locale]}
         </h2>
         {summary && (
           <span className="flex w-fit items-center gap-1.5 rounded-full bg-background/60 px-3 py-1 text-xs backdrop-blur-md">
             <HugeiconsIcon icon={StarIcon} className="size-3.5 fill-highlight text-highlight" />
-            Kỷ lục: {summary}
+            {fmt(m.home.best, { summary })}
           </span>
         )}
       </div>
@@ -140,13 +146,15 @@ function Slide({ game, active }: { game: GameManifest; active: boolean }) {
 }
 
 function InfoCard({ game }: { game: GameManifest }) {
+  const locale = useLocale();
+  const m = useMessages();
   return (
     <div className="relative isolate flex flex-1 flex-col gap-3 overflow-hidden rounded-2xl bg-linear-to-br from-warm to-warm-deep p-5">
       <div aria-hidden className="absolute inset-0 -z-10 bg-linear-to-t from-background/45 to-transparent" />
-      <h3 className="text-2xl leading-tight font-bold tracking-tight">{game.title}</h3>
-      <p className="line-clamp-3 text-sm leading-relaxed text-foreground/90 lg:line-clamp-9">{game.description}</p>
+      <h3 className="text-2xl leading-tight font-bold tracking-tight">{game.title[locale]}</h3>
+      <p className="line-clamp-3 text-sm leading-relaxed text-foreground/90 lg:line-clamp-9">{game.description[locale]}</p>
       <div className="mt-auto grid gap-3 pt-2">
-        <span className="text-sm font-semibold">Miễn phí · Chơi ngay trên trình duyệt</span>
+        <span className="text-sm font-semibold">{m.home.free}</span>
         {/* Dark glass on the orange card, as in the reference; an orange button would vanish here */}
         <Button
           size="lg"
@@ -155,7 +163,7 @@ function InfoCard({ game }: { game: GameManifest }) {
           render={<Link to="/games/$slug" params={{ slug: game.slug }} />}
         >
           <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" className="fill-current" />
-          Chơi ngay
+          {m.home.playNow}
         </Button>
       </div>
     </div>

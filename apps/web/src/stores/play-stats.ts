@@ -10,7 +10,7 @@ interface PlayStats {
   recordPlay: (slug: string) => void;
 }
 
-/** Per-device play history, for the "Chơi tiếp" shelf. */
+/** Per-device play history, for the "Keep playing" shelf. */
 export const usePlayStats = create<PlayStats>()(
   persist(
     (set) => ({

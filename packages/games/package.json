@@ -6,7 +6,8 @@
   "type": "module",
   "//": "Framework-free canvas games. Consumed as TypeScript source by the web app's Vite build (import.meta.glob discovers games), so there is no build step here.",
   "exports": {
-    ".": "./src/registry.ts"
+    ".": "./src/registry.ts",
+    "./i18n": "./src/core/i18n.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
