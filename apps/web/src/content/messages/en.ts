@@ -71,7 +71,7 @@ export const en: Messages = {
   home: {
     featured: "Featured games",
     best: "Best: {summary}",
-    free: "Free · Play right in your browser",
+    free: "Free, play right in your browser",
     playNow: "Play now",
     recommended: "Recommended for you",
     seeAll: "See all",
@@ -80,7 +80,7 @@ export const en: Messages = {
   },
   library: {
     title: "Library",
-    pageTitle: "Library · Engames",
+    pageTitle: "Library | Engames",
     count: { one: "{n} game, ready to play, nothing to install.", other: "{n} games, ready to play, nothing to install." },
     searchPlaceholder: "Search the library...",
     searchLabel: "Search the library",
@@ -117,7 +117,7 @@ export const en: Messages = {
     savedTitle: "Saved to the leaderboard!",
     saveTitle: "Save your score to the leaderboard",
     rank: "Rank #{rank}",
-    stillBest: " · your best is still {best}",
+    stillBest: " (your best is still {best})",
     savingAs: "Saving as {name}...",
     nameLabel: "Display name",
     namePlaceholder: "Enter your name",

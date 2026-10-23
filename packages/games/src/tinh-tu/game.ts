@@ -418,7 +418,7 @@ export function setup(rt: Runtime): GameHooks {
       case "end":
         reportScore?.({
           score: state.score,
-          detail: `${state.result?.stars ?? 0}★ · ${tr().shardsDetail(state.shards, SHARD_GOAL)}`,
+          detail: `${state.result?.stars ?? 0}★, ${tr().shardsDetail(state.shards, SHARD_GOAL)}`,
         });
         if (e.won)
           for (const [i, f] of [659, 784, 988, 1318].entries())

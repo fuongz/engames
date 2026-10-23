@@ -294,7 +294,7 @@ export function setup(rt: Runtime): GameHooks {
           reported = true;
           reportScore?.({
             score: state.kills,
-            detail: `${WEAPONS[state.weapon].name[locale()]} · ${SHIELDS[state.shield].name[locale()]}`,
+            detail: `${WEAPONS[state.weapon].name[locale()]} + ${SHIELDS[state.shield].name[locale()]}`,
           });
         }
         for (const [i, f] of [392, 330, 262, 196].entries())

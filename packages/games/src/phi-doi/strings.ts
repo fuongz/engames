@@ -27,7 +27,7 @@ export interface Strings {
   newBest: string;
   best: (n: number) => string;
   flyAgain: string;
-  /** Leaderboard detail, e.g. "Màn 2 · 30 xu". */
+  /** Leaderboard detail, e.g. "Màn 2, 30 xu". */
   detail: (stage: number, coins: number) => string;
 }
 
@@ -36,7 +36,7 @@ export const STRINGS: Localized<Strings> = {
     pickup: { power: "Tăng hỏa lực!", bomb: "+1 bom", heal: "Sửa máy bay" },
     stage: (n) => `Màn ${n}`,
     stageClearTitle: "HOÀN THÀNH",
-    stageClearSub: (n) => `Đã đánh chìm chiến hạm · Màn ${n}`,
+    stageClearSub: (n) => `Màn ${n}: đã đánh chìm chiến hạm`,
     stageStartSub: "Địch đông hơn và bắn nhanh hơn",
     warningStrip: "!!! CẨN THẬN",
     warning: "CẢNH BÁO",
@@ -46,23 +46,23 @@ export const STRINGS: Localized<Strings> = {
     missionLine2: "trận không chiến!",
     dragHint: "Kéo ngón tay ở bất kỳ đâu để bay",
     paused: "Tạm Dừng",
-    pauseScore: (score, stage) => `Điểm: ${score} · Màn ${stage}`,
-    keysHint: "Phím: WASD bay · J hỏa lực · Space bom",
+    pauseScore: (score, stage) => `Điểm: ${score} | Màn ${stage}`,
+    keysHint: "Phím: WASD bay | J hỏa lực | Space bom",
     resume: "Tiếp tục",
     restart: "Chơi lại",
     shotDown: "Bị Bắn Hạ!",
     resultLine: (stage, coins, ships) =>
-      `Màn ${stage} · ${coins} xu · ${ships} chiến hạm`,
+      `Màn ${stage} | ${coins} xu | ${ships} chiến hạm`,
     newBest: "Kỷ lục mới!",
     best: (n) => `Kỷ lục ${n}`,
     flyAgain: "Bay lại",
-    detail: (stage, coins) => `Màn ${stage} · ${coins} xu`,
+    detail: (stage, coins) => `Màn ${stage}, ${coins} xu`,
   },
   en: {
     pickup: { power: "Firepower up!", bomb: "+1 bomb", heal: "Plane repaired" },
     stage: (n) => `Stage ${n}`,
     stageClearTitle: "STAGE CLEAR",
-    stageClearSub: (n) => `Battleship sunk · Stage ${n}`,
+    stageClearSub: (n) => `Stage ${n}: battleship sunk`,
     stageStartSub: "More enemies, faster fire",
     warningStrip: "!!! BEWARE",
     warning: "WARNING",
@@ -72,16 +72,16 @@ export const STRINGS: Localized<Strings> = {
     missionLine2: "the air battle!",
     dragHint: "Drag anywhere to fly",
     paused: "Paused",
-    pauseScore: (score, stage) => `Score: ${score} · Stage ${stage}`,
-    keysHint: "Keys: WASD fly · J firepower · Space bomb",
+    pauseScore: (score, stage) => `Score: ${score} | Stage ${stage}`,
+    keysHint: "Keys: WASD fly | J firepower | Space bomb",
     resume: "Resume",
     restart: "Restart",
     shotDown: "Shot Down!",
     resultLine: (stage, coins, ships) =>
-      `Stage ${stage} · ${coins} coins · ${ships} ${ships === 1 ? "ship" : "ships"} sunk`,
+      `Stage ${stage} | ${coins} coins | ${ships} ${ships === 1 ? "ship" : "ships"} sunk`,
     newBest: "New best!",
     best: (n) => `Best ${n}`,
     flyAgain: "Fly again",
-    detail: (stage, coins) => `Stage ${stage} · ${coins} coins`,
+    detail: (stage, coins) => `Stage ${stage}, ${coins} coins`,
   },
 };

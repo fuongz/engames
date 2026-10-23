@@ -11,6 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { audioBus, createStorage, type GameManifest, type GameModule, loadGame, type ScoreReport } from "@web-games/games";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "#/components/ui/button";
@@ -18,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/u
 import { Progress } from "#/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { useLocale, useMessages } from "#/hooks/use-messages";
+import { EASE_OUT, FADE, RISE_BLUR, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
 import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
@@ -219,14 +221,15 @@ export function GamePlayer({
           ref={stageRef}
           className="absolute inset-y-0 left-[env(safe-area-inset-left)] right-[env(safe-area-inset-right)]"
         />
-        {!started && (
-          <StartScreen game={game} ready={module !== null} failed={failed} onStart={start} />
-        )}
+        {/* Fades off the first frame of the game instead of cutting to it */}
+        <AnimatePresence>
+          {!started && <StartScreen game={game} ready={module !== null} failed={failed} onStart={start} />}
+        </AnimatePresence>
         {needsRotate && <RotateHint />}
       </div>
 
       <Dialog open={infoOpen} onOpenChange={toggleInfo}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto overscroll-contain">
           <DialogHeader>
             <DialogTitle>{game.title[locale]}</DialogTitle>
           </DialogHeader>
@@ -235,7 +238,7 @@ export function GamePlayer({
       </Dialog>
 
       <Dialog open={boardOpen} onOpenChange={toggleBoard}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto overscroll-contain">
           <DialogHeader>
             <DialogTitle>{m.player.leaderboard}</DialogTitle>
           </DialogHeader>
@@ -247,6 +250,10 @@ export function GamePlayer({
     </div>
   );
 }
+
+const ARRIVE = stagger(0.1);
+// Exits are shorter than enters
+const LEAVE = { duration: 0.15, ease: EASE_OUT };
 
 /** Android allows an orientation lock only while fullscreen; iOS has neither, so the rotate hint covers it. */
 async function lockLandscape(el: HTMLElement | null) {
@@ -311,32 +318,54 @@ function StartScreen({
 }) {
   const locale = useLocale();
   const m = useMessages();
+  // Leaving: let taps through to the game straight away, not after the fade.
+  const present = useIsPresent();
+  // Arriving: art, line, then the button, 100ms apart
+  const piece = useReducedMotion() ? FADE : RISE_BLUR;
   return (
     // container-type:size lets the poster size itself by the frame's height (cqh),
     // so the Play button always fits, even in a short 16:9 desktop frame.
-    <div className="absolute inset-0 grid place-items-center overflow-hidden p-6 [container-type:size]">
+    <motion.div
+      exit={{ opacity: 0 }}
+      transition={LEAVE}
+      className={cn("absolute inset-0 grid place-items-center overflow-hidden p-6 [container-type:size]", !present && "pointer-events-none")}
+    >
       <img src={game.banner} alt="" aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-50 blur-2xl" />
-      <div className="relative grid w-full max-w-xs justify-items-center gap-4 text-center [@media(max-height:500px)]:gap-3">
+      <motion.div
+        variants={ARRIVE}
+        initial="hidden"
+        animate="shown"
+        className="relative grid w-full max-w-xs justify-items-center gap-4 text-center [@media(max-height:500px)]:gap-3"
+      >
         {/* A sideways phone has no room for the poster; show the title instead */}
-        <img
+        <motion.img
           src={game.poster[locale]}
           alt=""
-          className="aspect-[3/4] h-[min(42cqh,320px)] w-auto rounded-3xl object-cover shadow-2xl ring-1 ring-border [@media(max-height:500px)]:hidden"
+          variants={piece}
+          exit={{ transform: "scale(0.96)" }}
+          transition={LEAVE}
+          className="aspect-[3/4] h-[min(42cqh,320px)] w-auto rounded-3xl object-cover shadow-2xl ring-1 ring-white/10 [@media(max-height:500px)]:hidden"
         />
-        <h2 className="hidden text-2xl font-bold tracking-tight [@media(max-height:500px)]:block">{game.title[locale]}</h2>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{game.tagline[locale]}</p>
-        {failed ? (
-          <p className="text-sm text-destructive">{m.player.loadFailed}</p>
-        ) : (
-          <>
-            <Button size="lg" className="h-12 w-full max-w-60 rounded-full text-base font-semibold" disabled={!ready} onClick={onStart}>
-              <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />
-              {ready ? m.player.play : m.player.loading}
-            </Button>
-            {!ready && <Progress value={null} className="w-full max-w-60" aria-label={m.player.loadingLabel} />}
-          </>
-        )}
-      </div>
-    </div>
+        <motion.h2 variants={piece} className="hidden text-2xl font-bold tracking-tight [@media(max-height:500px)]:block">
+          {game.title[locale]}
+        </motion.h2>
+        <motion.p variants={piece} className="line-clamp-2 text-sm text-muted-foreground">
+          {game.tagline[locale]}
+        </motion.p>
+        <motion.div variants={piece} className="grid w-full justify-items-center gap-4 [@media(max-height:500px)]:gap-3">
+          {failed ? (
+            <p className="text-sm text-destructive">{m.player.loadFailed}</p>
+          ) : (
+            <>
+              <Button size="lg" className="h-12 w-full max-w-60 rounded-full text-base font-semibold" disabled={!ready} onClick={onStart} data-cuelume-emphasis="strong">
+                <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />
+                {ready ? m.player.play : m.player.loading}
+              </Button>
+              {!ready && <Progress value={null} className="w-full max-w-60" aria-label={m.player.loadingLabel} />}
+            </>
+          )}
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }

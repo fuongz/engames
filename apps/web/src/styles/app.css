@@ -71,6 +71,16 @@
   --font-heading: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 
+  /* Motion curves. Overriding Tailwind's names makes every `ease-out` /
+     `ease-in-out` class use them; lib/motion.ts mirrors them for Motion. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  /* Hover halo for game art: a tight orange glow inside a wide soft one. */
+  --shadow-glow:
+    0 0 20px 2px color-mix(in oklab, var(--primary) 55%, transparent),
+    0 0 64px 10px color-mix(in oklab, var(--primary) 25%, transparent);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -113,4 +123,27 @@
 html {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+}
+
+/* The hero's current dot fills over the auto-advance wait (scale, so it never relayouts). */
+@keyframes dot-fill {
+  from {
+    scale: 0 1;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
+/* iOS Safari zooms the page into any focused field set under 16px. Touch
+   screens get at least 16px in every field, so focusing never zooms; pinch
+   zoom stays available (no maximum-scale in the viewport). Unlayered, so it
+   wins over a `text-sm` utility, including in registry components. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select,
+  [contenteditable="true"] {
+    font-size: max(16px, 1em);
+  }
 }

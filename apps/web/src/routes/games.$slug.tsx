@@ -17,7 +17,7 @@ export const Route = createFileRoute("/games/$slug")({
     return { game, board };
   },
   head: ({ loaderData }) => ({
-    meta: [{ title: loaderData ? `${loaderData.game.title[useLocaleStore.getState().locale]} · Engames` : "Engames" }],
+    meta: [{ title: loaderData ? `${loaderData.game.title[useLocaleStore.getState().locale]} | Engames` : "Engames" }],
   }),
   component: GamePage,
 });

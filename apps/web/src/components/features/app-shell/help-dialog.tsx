@@ -13,7 +13,7 @@ export function HelpDialog({ triggerClassName }: { triggerClassName: string }) {
         <HugeiconsIcon icon={HelpCircleIcon} className="size-5" />
         {m.help.trigger}
       </DialogTrigger>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto overscroll-contain">
         <DialogHeader>
           <DialogTitle>{m.help.title}</DialogTitle>
           <DialogDescription>{m.help.description}</DialogDescription>

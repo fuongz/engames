@@ -65,7 +65,7 @@ export const STRINGS: Localized<Strings> = {
     ],
     ok: "OK",
     moveHint: "Chạy vào một phòng trống và lên giường!",
-    keysHint: "WASD / mũi tên: chạy · Space: ngủ · R: sửa cửa",
+    keysHint: "WASD / mũi tên: chạy | Space: ngủ | R: sửa cửa",
     sleep: "Ngủ", // ad
     door: "Cửa",
     lookHint: "Kéo màn hình để nhìn quanh",
@@ -97,7 +97,7 @@ export const STRINGS: Localized<Strings> = {
         desc: "Tăng tốc độ tấn công của Tháp",
       }, // ad
     },
-    turretStats: (d, r) => `Tấn Công: ${d} · Phạm Vi: ${r}`,
+    turretStats: (d, r) => `Tấn Công: ${d} | Phạm Vi: ${r}`,
     limit: (used, max) => `Có thể xây ${used}/${max}`, // ad
     upgrade: "Nâng cấp",
     max: "Tối đa",
@@ -112,7 +112,7 @@ export const STRINGS: Localized<Strings> = {
     close: "Đóng",
     won: "Hạ Gục Thợ Săn!",
     lost: "Bạn Đã Bị Bắt!",
-    resultLine: (time, level) => `Sống ${time} · Thợ Săn cấp ${level}`,
+    resultLine: (time, level) => `Sống ${time} | Thợ Săn cấp ${level}`,
     score: (n) => `${n} điểm`,
     newBest: "Kỷ lục mới!",
     best: (n) => `Kỷ lục ${n}`,
@@ -121,7 +121,7 @@ export const STRINGS: Localized<Strings> = {
     resume: "Tiếp tục",
     restart: "Chơi lại",
     detail: (won, time, level) =>
-      won ? `Hạ Thợ Săn · ${time}` : `Sống ${time} · cấp ${level}`,
+      won ? `Hạ Thợ Săn sau ${time}` : `Sống ${time}, cấp ${level}`,
   },
   en: {
     noticeTitle: "NOTICE",
@@ -134,7 +134,7 @@ export const STRINGS: Localized<Strings> = {
     ],
     ok: "OK",
     moveHint: "Run into an empty room and get into bed!",
-    keysHint: "WASD / arrows: run · Space: sleep · R: repair",
+    keysHint: "WASD / arrows: run | Space: sleep | R: repair",
     sleep: "Sleep",
     door: "Door",
     lookHint: "Drag the screen to look around",
@@ -172,7 +172,7 @@ export const STRINGS: Localized<Strings> = {
         desc: "Turrets fire faster",
       },
     },
-    turretStats: (d, r) => `Damage: ${d} · Range: ${r}`,
+    turretStats: (d, r) => `Damage: ${d} | Range: ${r}`,
     limit: (used, max) => `Can build ${used}/${max}`,
     upgrade: "Upgrade",
     max: "Max",
@@ -187,7 +187,7 @@ export const STRINGS: Localized<Strings> = {
     close: "Close",
     won: "Hunter Defeated!",
     lost: "You Got Caught!",
-    resultLine: (time, level) => `Survived ${time} · Hunter Lv ${level}`,
+    resultLine: (time, level) => `Survived ${time} | Hunter Lv ${level}`,
     score: (n) => `${n} pts`,
     newBest: "New best!",
     best: (n) => `Best ${n}`,
@@ -196,6 +196,6 @@ export const STRINGS: Localized<Strings> = {
     resume: "Resume",
     restart: "Restart",
     detail: (won, time, level) =>
-      won ? `Hunter down · ${time}` : `Survived ${time} · Lv ${level}`,
+      won ? `Hunter down in ${time}` : `Survived ${time}, Lv ${level}`,
   },
 };

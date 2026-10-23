@@ -6,7 +6,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-/** hidden: installed or unsupported · prompt: native prompt ready · ios: show Share steps */
+/** hidden: installed or unsupported; prompt: native prompt ready; ios: show Share steps */
 type InstallMode = "hidden" | "prompt" | "ios";
 
 interface InstallState {

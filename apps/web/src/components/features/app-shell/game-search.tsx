@@ -33,6 +33,9 @@ export function GameSearch({
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
+      // Phones: sit just under the status bar, so the list stays clear of the
+      // on-screen keyboard and the top of the screen isn't left empty
+      className="top-[calc(env(safe-area-inset-top)+0.75rem)] sm:top-1/3"
       title={m.search.title}
       description={m.search.description}
     >
@@ -58,7 +61,7 @@ export function GameSearch({
                 <img
                   src={g.poster[locale]}
                   alt=""
-                  className="aspect-square size-11 shrink-0 rounded-lg object-cover object-top"
+                  className="aspect-square size-11 shrink-0 rounded-lg object-cover object-top outline-1 -outline-offset-1 outline-white/10"
                 />
                 <span className="grid min-w-0 gap-0.5">
                   <span className="truncate font-medium">{g.title[locale]}</span>

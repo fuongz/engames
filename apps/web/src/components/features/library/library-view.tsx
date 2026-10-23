@@ -1,6 +1,7 @@
 import { GameController03Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { games } from "@web-games/games";
+import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { CategoryChips } from "./category-chips";
 import { GameCard } from "#/components/shared/games/game-card";
@@ -8,6 +9,14 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/
 import { Input } from "#/components/ui/input";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { plural } from "#/lib/i18n";
+import { EASE_IN_OUT, EASE_OUT } from "#/lib/motion";
+
+// Filtering shows where cards went: the rest slide into the gaps, leavers fade.
+// `scale` rather than a transform string, so it composes with the layout transform.
+const SHOWN = { opacity: 1, scale: 1 };
+const HIDDEN = { opacity: 0, scale: 0.96 };
+const LEAVE = { ...HIDDEN, transition: { duration: 0.15, ease: EASE_OUT } };
+const CARD = { default: { duration: 0.2, ease: EASE_OUT }, layout: { duration: 0.25, ease: EASE_IN_OUT } };
 
 /** Every game, filterable by category (from the URL) and free text. */
 export function LibraryView({ category, onCategory }: { category: string; onCategory: (c: string) => void }) {
@@ -60,9 +69,21 @@ export function LibraryView({ category, onCategory }: { category: string; onCate
         </Empty>
       ) : (
         <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {list.map((g) => (
-            <GameCard key={g.slug} game={g} />
-          ))}
+          <AnimatePresence mode="popLayout">
+            {list.map((g, i) => (
+              <motion.div
+                key={g.slug}
+                layout
+                initial={HIDDEN}
+                animate={SHOWN}
+                exit={LEAVE}
+                // One after another, capped so a long list never keeps the last card waiting
+                transition={{ ...CARD, default: { ...CARD.default, delay: Math.min(i, 12) * 0.04 } }}
+              >
+                <GameCard game={g} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
     </main>

@@ -21,7 +21,7 @@ export interface Strings {
   lost: string;
   resultScore: (score: number) => string;
   resultLine: (shards: number, goal: number, best: number) => string;
-  /** ScoreReport.detail, after the "n★ · " prefix. */
+  /** ScoreReport.detail, after the "n★, " prefix. */
   shardsDetail: (shards: number, goal: number) => string;
   summary: (best: number) => string;
 }
@@ -41,14 +41,14 @@ export const STRINGS: Localized<Strings> = {
     scoreLabel: "Điểm Hiện Tại:", // ad
     paused: "Tạm Dừng",
     pauseScore: (score) => `Điểm hiện tại: ${score}`,
-    keyHint: "Phím: WASD/mũi tên di chuyển · Space dùng chiêu",
+    keyHint: "Phím: WASD/mũi tên di chuyển | Space dùng chiêu",
     resume: "Tiếp tục",
     playAgain: "Chơi lại",
     won: "Hoàn Thành!",
     lost: "Thất Bại",
     resultScore: (score) => `Điểm: ${score}`,
     resultLine: (shards, goal, best) =>
-      `Mảnh tinh tú ${shards}/${goal} · Kỷ lục ${best}`,
+      `Mảnh tinh tú ${shards}/${goal} | Kỷ lục ${best}`,
     shardsDetail: (shards, goal) => `${shards}/${goal} mảnh`,
     summary: (best) => `Kỷ lục ${best} điểm`,
   },
@@ -66,14 +66,14 @@ export const STRINGS: Localized<Strings> = {
     scoreLabel: "Score:",
     paused: "Paused",
     pauseScore: (score) => `Score: ${score}`,
-    keyHint: "Keys: WASD/arrows to move · Space for skill",
+    keyHint: "Keys: WASD/arrows to move | Space for skill",
     resume: "Resume",
     playAgain: "Play again",
     won: "Cleared!",
     lost: "Game Over",
     resultScore: (score) => `Score: ${score}`,
     resultLine: (shards, goal, best) =>
-      `Star shards ${shards}/${goal} · Best ${best}`,
+      `Star shards ${shards}/${goal} | Best ${best}`,
     shardsDetail: (shards, goal) => `${shards}/${goal} shards`,
     summary: (best) => `Best ${best} pts`,
   },

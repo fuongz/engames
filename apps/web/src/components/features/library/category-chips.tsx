@@ -1,8 +1,10 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { categories } from "@web-games/games";
+import { motion } from "motion/react";
 import { ALL_CATEGORIES, categoryIcon } from "#/components/shared/games/category-icons";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { useLocale, useMessages } from "#/hooks/use-messages";
+import { INDICATOR_SPRING } from "#/lib/motion";
 
 /** Category filter chips; the selected one takes the orange accent. Scrolls sideways on phones. */
 export function CategoryChips({
@@ -33,8 +35,12 @@ export function CategoryChips({
           <ToggleGroupItem
             key={c.id}
             value={c.id}
-            className="h-10 gap-2 rounded-full border bg-card px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-pressed:border-transparent data-pressed:bg-primary data-pressed:text-primary-foreground"
+            className="relative isolate h-10 gap-2 rounded-full border bg-card px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-pressed:border-transparent data-pressed:bg-transparent data-pressed:text-primary-foreground"
           >
+            {/* One orange pill, sliding to the picked chip */}
+            {value === c.id && (
+              <motion.span layoutId="chip-active" transition={INDICATOR_SPRING} className="absolute inset-0 -z-10 rounded-full bg-primary" />
+            )}
             <HugeiconsIcon icon={categoryIcon(c.id)} className="size-4.5" />
             {c.label}
           </ToggleGroupItem>
