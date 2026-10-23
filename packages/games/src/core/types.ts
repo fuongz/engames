@@ -45,6 +45,12 @@ export interface GameManifest {
    * `online/registry.ts` (see docs/standards/online-multiplayer.md).
    */
   online?: { modes: OnlineMode[]; minPlayers: number; maxPlayers: number };
+  /**
+   * Progress lives on the player's account (`GameContext.cloud`), so the portal
+   * asks guests to sign in before mounting. The game also ships a `save.ts`
+   * the server checks every save against (see saves.ts).
+   */
+  requiresAccount?: boolean;
 }
 
 /**
@@ -94,6 +100,37 @@ export interface GameContext {
    * simulation then: it sends inputs and draws what the room sends back.
    */
   online?: OnlineMatch;
+  /**
+   * The signed-in player's save slot, for `requiresAccount` games. Missing when
+   * nobody is signed in (or outside the portal).
+   */
+  cloud?: CloudSave;
+}
+
+/** A saved game on the server: the game's own data plus a version for conflicts. */
+export interface CloudSlot {
+  data: unknown;
+  /** Bumped by every save; 0 means "never saved". */
+  version: number;
+}
+
+export type CloudSaveResult =
+  | { ok: true; version: number }
+  /** Another device saved first: `current` is what the server holds now. */
+  | { ok: false; conflict: CloudSlot };
+
+/** One save slot per player per game, kept by the portal's server. */
+export interface CloudSave {
+  /** The player's display name. */
+  player: string;
+  /** The player's account id, to key any local backup to the right person. */
+  playerId: string;
+  load(): Promise<CloudSlot | null>;
+  /**
+   * Store `data` if the server still holds `version` (optimistic concurrency).
+   * `score` also files the player's best on the game's leaderboard.
+   */
+  save(data: unknown, version: number, score?: ScoreReport): Promise<CloudSaveResult>;
 }
 
 /** The game's side of an online match; the portal owns the socket behind it. */

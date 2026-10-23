@@ -9,7 +9,8 @@
     ".": "./src/registry.ts",
     "./i18n": "./src/core/i18n.ts",
     "./online": "./src/online/index.ts",
-    "./online/client": "./src/online/client.ts"
+    "./online/client": "./src/online/client.ts",
+    "./saves": "./src/saves.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
