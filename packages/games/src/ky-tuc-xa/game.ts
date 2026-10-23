@@ -944,7 +944,7 @@ export function setup(rt: Runtime): GameHooks {
     );
     text(
       ctx,
-      `${tr().hunter} · ${tr().level(h.level)}`,
+      `${tr().hunter} (${tr().level(h.level)})`,
       h.x,
       h.y - 60,
       11,

@@ -8,6 +8,7 @@ import { registerServiceWorker } from "#/lib/pwa";
 import appCss from "#/styles/app.css?url";
 import { listenForInstall } from "#/stores/install";
 import { listenForLocale, useLocaleStore } from "#/stores/locale";
+import { useInterfaceSounds } from "#/hooks/use-interface-sounds";
 
 // SPA build: there is no server at request time, so security headers live in
 // public/_headers (applied by Cloudflare Workers static assets) instead of a server fn.
@@ -40,6 +41,7 @@ export const Route = createRootRoute({
 });
 
 function RootLayout() {
+  useInterfaceSounds();
   useEffect(() => {
     registerServiceWorker();
     listenForInstall();

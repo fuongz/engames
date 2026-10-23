@@ -1,11 +1,18 @@
 import { LibraryIcon, Search01Icon, Store01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { useMessages } from "#/hooks/use-messages";
+import { INDICATOR_SPRING } from "#/lib/motion";
 
 const ITEM =
-  "flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[11px] font-medium text-muted-foreground transition-colors data-[active=true]:text-primary";
+  "relative isolate flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[11px] font-medium text-muted-foreground transition-colors data-[active=true]:text-primary";
+
+/** The tint behind the current tab; it slides to the tapped one. */
+function ActivePill() {
+  return <motion.span layoutId="tab-active" transition={INDICATOR_SPRING} className="absolute inset-0 -z-10 rounded-xl bg-primary/12" />;
+}
 
 /** Floating tab bar for phones (the sidebar's job on desktop), clear of the home indicator. */
 export function MobileNav({ onSearch }: { onSearch: () => void }) {
@@ -14,14 +21,18 @@ export function MobileNav({ onSearch }: { onSearch: () => void }) {
   // Decided after mount: the prerendered "/" shell's attributes survive hydration.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const discover = mounted && path === "/";
+  const library = mounted && path.startsWith("/library");
 
   return (
-    <nav className="fixed inset-x-4 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex gap-1 rounded-2xl border bg-card/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
-      <Link to="/" className={ITEM} data-active={mounted && path === "/"}>
+    <nav className="fixed inset-x-4 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex gap-1 rounded-[25px] border bg-card/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
+      <Link to="/" className={ITEM} data-active={discover}>
+        {discover && <ActivePill />}
         <HugeiconsIcon icon={Store01Icon} className="size-5" />
         {m.nav.discover}
       </Link>
-      <Link to="/library" className={ITEM} data-active={mounted && path.startsWith("/library")}>
+      <Link to="/library" className={ITEM} data-active={library}>
+        {library && <ActivePill />}
         <HugeiconsIcon icon={LibraryIcon} className="size-5" />
         {m.nav.library}
       </Link>

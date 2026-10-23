@@ -29,7 +29,7 @@ export const STRINGS: Localized<Strings> = {
   vi: {
     wave: (n) => `Đợt ${n}`,
     waveBanner: (n) => `ĐỢT ${n}`,
-    bossBanner: (n) => `ĐỢT ${n} · BOSS!`,
+    bossBanner: (n) => `BOSS ĐỢT ${n}!`,
     tutorial: "Kéo 2 thú cùng cấp để ghép!",
     hatch: "ẤP TRỨNG",
     evolving: "Đang tiến hóa",
@@ -39,15 +39,15 @@ export const STRINGS: Localized<Strings> = {
     gameOver: "THUA RỒI!",
     survived: (wave) => `Trụ được tới đợt ${wave}`,
     score: (n) => `Điểm: ${n}`,
-    best: (wave, score) => `Kỷ lục: đợt ${wave} · ${score} điểm`,
+    best: (wave, score) => `Kỷ lục: đợt ${wave}, ${score} điểm`,
     kills: (n) => `Hạ gục ${n} zombie`,
     playAgain: "CHƠI LẠI",
-    summary: (wave, score) => `Đợt ${wave} · ${score} điểm`,
+    summary: (wave, score) => `Đợt ${wave}, ${score} điểm`,
   },
   en: {
     wave: (n) => `Wave ${n}`,
     waveBanner: (n) => `WAVE ${n}`,
-    // "WAVE n · BOSS!" overflows the 300px banner at 40px; this order fits.
+    // "WAVE n: BOSS!" overflows the 300px banner at 40px; this order fits.
     bossBanner: (n) => `BOSS WAVE ${n}!`,
     tutorial: "Drag 2 same-level critters to merge!",
     hatch: "HATCH",
@@ -58,9 +58,9 @@ export const STRINGS: Localized<Strings> = {
     gameOver: "GAME OVER!",
     survived: (wave) => `Survived to wave ${wave}`,
     score: (n) => `Score: ${n}`,
-    best: (wave, score) => `Best: wave ${wave} · ${score} pts`,
+    best: (wave, score) => `Best: wave ${wave}, ${score} pts`,
     kills: (n) => `${n} ${n === 1 ? "zombie" : "zombies"} defeated`,
     playAgain: "PLAY AGAIN",
-    summary: (wave, score) => `Wave ${wave} · ${score} pts`,
+    summary: (wave, score) => `Wave ${wave}, ${score} pts`,
   },
 };

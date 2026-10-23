@@ -63,6 +63,7 @@ decision and the minor as a starting point.
 | Rendered markdown | `react-markdown` + `remark-gfm` |
 | Charts | **Recharts** |
 | Drag and drop | `@dnd-kit/core` |
+| Interface sounds | **Cuelume** (`cuelume`) — synthesized Web Audio cues, no files. Bound once in `hooks/use-interface-sounds.ts` (theme `bubble`), tied to the portal's Sound switch (`audioBus`). Every clickable is auto-marked `tap` and every text field `type`; set a `data-cuelume-*` attribute only to override, and play outcomes (`success`, `error`, `count`) with `play()`. Never on hover |
 
 Smaller primitives arrive as dependencies of the shadcn components you install
 and are **not separate decisions**: `cmdk`, `vaul`, `sonner`, `embla-carousel-react`,

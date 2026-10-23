@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { GameSearch } from "./game-search";
 import { InstallHelpDialog } from "./install-help-dialog";
 import { MobileNav } from "./mobile-nav";
+import { PageTransition } from "./page-transition";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 
@@ -34,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="lg:pl-[220px]">
         <div className="mx-auto grid max-w-[1240px] gap-6 px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:gap-8 lg:px-8 lg:pt-7 lg:pb-10">
           <TopBar onSearch={openSearch} />
-          {children}
+          <PageTransition>{children}</PageTransition>
         </div>
       </div>
 

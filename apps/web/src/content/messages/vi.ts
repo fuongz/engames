@@ -70,7 +70,7 @@ export const vi = {
   home: {
     featured: "Game nổi bật",
     best: "Kỷ lục: {summary}",
-    free: "Miễn phí · Chơi ngay trên trình duyệt",
+    free: "Miễn phí, chơi ngay trên trình duyệt",
     playNow: "Chơi ngay",
     recommended: "Gợi ý cho bạn",
     seeAll: "Xem tất cả",
@@ -79,7 +79,7 @@ export const vi = {
   },
   library: {
     title: "Thư viện",
-    pageTitle: "Thư viện · Engames",
+    pageTitle: "Thư viện | Engames",
     count: { one: "{n} game, chơi ngay không cần cài.", other: "{n} game, chơi ngay không cần cài." },
     searchPlaceholder: "Tìm trong thư viện...",
     searchLabel: "Tìm trong thư viện",
@@ -116,7 +116,7 @@ export const vi = {
     savedTitle: "Đã lưu lên bảng xếp hạng!",
     saveTitle: "Lưu điểm lên bảng xếp hạng",
     rank: "Hạng #{rank}",
-    stillBest: " · kỷ lục của bạn vẫn là {best}",
+    stillBest: " (kỷ lục của bạn vẫn là {best})",
     savingAs: "Đang lưu dưới tên {name}...",
     nameLabel: "Tên hiển thị",
     namePlaceholder: "Nhập tên của bạn",

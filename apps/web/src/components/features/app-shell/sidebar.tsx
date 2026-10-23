@@ -2,16 +2,29 @@ import { LibraryIcon, PlusSignIcon, Store01Icon, VolumeHighIcon, VolumeOffIcon }
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/games";
+import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { AccountButton } from "#/components/shared/auth/account-button";
 import { LanguageMenu } from "#/components/shared/i18n/language-menu";
 import { useMessages } from "#/hooks/use-messages";
+import { INDICATOR_SPRING } from "#/lib/motion";
 import { useInstallStore } from "#/stores/install";
 import { HelpDialog } from "./help-dialog";
 
-/** Sidebar row; the active one gets the orange text and left bar. */
+/** Sidebar row; the active one gets the orange text and the left bar. */
 const SIDEBAR_ITEM =
-  "relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground before:absolute before:top-1/2 before:-left-5 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-primary before:opacity-0 data-[active=true]:text-primary data-[active=true]:before:opacity-100";
+  "relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[active=true]:text-primary";
+
+/** One bar shared by the nav links: it glides to the new page instead of blinking. */
+function ActiveBar() {
+  return (
+    <motion.span
+      layoutId="sidebar-active"
+      transition={INDICATOR_SPRING}
+      className="absolute top-1/2 -left-5 h-6 w-1 -translate-y-1/2 rounded-r-full bg-primary"
+    />
+  );
+}
 
 /** Steam-style left rail, desktop only; phones get the bottom tab bar. */
 export function Sidebar() {
@@ -23,6 +36,8 @@ export function Sidebar() {
   // index.html is prerendered at "/", and hydration keeps its attributes, so the
   // active link is only decided after mount (a normal re-render patches it).
   const [mounted, setMounted] = useState(false);
+  const discover = mounted && path === "/";
+  const library = mounted && path.startsWith("/library");
 
   useEffect(() => {
     setMounted(true);
@@ -38,11 +53,13 @@ export function Sidebar() {
       </Link>
 
       <nav className="grid gap-1" aria-label={m.nav.label}>
-        <Link to="/" className={SIDEBAR_ITEM} data-active={mounted && path === "/"}>
+        <Link to="/" className={SIDEBAR_ITEM} data-active={discover}>
+          {discover && <ActiveBar />}
           <HugeiconsIcon icon={Store01Icon} className="size-5" />
           {m.nav.discover}
         </Link>
-        <Link to="/library" className={SIDEBAR_ITEM} data-active={mounted && path.startsWith("/library")}>
+        <Link to="/library" className={SIDEBAR_ITEM} data-active={library}>
+          {library && <ActiveBar />}
           <HugeiconsIcon icon={LibraryIcon} className="size-5" />
           {m.nav.library}
         </Link>

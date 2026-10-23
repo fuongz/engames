@@ -95,8 +95,9 @@ function CommandList({
   return (
     <CommandPrimitive.List
       data-slot="command-list"
+      // EDITED (not registry): overscroll-contain so the list never scrolls the page behind.
       className={cn(
-        "no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
+        "no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto overscroll-contain outline-none",
         className
       )}
       {...props}

@@ -97,7 +97,7 @@ export const score = sqliteTable(
     userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     score: integer("score").notNull(),
-    /** Game-specific one-liner, e.g. "Đợt 12" or "3★ · 10/10". */
+    /** Game-specific one-liner, e.g. "Đợt 12" or "3★, 10/10". */
     detail: text("detail"),
     // Unix epoch seconds, so it compares and sorts in SQL.
     createdAt: integer("created_at", { mode: "timestamp" })

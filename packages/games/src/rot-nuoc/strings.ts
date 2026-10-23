@@ -37,7 +37,7 @@ export const STRINGS: Localized<Strings> = {
     undoReward: "+1 lượt hoàn tác",
     next: "Màn Tiếp",
     gift: "Quà đây!",
-    giftReward: (undos, tubes) => `+${undos} hoàn tác · +${tubes} ống`,
+    giftReward: (undos, tubes) => `+${undos} hoàn tác, +${tubes} ống`,
     detail: (n) => `Màn ${n}`,
   },
   en: {
@@ -54,7 +54,7 @@ export const STRINGS: Localized<Strings> = {
     undoReward: "+1 undo",
     next: "Next Level",
     gift: "A gift!",
-    giftReward: (undos, tubes) => `+${undos} undos · +${tubes} tube`,
+    giftReward: (undos, tubes) => `+${undos} undos, +${tubes} tube`,
     detail: (n) => `Level ${n}`,
   },
 };
