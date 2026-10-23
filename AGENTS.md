@@ -117,6 +117,12 @@ node scripts/audit-layout.mjs   # 0 = layout is correct
   The registry discovers it, so the portal needs no edits.
 - **Add shadcn components with `bun run ui:add <name>`**, not a bare `shadcn add`:
   the CLI writes `import { cn } from "cn"` under our `#/` alias and the script repairs it.
+- **Server code** lives in `apps/web/src/server/`: `leaderboard.ts` is the
+  boundary (server functions + types only), `db/` and `auth/` are server-only
+  (enforced by `layout.audit.json`). Query functions take `db` as a parameter so
+  `bun test` can run them on bun:sqlite with the real migrations.
+- **Games report finished runs** with `ctx.reportScore({ score, detail })` — once
+  per run end, never on quit. The portal owns the save/leaderboard UI.
 - **Mobile first.** Check every UI change at 390×844; the player is full-screen
   below `lg` and must respect `env(safe-area-inset-*)`.
 

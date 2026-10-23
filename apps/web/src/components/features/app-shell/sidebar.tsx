@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/games";
 import { useEffect, useState } from "react";
+import { AccountButton } from "#/components/shared/auth/account-button";
 import { useInstallStore } from "#/stores/install";
 import { HelpDialog } from "./help-dialog";
 
@@ -50,6 +51,7 @@ export function Sidebar() {
           Âm thanh: {muted ? "Tắt" : "Bật"}
         </button>
         <HelpDialog triggerClassName={SIDEBAR_ITEM} />
+        <AccountButton variant="sidebar" />
       </div>
 
       {installMode !== "hidden" && (

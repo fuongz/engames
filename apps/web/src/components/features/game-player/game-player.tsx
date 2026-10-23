@@ -2,6 +2,7 @@ import {
   ArrowLeft01Icon,
   InformationCircleIcon,
   FullScreenIcon,
+  RankingIcon,
   SmartphoneIcon,
   PlayIcon,
   Refresh01Icon,
@@ -10,7 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
-import { audioBus, createStorage, type GameManifest, type GameModule, loadGame } from "@web-games/games";
+import { audioBus, createStorage, type GameManifest, type GameModule, loadGame, type ScoreReport } from "@web-games/games";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/ui/dialog";
@@ -18,6 +19,10 @@ import { Progress } from "#/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { cn } from "#/lib/utils";
 import { usePlayStats } from "#/stores/play-stats";
+import { ScoreDialog, takePendingScore } from "./score-dialog";
+
+/** Give the game's own result screen a moment before the save dialog covers it. */
+const REPORT_DELAY = 1300;
 
 type GameInstance = ReturnType<GameModule["mount"]>;
 
@@ -26,7 +31,15 @@ type GameInstance = ReturnType<GameModule["mount"]>;
  * view with safe-area padding); from `lg` up it sits inside the page.
  * `details` is shown in a dialog on phones, where there is no sidebar.
  */
-export function GamePlayer({ game, details }: { game: GameManifest; details: ReactNode }) {
+export function GamePlayer({
+  game,
+  details,
+  leaderboard,
+}: {
+  game: GameManifest;
+  details: ReactNode;
+  leaderboard: ReactNode;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<GameInstance | null>(null);
@@ -35,6 +48,16 @@ export function GamePlayer({ game, details }: { game: GameManifest; details: Rea
   const [started, setStarted] = useState(false);
   const [muted, setMuted] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [report, setReport] = useState<ScoreReport | null>(null);
+  const reportTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Back from Google sign-in with a run that was waiting to be saved
+  useEffect(() => {
+    const pending = takePendingScore(game.slug);
+    if (pending) setReport(pending);
+    return () => clearTimeout(reportTimer.current);
+  }, [game.slug]);
   const [canFullscreen, setCanFullscreen] = useState(false);
   const [needsRotate, setNeedsRotate] = useState(false);
   const recordPlay = usePlayStats((s) => s.recordPlay);
@@ -94,7 +117,15 @@ export function GamePlayer({ game, details }: { game: GameManifest; details: Rea
     if (!module || !stage) return;
     instanceRef.current?.destroy();
     stage.replaceChildren();
-    instanceRef.current = module.mount(stage, { storage: createStorage(game.slug), audio: audioBus });
+    instanceRef.current = module.mount(stage, {
+      storage: createStorage(game.slug),
+      audio: audioBus,
+      reportScore: (r) => {
+        if (r.score <= 0) return;
+        clearTimeout(reportTimer.current);
+        reportTimer.current = setTimeout(() => setReport(r), REPORT_DELAY);
+      },
+    });
   }, [module, game.slug]);
 
   const start = () => {
@@ -109,6 +140,18 @@ export function GamePlayer({ game, details }: { game: GameManifest; details: Rea
     setInfoOpen(open);
     if (open) instanceRef.current?.pause?.();
     else instanceRef.current?.resume?.();
+  };
+
+  const toggleBoard = (open: boolean) => {
+    setBoardOpen(open);
+    if (open) instanceRef.current?.pause?.();
+    else instanceRef.current?.resume?.();
+  };
+
+  const replay = () => {
+    setReport(null);
+    if (started) mount();
+    else start();
   };
 
   return (
@@ -137,6 +180,9 @@ export function GamePlayer({ game, details }: { game: GameManifest; details: Rea
             <HugeiconsIcon icon={ArrowLeft01Icon} />
           </Button>
           <h1 className="min-w-0 flex-1 truncate font-semibold [@media(max-height:500px)]:hidden">{game.title}</h1>
+          <ToolButton label="Bảng xếp hạng" className="lg:hidden" onClick={() => toggleBoard(true)}>
+            <HugeiconsIcon icon={RankingIcon} />
+          </ToolButton>
           <ToolButton label="Hướng dẫn" className="lg:hidden" onClick={() => toggleInfo(true)}>
             <HugeiconsIcon icon={InformationCircleIcon} />
           </ToolButton>
@@ -181,6 +227,17 @@ export function GamePlayer({ game, details }: { game: GameManifest; details: Rea
           {details}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={boardOpen} onOpenChange={toggleBoard}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bảng xếp hạng</DialogTitle>
+          </DialogHeader>
+          {leaderboard}
+        </DialogContent>
+      </Dialog>
+
+      {report && <ScoreDialog game={game} report={report} onClose={() => setReport(null)} onReplay={replay} />}
     </div>
   );
 }

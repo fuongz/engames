@@ -39,6 +39,6 @@ export const categories: { id: GameCategory; label: string }[] = [
 ];
 
 export { SUMMARY_KEY } from "./core/types";
-export type { GameCategory, GameManifest, GameModule } from "./core/types";
+export type { GameCategory, GameManifest, GameModule, ScoreReport } from "./core/types";
 export { audioBus } from "./core/audio";
 export { createStorage } from "./core/storage";

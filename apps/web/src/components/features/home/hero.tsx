@@ -1,4 +1,4 @@
-import { ComputerIcon, PlayIcon, SmartphoneIcon, StarIcon } from "@hugeicons/core-free-icons";
+import { PlayIcon, StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import { SUMMARY_KEY, categories, createStorage, type GameManifest, games } from "@web-games/games";
@@ -11,26 +11,28 @@ const SWIPE_PX = 40;
 
 /**
  * Steam-style hero: a full-bleed art carousel on the left, the current game's
- * warm info card and two art tiles on the right. Stacks on phones.
+ * warm info card on the right. Stacks on phones.
  */
 export function Hero() {
   const [index, setIndex] = useState(0);
   const game = games[index % Math.max(1, games.length)];
 
-  // `games` is a static catalogue, so the timer never needs re-arming
+  // Re-armed on every change, so picking a slide (dot or swipe) gets a full
+  // ADVANCE_MS before auto-advance moves on.
   useEffect(() => {
     if (games.length < 2) return;
-    const id = window.setInterval(() => setIndex((i) => (i + 1) % games.length), ADVANCE_MS);
-    return () => window.clearInterval(id);
-  }, []);
+    const id = window.setTimeout(() => setIndex((index + 1) % games.length), ADVANCE_MS);
+    return () => window.clearTimeout(id);
+  }, [index]);
 
   if (!game) return null;
   return (
     <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="grid gap-3">
         <Carousel index={index} onIndex={setIndex} />
-        <div className="flex justify-center gap-1.5" role="tablist" aria-label="Game nổi bật">
+        <div className="flex justify-center" role="tablist" aria-label="Game nổi bật">
           {games.map((g, i) => (
+            // The padding is the hit area (~24px); the pill inside is the visible dot
             <button
               key={g.slug}
               type="button"
@@ -38,14 +40,20 @@ export function Hero() {
               aria-selected={i === index}
               aria-label={g.title}
               onClick={() => setIndex(i)}
-              className={cn("h-1.5 rounded-full transition-all", i === index ? "w-7 bg-primary" : "w-1.5 bg-muted-foreground/40")}
-            />
+              className="group grid cursor-pointer place-items-center rounded-full px-1.5 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300",
+                  i === index ? "w-7 bg-primary" : "w-1.5 bg-muted-foreground/40 group-hover:w-3 group-hover:bg-muted-foreground",
+                )}
+              />
+            </button>
           ))}
         </div>
       </div>
       <div className="flex flex-col gap-3 lg:h-[400px]">
         <InfoCard game={game} />
-        <ArtTiles index={index} onIndex={setIndex} />
       </div>
     </section>
   );
@@ -136,69 +144,20 @@ function InfoCard({ game }: { game: GameManifest }) {
     <div className="relative isolate flex flex-1 flex-col gap-3 overflow-hidden rounded-2xl bg-linear-to-br from-warm to-warm-deep p-5">
       <div aria-hidden className="absolute inset-0 -z-10 bg-linear-to-t from-background/45 to-transparent" />
       <h3 className="text-2xl leading-tight font-bold tracking-tight">{game.title}</h3>
-      <p className="line-clamp-3 text-sm leading-relaxed text-foreground/90 lg:line-clamp-4">{game.description}</p>
+      <p className="line-clamp-3 text-sm leading-relaxed text-foreground/90 lg:line-clamp-9">{game.description}</p>
       <div className="mt-auto grid gap-3 pt-2">
         <span className="text-sm font-semibold">Miễn phí · Chơi ngay trên trình duyệt</span>
-        <div className="flex items-center gap-3">
-          {/* Dark glass on the orange card, as in the reference; an orange button would vanish here */}
-          <Button
-            size="lg"
-            className="h-11 flex-1 rounded-xl bg-background/40 text-foreground backdrop-blur-md hover:bg-background/60"
-            nativeButton={false}
-            render={<Link to="/games/$slug" params={{ slug: game.slug }} />}
-          >
-            <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" className="fill-current" />
-            Chơi ngay
-          </Button>
-          <span className="flex gap-1.5 text-foreground/80" title="Chơi được trên máy tính và điện thoại">
-            <HugeiconsIcon icon={ComputerIcon} className="size-5" />
-            <HugeiconsIcon icon={SmartphoneIcon} className="size-5" />
-          </span>
-        </div>
+        {/* Dark glass on the orange card, as in the reference; an orange button would vanish here */}
+        <Button
+          size="lg"
+          className="h-11 w-full rounded-xl bg-background/40 text-foreground backdrop-blur-md hover:bg-background/60"
+          nativeButton={false}
+          render={<Link to="/games/$slug" params={{ slug: game.slug }} />}
+        >
+          <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" className="fill-current" />
+          Chơi ngay
+        </Button>
       </div>
-    </div>
-  );
-}
-
-/** Two small art tiles: the next games in the carousel, or crops of this one. */
-function ArtTiles({ index, onIndex }: { index: number; onIndex: (i: number) => void }) {
-  const game = games[index];
-  const tiles =
-    games.length > 1
-      ? [1, 2].map((k) => {
-          const i = (index + k) % games.length;
-          return { key: `g-${i}`, src: games[i].banner, pos: "object-right", go: () => onIndex(i), label: games[i].title };
-        })
-      : [
-          { key: "crop-1", src: game.banner, pos: "object-[85%_30%]", go: null, label: game.title },
-          { key: "crop-2", src: game.poster, pos: "object-[50%_35%]", go: null, label: game.title },
-        ];
-
-  return (
-    <div className="grid h-24 grid-cols-2 gap-3 lg:h-[100px]">
-      {tiles.map((t) =>
-        t.go ? (
-          <button
-            key={t.key}
-            type="button"
-            onClick={t.go}
-            aria-label={t.label}
-            className="overflow-hidden rounded-xl ring-1 ring-border transition hover:ring-primary/60"
-          >
-            <img src={t.src} alt="" className={cn("size-full object-cover", t.pos)} />
-          </button>
-        ) : (
-          <Link
-            key={t.key}
-            to="/games/$slug"
-            params={{ slug: game.slug }}
-            aria-label={t.label}
-            className="overflow-hidden rounded-xl ring-1 ring-border transition hover:ring-primary/60"
-          >
-            <img src={t.src} alt="" className={cn("size-full scale-150 object-cover", t.pos)} />
-          </Link>
-        ),
-      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 {
   "name": "@web-games/web",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "//imports": "One alias, declared HERE and mirrored in tsconfig.json `paths`. Nowhere else — `#` is a Node subpath prefix that vite, rolldown and `bun run` all resolve natively, so a vite `resolve.alias` would be a third place to forget.",
@@ -9,10 +10,16 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "wrangler types && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "bun run build && wrangler deploy",
+    "//build": "`wrangler types` FIRST: it writes worker-configuration.d.ts, which tsconfig include-lists. Wiring it into build keeps `bun run gate` green on a fresh clone.",
+    "cf-typegen": "wrangler types",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply prod-engames --local",
+    "db:migrate:remote": "wrangler d1 migrations apply prod-engames --remote",
+    "test": "bun test src"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -23,9 +30,11 @@
     "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-start": "^1.168.26",
     "@web-games/games": "workspace:*",
+    "better-auth": "^1.7.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "drizzle-orm": "^0.45.4",
     "motion": "^12.40.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -35,11 +44,14 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.64.0",
     "@tailwindcss/vite": "^4.3.1",
+    "@types/bun": "^1.4.3",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4.3.1",
     "vite": "^8.0.16",
     "wrangler": "^4.151.3"

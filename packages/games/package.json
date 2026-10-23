@@ -1,6 +1,7 @@
 {
   "name": "@web-games/games",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "//": "Framework-free canvas games. Consumed as TypeScript source by the web app's Vite build (import.meta.glob discovers games), so there is no build step here.",
