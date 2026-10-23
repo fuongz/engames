@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fixedSteps } from "./game";
-import { clamp, inRect, mulberry32, smoothstep } from "./math";
+import { clamp, inRect, mulberry32, nextRandom, smoothstep } from "./math";
 
 describe("math", () => {
   it("replays a seed", () => {
@@ -9,6 +9,15 @@ describe("math", () => {
     const xs = Array.from({ length: 5 }, a);
     expect(xs).toEqual(Array.from({ length: 5 }, b));
     expect(xs.every((x) => x >= 0 && x < 1)).toBe(true);
+  });
+
+  it("nextRandom matches mulberry32 and survives a JSON round trip", () => {
+    const a = mulberry32(7);
+    let state = { seed: 7 };
+    for (let i = 0; i < 5; i++) {
+      expect(nextRandom(state)).toBe(a());
+      state = JSON.parse(JSON.stringify(state));
+    }
   });
 
   it("hit-tests edges inclusively", () => {

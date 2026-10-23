@@ -1,0 +1,9 @@
+# Copy to .dev.vars (gitignored) for `bun run dev:realtime`.
+
+# The SAME value as TICKET_SECRET in apps/web/.dev.vars: the portal signs join
+# tickets with it and this Worker checks them.
+TICKET_SECRET=
+
+# Local portal: the origin allowed to open sockets, and where results are posted.
+ALLOWED_ORIGINS=http://localhost:5173
+PORTAL_URL=http://localhost:5173

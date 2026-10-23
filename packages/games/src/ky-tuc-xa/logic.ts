@@ -1,4 +1,4 @@
-import { mulberry32 } from "../core/math";
+import { nextRandom } from "../core/math";
 import {
   ACCELERATOR_SPEED,
   ARCADE_ENERGY_EVERY,
@@ -52,6 +52,10 @@ import {
 
 // Pure simulation: no DOM, no canvas. The renderer reads state and drains
 // `events` each frame for sound, popups and effects.
+//
+// Seats: occupants are humans (`bot: null`) then bots. Solo is one human seat
+// and five bots; online co-op seats up to six humans and bots fill the rest.
+// An occupant's id is its index in `occupants`, which is also its seat.
 
 export interface Pt {
   x: number;
@@ -62,8 +66,14 @@ export type BotName = (typeof BOT_NAMES)[number];
 
 export interface Occupant {
   id: number;
-  /** null = the player. */
+  /** null = a human seat. */
   bot: BotName | null;
+  /** A human's display name ("" in solo). */
+  name: string;
+  /** A human whose connection dropped: their room keeps buying like a bot. */
+  autopilot: boolean;
+  /** Night time when a human was caught (null while still in). */
+  diedAt: number | null;
   x: number;
   y: number;
   path: Pt[];
@@ -130,10 +140,10 @@ export type Action =
 
 export type GameEvent =
   | { type: "tick"; n: number }
-  | { type: "asleep"; room: number; player: boolean }
-  | { type: "roomTaken"; room: number }
+  | { type: "asleep"; room: number; occupant: number }
+  | { type: "roomTaken"; room: number; occupant: number }
   | { type: "night" }
-  | { type: "caught" }
+  | { type: "caught"; occupant: number }
   | { type: "income"; room: number; amount: number }
   | { type: "built"; room: number; tile: number; kind: BuildKind }
   | {
@@ -145,7 +155,7 @@ export type GameEvent =
   | { type: "repaired"; room: number }
   | { type: "shot"; from: Pt; to: Pt; room: number }
   | { type: "doorHit"; room: number }
-  | { type: "doorBroken"; room: number; player: boolean }
+  | { type: "doorBroken"; room: number; occupant: number | null }
   | { type: "levelUp"; level: number }
   | { type: "retreat" }
   | { type: "hunterDown" }
@@ -166,14 +176,30 @@ export interface GameState {
   rooms: Room[];
   occupants: Occupant[];
   hunter: Hunter | null;
-  /** Room the player sleeps in, once asleep. */
-  playerRoom: number | null;
   firstTarget: boolean;
-  score: number;
   result: Result | null;
   events: GameEvent[];
-  rng: () => number;
+  /** Random state as a plain number, so the whole state is JSON (snapshots). */
+  seed: number;
 }
+
+/** What one human seat does in one step. */
+export interface SeatInput {
+  actions?: Action[];
+  /** Stick or keys, each axis in [-1, 1]. */
+  move?: Pt;
+}
+
+/** Inputs keyed by seat (occupant id). Seats without an entry stand still. */
+export type Inputs = Record<number, SeatInput | null | undefined>;
+
+/** Solo: the one human seat's input. */
+export const solo = (actions: Action[] = [], move: Pt = { x: 0, y: 0 }): Inputs => ({ 0: { actions, move } });
+
+const rand = (s: GameState) => nextRandom(s);
+export const isHuman = (o: Occupant) => o.bot === null;
+export const humans = (s: GameState) => s.occupants.filter(isHuman);
+const humansIn = (s: GameState) => s.occupants.some((o) => isHuman(o) && o.alive);
 
 // ---------------------------------------------------------------- geometry
 
@@ -327,9 +353,9 @@ function pathToDoor(from: Pt, room: number): Pt[] {
 
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
 
-/** The free-or-taken bed the player is standing at, if any. */
-export function bedNear(s: GameState): number | null {
-  const me = s.occupants[0];
+/** The free-or-taken bed a human is standing at, if any. */
+export function bedNear(s: GameState, id = 0): number | null {
+  const me = s.occupants[id];
   if (me.asleep || !me.alive) return null;
   for (let i = 0; i < ROOM_COUNT; i++)
     if (dist(me, tileCenter(i, bedTile(i))) <= BED_REACH) return i;
@@ -338,8 +364,10 @@ export function bedNear(s: GameState): number | null {
 
 // ---------------------------------------------------------------- setup
 
-export function createGame(seed = Date.now()): GameState {
-  const rng = mulberry32(seed);
+/** A fresh match: each of `seated` takes a human seat, bots take the rest (six in all). */
+export function createGame(seed = Date.now(), seated: { name: string }[] = [{ name: "" }]): GameState {
+  const random = { seed };
+  const rng = () => nextRandom(random);
   const rooms: Room[] = [];
   for (let i = 0; i < ROOM_COUNT; i++) {
     rooms.push({
@@ -363,23 +391,32 @@ export function createGame(seed = Date.now()): GameState {
     x: HALL_X + (i - 2.5) * 26,
     y: HALL_Y + (i % 2 ? 18 : -18),
   });
-  occupants.push({
-    id: 0,
-    bot: null,
-    ...spawn(0),
-    path: [],
-    speed: PLAYER_SPEED,
-    room: -1,
-    asleep: false,
-    alive: true,
-    delay: 0,
-    think: 0,
-  });
-  BOT_NAMES.forEach((name, i) => {
+  const seats = Math.max(1, Math.min(seated.length, BOT_NAMES.length + 1));
+  for (let i = 0; i < seats; i++) {
     occupants.push({
-      id: i + 1,
+      id: i,
+      bot: null,
+      name: seated[i]?.name ?? "",
+      autopilot: false,
+      diedAt: null,
+      ...spawn(i),
+      path: [],
+      speed: PLAYER_SPEED,
+      room: -1,
+      asleep: false,
+      alive: true,
+      delay: 0,
+      think: 0,
+    });
+  }
+  BOT_NAMES.slice(0, BOT_NAMES.length + 1 - seats).forEach((name, i) => {
+    occupants.push({
+      id: seats + i,
       bot: name,
-      ...spawn(i + 1),
+      name: "",
+      autopilot: false,
+      diedAt: null,
+      ...spawn(seats + i),
       path: [],
       speed: BOT_SPEED[i],
       room: -1,
@@ -397,29 +434,32 @@ export function createGame(seed = Date.now()): GameState {
     rooms,
     occupants,
     hunter: null,
-    playerRoom: null,
     firstTarget: true,
-    score: 0,
     result: null,
     events: [],
-    rng,
+    seed: random.seed,
   };
 }
 
-export const player = (s: GameState) => s.occupants[0];
+/** A human seat's occupant (seat 0 in solo). */
+export const player = (s: GameState, id = 0) => s.occupants[id];
 
-/** `move` is the player's stick or keys, each axis in [-1, 1]. */
-export function update(
-  s: GameState,
-  dt: number,
-  actions: Action[] = [],
-  move: Pt = { x: 0, y: 0 },
-) {
+/** The room a human sleeps in (kept after their door falls), or null. */
+export function roomOf(s: GameState, id = 0): Room | null {
+  const o = s.occupants[id];
+  return o?.asleep && o.room >= 0 ? s.rooms[o.room] : null;
+}
+
+const NO_MOVE: Pt = { x: 0, y: 0 };
+
+export function update(s: GameState, dt: number, inputs: Inputs = {}) {
   if (s.phase === "over") return;
   s.time += dt;
-  for (const a of actions) act(s, a);
+  for (const o of s.occupants)
+    if (isHuman(o)) for (const a of inputs[o.id]?.actions ?? []) act(s, o, a);
 
-  walkPlayer(s, move, dt);
+  for (const o of s.occupants)
+    if (isHuman(o)) walkHuman(s, o, inputs[o.id]?.move ?? NO_MOVE, dt);
   for (const o of s.occupants) if (o.bot) followPath(s, o, dt);
 
   if (s.phase === "setup") {
@@ -431,17 +471,16 @@ export function update(
       if (o.bot && !o.asleep && o.alive) botSeekRoom(s, o, dt);
     // ad: building already works during the countdown, once you are in bed
     for (const o of s.occupants)
-      if (o.bot && o.asleep && o.alive) botThink(s, o, dt);
+      if ((o.bot || o.autopilot) && o.asleep && o.alive) botThink(s, o, dt);
     if (s.countdown <= 0) startNight(s);
   } else {
     s.nightTime += dt;
     if (s.hunter) updateHunter(s, s.hunter, dt);
     fireTurrets(s, dt);
     for (const o of s.occupants)
-      if (o.bot && o.asleep && o.alive) botThink(s, o, dt);
+      if ((o.bot || o.autopilot) && o.asleep && o.alive) botThink(s, o, dt);
   }
   economy(s, dt);
-  s.score = scoreOf(s);
 }
 
 /** How far the player is slid sideways to line up with an opening they are pushing into. */
@@ -452,8 +491,7 @@ const CORNER_ASSIST = 16;
  * axis is blocked but an opening (corridor mouth, doorway) is a few pixels to
  * the side, the player is eased into line with it, as in Pac-Man cornering.
  */
-function walkPlayer(s: GameState, move: Pt, dt: number) {
-  const me = s.occupants[0];
+export function walkHuman(s: GameState, me: Occupant, move: Pt, dt: number) {
   if (!me.alive || me.asleep || s.phase !== "setup") return;
   const len = Math.hypot(move.x, move.y);
   if (len < 0.05) return;
@@ -520,8 +558,7 @@ function claim(s: GameState, o: Occupant, room: Room) {
   o.x = bed.x;
   o.y = bed.y;
   o.path = [];
-  if (!o.bot) s.playerRoom = room.index;
-  s.events.push({ type: "asleep", room: room.index, player: !o.bot });
+  s.events.push({ type: "asleep", room: room.index, occupant: o.id });
 }
 
 function claimedBy(s: GameState, room: number, except: Occupant) {
@@ -539,7 +576,7 @@ function botSeekRoom(s: GameState, o: Occupant, dt: number) {
     (r) => r.owner === null && !claimedBy(s, r.index, o),
   );
   if (free.length === 0) return;
-  const pick = free[Math.floor(s.rng() * free.length)];
+  const pick = free[Math.floor(rand(s) * free.length)];
   o.room = pick.index;
   o.path = pathToBed(o, pick.index);
 }
@@ -550,11 +587,14 @@ function startNight(s: GameState) {
   for (const o of s.occupants) {
     if (o.asleep || !o.alive) continue;
     o.alive = false;
-    if (!o.bot) {
-      s.events.push({ type: "caught" });
-      end(s, false);
-      return;
+    if (isHuman(o)) {
+      o.diedAt = 0;
+      s.events.push({ type: "caught", occupant: o.id });
     }
+  }
+  if (!humansIn(s)) {
+    end(s, false);
+    return;
   }
   s.hunter = {
     x: HALL_X,
@@ -623,18 +663,18 @@ export const doorUpgradeCost = (room: Room) =>
 export const turretUpgradeCost = (b: Building) =>
   TURRET_UPGRADE[b.level - 1] ?? null;
 
-function act(s: GameState, a: Action) {
-  const me = player(s);
+function act(s: GameState, me: Occupant, a: Action) {
+  if (!me.alive) return;
   if (a.type === "sleep") {
-    const near = bedNear(s);
+    const near = bedNear(s, me.id);
     if (near === null || s.phase !== "setup") return;
     const room = s.rooms[near];
     if (room.owner === null) claim(s, me, room);
-    else s.events.push({ type: "roomTaken", room: near });
+    else s.events.push({ type: "roomTaken", room: near, occupant: me.id });
     return;
   }
-  if (s.playerRoom === null) return;
-  apply(s, s.rooms[s.playerRoom], a);
+  const room = roomOf(s, me.id);
+  if (room) apply(s, room, a);
 }
 
 /** One purchase for any room (the player's actions and the bots' go through here). */
@@ -837,11 +877,13 @@ export const enraged = (h: Hunter) =>
 function breakDoor(s: GameState, h: Hunter, room: Room) {
   room.doorHp = 0;
   const victim = s.occupants.find((o) => o.id === room.owner);
-  const isPlayer = victim !== undefined && !victim.bot;
-  s.events.push({ type: "doorBroken", room: room.index, player: isPlayer });
-  if (victim) victim.alive = false;
+  s.events.push({ type: "doorBroken", room: room.index, occupant: victim?.id ?? null });
+  if (victim) {
+    victim.alive = false;
+    if (isHuman(victim)) victim.diedAt = s.nightTime;
+  }
   room.dark = true;
-  if (isPlayer) {
+  if (!humansIn(s)) {
     end(s, false);
     return;
   }
@@ -849,19 +891,19 @@ function breakDoor(s: GameState, h: Hunter, room: Room) {
   chooseTarget(s, h);
 }
 
-/** The weakest door is the most tempting; the very first target is never the player. */
+/** The weakest door is the most tempting; the very first target is never a human's. */
 function chooseTarget(s: GameState, h: Hunter) {
   const alive = s.rooms.filter((r) => r.owner !== null && !r.dark);
   let pool = alive;
   if (s.firstTarget) {
-    const bots = alive.filter((r) => r.index !== s.playerRoom);
+    const bots = alive.filter((r) => !s.occupants.some((o) => isHuman(o) && o.id === r.owner));
     if (bots.length > 0) pool = bots;
     s.firstTarget = false;
   }
   if (pool.length === 0) return;
   const weights = pool.map((r) => 1 / (r.doorHp + 40) ** 1.2);
   const total = weights.reduce((a, b) => a + b, 0);
-  let roll = s.rng() * total;
+  let roll = rand(s) * total;
   let pick = pool[0];
   for (let i = 0; i < pool.length; i++) {
     roll -= weights[i];
@@ -889,10 +931,9 @@ function botThink(s: GameState, o: Occupant, dt: number) {
   o.think -= dt;
   if (o.think > 0) return;
   o.think = BOT_THINK;
-  if (!o.bot) return;
   const room = s.rooms[o.room];
-  // Weaker bots hesitate more often
-  if (s.rng() > BOT_SKILL[o.bot]) return;
+  // Weaker bots hesitate more often; an autopilot plays like the best of them
+  if (rand(s) > (o.bot ? BOT_SKILL[o.bot] : BOT_SKILL.master)) return;
   planBuy(s, room);
 }
 
@@ -968,15 +1009,16 @@ function end(s: GameState, won: boolean) {
   if (s.phase === "over") return;
   s.phase = "over";
   s.result = { won, nightTime: s.nightTime, level: s.hunter?.level ?? 1 };
-  s.score = scoreOf(s);
   s.events.push({ type: "end", won });
 }
 
-/** Gold earned, plus survival time, plus a bonus for taking the hunter down (bigger when fast). */
-export function scoreOf(s: GameState) {
-  const room = s.playerRoom === null ? null : s.rooms[s.playerRoom];
-  const earned = room?.goldEarned ?? 0;
-  const survival = Math.floor(s.nightTime) * 5;
+/**
+ * A human's score: gold their room earned, plus 5 per second they lasted, plus
+ * a bonus every human shares for taking the hunter down (bigger when fast).
+ */
+export function scoreOf(s: GameState, id = 0) {
+  const earned = roomOf(s, id)?.goldEarned ?? 0;
+  const survival = Math.floor(s.occupants[id]?.diedAt ?? s.nightTime) * 5;
   const bonus = s.result?.won
     ? 5000 + Math.max(0, 3000 - Math.floor(s.nightTime) * 10)
     : 0;

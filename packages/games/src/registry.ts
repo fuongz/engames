@@ -50,6 +50,7 @@ export type {
   GameCategory,
   GameManifest,
   GameModule,
+  OnlineMatch,
   ScoreReport,
 } from "./core/types";
 export { audioBus } from "./core/audio";

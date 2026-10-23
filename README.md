@@ -15,6 +15,7 @@ apps/web/          portal — TanStack Start (SPA mode on Workers) + Tailwind v4
   drizzle/         generated SQL migrations (never hand-edit)
   public/          manifest.webmanifest, sw.js, icons/, _headers
   wrangler.jsonc   Worker, D1 binding `DB` (prod-engames), custom domain
+apps/realtime/     online rooms — one Durable Object per room (see docs/standards/online-multiplayer.md)
 packages/games/    the games — framework-free TypeScript on <canvas>
   src/core/        the engine: defineGame runtime, Stage, Loop, math/rng, AudioBus, storage
   src/registry.ts  discovers every src/<slug>/manifest.ts
@@ -27,8 +28,10 @@ packages/games/    the games — framework-free TypeScript on <canvas>
 ```sh
 bun install
 bun run dev        # portal on http://localhost:5173 (Vite default)
+bun run dev:realtime  # online rooms on ws://localhost:8787 (needs apps/realtime/.dev.vars)
 bun run gate       # build → lint + layout audit → typecheck → tests (keep it green)
 bun run deploy     # build and `wrangler deploy` (needs Cloudflare credentials)
+bun run deploy:realtime  # deploy the online-room Worker (engames-realtime)
 bun run ui:add x   # shadcn add for apps/web, with the `#/` alias fix applied
 bun run secrets    # gitleaks over the whole git history (CI runs the same)
 ```
@@ -51,6 +54,19 @@ One-time setup:
 2. Local: `cp apps/web/.dev.vars.example apps/web/.dev.vars` and fill it in.
 3. Production secrets (from `apps/web`):
    `bunx wrangler secret put BETTER_AUTH_SECRET` (and `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`).
+
+## Online co-op
+
+Ký Túc Xá Đêm plays online: up to six people share the dorm against the Hunter
+and bots take any empty bed. A room is a link (`/games/ky-tuc-xa?room=K7M2QX`);
+guests join with a name, signed-in players also reach the co-op leaderboard.
+The room runs the game's own `logic.ts` on a Durable Object in `apps/realtime`.
+
+One-time setup: put the same `TICKET_SECRET` in `apps/web/.dev.vars` and
+`apps/realtime/.dev.vars` (production: `wrangler secret put TICKET_SECRET` in
+both apps), then `bun run deploy:realtime`. Everything else, including how to
+make another game online, is in
+[`docs/standards/online-multiplayer.md`](docs/standards/online-multiplayer.md).
 
 ## Languages (Tiếng Việt / English)
 

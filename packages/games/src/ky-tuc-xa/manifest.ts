@@ -40,6 +40,7 @@ const manifest: GameManifest = {
   banner,
   width: W,
   height: H,
+  online: { modes: ["coop"], minPlayers: 1, maxPlayers: 6 },
   releasedAt: "2026-10-23T15:00",
   inspiredBy: {
     vi: "Haunted Dorm (Mihuan Games), quảng cáo TikTok người dùng quay màn hình",

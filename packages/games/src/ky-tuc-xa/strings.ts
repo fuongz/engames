@@ -1,4 +1,4 @@
-import type { Localized } from "../core";
+import type { Localized } from "../core/i18n";
 import type { BuildKind } from "./config";
 import type { BotName } from "./logic";
 
@@ -46,6 +46,12 @@ export interface Strings {
   newBest: string;
   best: (n: number) => string;
   playAgain: string;
+  /** Online: after a match, back to the room's lobby. */
+  backToLobby: string;
+  /** Online: your door fell, the team plays on. */
+  spectating: string;
+  /** Online: the scoreboard heading on the result card. */
+  team: string;
   paused: string;
   resume: string;
   restart: string;
@@ -117,6 +123,9 @@ export const STRINGS: Localized<Strings> = {
     newBest: "Kỷ lục mới!",
     best: (n) => `Kỷ lục ${n}`,
     playAgain: "Chơi lại",
+    backToLobby: "Về phòng chờ",
+    spectating: "Bạn đã bị bắt, đang xem đồng đội",
+    team: "Cả đội",
     paused: "Tạm Dừng",
     resume: "Tiếp tục",
     restart: "Chơi lại",
@@ -192,6 +201,9 @@ export const STRINGS: Localized<Strings> = {
     newBest: "New best!",
     best: (n) => `Best ${n}`,
     playAgain: "Play again",
+    backToLobby: "Back to lobby",
+    spectating: "You were caught, watching your team",
+    team: "Team",
     paused: "Paused",
     resume: "Resume",
     restart: "Restart",

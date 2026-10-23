@@ -2,6 +2,7 @@
   "src": "apps/web/src",
   "serverOnly": [
     "server/db/",
-    "server/auth/"
+    "server/auth/",
+    "server/online/"
   ]
 }

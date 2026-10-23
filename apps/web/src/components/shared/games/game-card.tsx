@@ -5,6 +5,7 @@ import { SUMMARY_KEY, categories, createStorage, type GameManifest, summaryText 
 import { motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
 import { type PointerEvent, useEffect, useState } from "react";
 import { useLocale } from "#/hooks/use-messages";
+import { CoopBadge } from "./coop-badge";
 import { cn } from "#/lib/utils";
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
@@ -80,6 +81,7 @@ export function GameCard({ game, className }: { game: GameManifest; className?: 
           loading="lazy"
           className="size-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
         />
+        <CoopBadge game={game} variant="overlay" className="absolute top-2 left-2" />
         {tilt && (
           <motion.div
             aria-hidden

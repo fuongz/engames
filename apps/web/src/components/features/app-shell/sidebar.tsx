@@ -1,4 +1,4 @@
-import { LibraryIcon, PlusSignIcon, Store01Icon, VolumeHighIcon, VolumeOffIcon } from "@hugeicons/core-free-icons";
+import { LibraryIcon, PlusSignIcon, Store01Icon, UserGroupIcon, VolumeHighIcon, VolumeOffIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/games";
@@ -33,11 +33,13 @@ export function Sidebar() {
   const installMode = useInstallStore((s) => s.mode);
   const install = useInstallStore((s) => s.install);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const coopFilter = useRouterState({ select: (s) => (s.location.search as { coop?: unknown }).coop === 1 });
   // index.html is prerendered at "/", and hydration keeps its attributes, so the
   // active link is only decided after mount (a normal re-render patches it).
   const [mounted, setMounted] = useState(false);
   const discover = mounted && path === "/";
-  const library = mounted && path.startsWith("/library");
+  const coop = mounted && path.startsWith("/library") && coopFilter;
+  const library = mounted && path.startsWith("/library") && !coopFilter;
 
   useEffect(() => {
     setMounted(true);
@@ -62,6 +64,12 @@ export function Sidebar() {
           {library && <ActiveBar />}
           <HugeiconsIcon icon={LibraryIcon} className="size-5" />
           {m.nav.library}
+        </Link>
+        {/* The library, filtered to games you can play with friends */}
+        <Link to="/library" search={{ coop: 1 }} className={SIDEBAR_ITEM} data-active={coop}>
+          {coop && <ActiveBar />}
+          <HugeiconsIcon icon={UserGroupIcon} className="size-5" />
+          {m.nav.coop}
         </Link>
       </nav>
 

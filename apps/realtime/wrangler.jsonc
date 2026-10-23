@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // engames-realtime: online rooms. One GameRoom Durable Object per room;
+  // see docs/standards/online-multiplayer.md.
+  "name": "engames-realtime",
+  "account_id": "4db494888d9a82bbe3df140e2e1a7676",
+  "compatibility_date": "2026-10-01",
+  "main": "src/index.ts",
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+
+  // Public config. TICKET_SECRET (shared with the portal) is a secret:
+  // `bunx wrangler secret put TICKET_SECRET`, locally in .dev.vars.
+  "vars": {
+    "ALLOWED_ORIGINS": "https://engames.trinhvaphuong.com",
+    "PORTAL_URL": "https://engames.trinhvaphuong.com"
+  },
+
+  "routes": [{ "pattern": "engames-rt.trinhvaphuong.com", "custom_domain": true }]
+}

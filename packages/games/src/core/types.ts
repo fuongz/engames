@@ -1,3 +1,4 @@
+import type { OnlineMode, ServerMessage, Vec } from "../online/protocol";
 import type { AudioBus } from "./audio";
 import type { Locale, Localized } from "./i18n";
 import type { GameStorage } from "./storage";
@@ -34,6 +35,11 @@ export interface GameManifest {
   /** ISO date, used for "new" ordering. */
   releasedAt: string;
   inspiredBy?: Localized<string>;
+  /**
+   * Playable online too: the game has an `online.ts` adapter registered in
+   * `online/registry.ts` (see docs/standards/online-multiplayer.md).
+   */
+  online?: { modes: OnlineMode[]; minPlayers: number; maxPlayers: number };
 }
 
 /**
@@ -78,6 +84,27 @@ export interface GameContext {
    * outside the portal; treat a missing one as DEFAULT_LOCALE.
    */
   locale?(): Locale;
+  /**
+   * Set when this mount is an online match. The game must not step its own
+   * simulation then: it sends inputs and draws what the room sends back.
+   */
+  online?: OnlineMatch;
+}
+
+/** The game's side of an online match; the portal owns the socket behind it. */
+export interface OnlineMatch {
+  /** This client's seat in the simulation. */
+  seat: number;
+  seats: { seat: number; name: string }[];
+  seed: number;
+  /** Simulation steps per second (inputs go out at this rate). */
+  tickRate: number;
+  /** This input tick's move and actions. */
+  send(input: { seq: number; move: Vec; actions: unknown[] }): void;
+  /** Match messages from the room (`snap`, `ev`, `end`); returns an unsubscribe. */
+  onMessage(fn: (m: ServerMessage) => void): () => void;
+  /** After `end`: leave the match screen and return to the room's lobby. */
+  backToLobby(): void;
 }
 
 export interface GameInstance {
