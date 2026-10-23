@@ -1,5 +1,5 @@
 import { BEAM_HALF, H, type PickupKind } from "./config";
-import { mulberry32 } from "./logic";
+import { mulberry32 } from "../core";
 
 // Procedural art in the ad's palette: deep blue-violet space, pink/gold rider,
 // obsidian enemies with purple or lava fire. Static shapes are pre-rendered to

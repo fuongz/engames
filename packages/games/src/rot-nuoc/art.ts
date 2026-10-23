@@ -1,5 +1,5 @@
 import { COLORS } from "./config";
-import { mulberry32 } from "./logic";
+import { mulberry32 } from "../core";
 
 // Procedural art in the ad's palette: charcoal background with faint doodles,
 // glossy yellow buttons, glass tubes with flat-coloured layers whose surfaces

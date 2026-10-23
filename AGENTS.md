@@ -15,6 +15,7 @@ local repository instruction, then these general rules.
 | --- | --- |
 | What may I install? How is it configured? | [`docs/standards/tech-stack.md`](docs/standards/tech-stack.md) |
 | Where does this file go? | [`docs/standards/frontend-app-layout.md`](docs/standards/frontend-app-layout.md) |
+| How is a game built? | [`docs/standards/game-engine.md`](docs/standards/game-engine.md) |
 
 Four things you will get wrong without them, so they are worth stating up front:
 
@@ -115,6 +116,10 @@ node scripts/audit-layout.mjs   # 0 = layout is correct
   through `GameModule.mount(root, ctx)` from `@web-games/games`.
 - **A new game is a new folder** under `packages/games/src/<slug>/` (see README).
   The registry discovers it, so the portal needs no edits.
+- **Games are built on the engine in `packages/games/src/core/`** — read
+  [`docs/standards/game-engine.md`](docs/standards/game-engine.md) first.
+  `index.ts` is one `defineGame(...)` call; never add `window`/`document` listeners
+  or a `Loop` in a game; `logic.ts` stays pure (imports only `../core/math`).
 - **Add shadcn components with `bun run ui:add <name>`**, not a bare `shadcn add`:
   the CLI writes `import { cn } from "cn"` under our `#/` alias and the script repairs it.
 - **Server code** lives in `apps/web/src/server/`: `leaderboard.ts` is the

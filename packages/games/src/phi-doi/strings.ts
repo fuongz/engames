@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "../core";
 import type { PickupKind } from "./config";
 
 // Every player-visible line in the game. game.ts resolves these at draw time, so

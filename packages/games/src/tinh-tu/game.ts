@@ -1,11 +1,12 @@
 import "@fontsource/baloo-2/800.css";
-import { currentLocale } from "../core/i18n";
-import { Loop, type PointerInfo, Stage } from "../core/stage";
 import {
-  type GameContext,
-  type GameInstance,
+  type GameHooks,
+  type PointerInfo,
+  type Runtime,
+  type StageHandlers,
   SUMMARY_KEY,
-} from "../core/types";
+  inRect,
+} from "../core";
 import {
   blit,
   drawBeam,
@@ -71,14 +72,11 @@ interface Button {
 
 const JOY_RADIUS = 60;
 
-export function startGame(root: HTMLElement, game: GameContext): GameInstance {
-  const { storage, audio, reportScore } = game;
+export function setup(rt: Runtime): GameHooks {
+  const { stage, ctx, keys } = rt;
+  const { storage, audio, reportScore } = rt.game;
   // Read per frame: the player can switch language while the game runs.
-  const tr = () => STRINGS[currentLocale(game)];
-  // Canvas text silently falls back until the face is loaded; ask for it up front.
-  void document.fonts?.load('800 20px "Baloo 2"');
-  const stage = new Stage(root, W, H, { bleed: true });
-  const { ctx } = stage;
+  const tr = () => STRINGS[rt.locale()];
   const sprites = makeSprites();
   const sky = makeSky();
 
@@ -101,7 +99,6 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
 
   // ---------------------------------------------------------- input
 
-  const keys = new Set<string>();
   let joy: { id: number; ox: number; oy: number; x: number; y: number } | null =
     null;
   let usedTouch = false;
@@ -126,10 +123,6 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
   });
   const inCircle = (p: { x: number; y: number }, b: Button) =>
     (p.x - b.x) ** 2 + (p.y - b.y) ** 2 <= (b.r + 12) ** 2;
-  const inRect = (
-    p: { x: number; y: number },
-    r: { x: number; y: number; w: number; h: number },
-  ) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
   function restart() {
     state = createGame();
@@ -154,9 +147,8 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
     });
   }
 
-  stage.onPointer({
+  const pointer: StageHandlers = {
     down(p: PointerInfo) {
-      audio.unlock();
       if (state.phase === "over") {
         if (inRect(p, overlayBtns().primary)) restart();
         return;
@@ -186,7 +178,7 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
     up(p: PointerInfo) {
       if (joy && p.id === joy.id) joy = null;
     },
-  });
+  };
 
   const MOVE_KEYS: Record<string, [number, number]> = {
     ArrowLeft: [-1, 0],
@@ -200,16 +192,12 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
   };
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.code in MOVE_KEYS || e.code === "Space") e.preventDefault();
-    keys.add(e.code);
     if (e.repeat) return;
     if (e.code === "Space" || e.code === "KeyJ" || e.code === "KeyK")
       skillQueued = true;
     if (e.code === "Escape" || e.code === "KeyP") togglePause();
     if (e.code === "Enter" && state.phase === "over") restart();
   };
-  const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code);
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
 
   function readInput(): Input {
     let mx = 0;
@@ -504,7 +492,6 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
       hurtFlash = Math.max(0, hurtFlash - dt);
       countPop += dt;
     }
-    draw();
   }
 
   function draw() {
@@ -1131,28 +1118,13 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
     ctx.stroke();
   }
 
-  const loop = new Loop(step);
-  loop.start();
-  const onVisibility = () => {
-    if (document.hidden) {
-      if (state.phase === "play") paused = true;
-      loop.stop();
-    } else loop.start();
-  };
-  document.addEventListener("visibilitychange", onVisibility);
-
   return {
-    pause: () => {
+    update: step,
+    render: draw,
+    pointer,
+    keydown: onKeyDown,
+    suspend() {
       if (state.phase === "play") paused = true;
-      loop.stop();
-    },
-    resume: () => loop.start(),
-    destroy() {
-      loop.stop();
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      document.removeEventListener("visibilitychange", onVisibility);
-      stage.destroy();
     },
   };
 }

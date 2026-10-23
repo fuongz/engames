@@ -1,11 +1,12 @@
 import "@fontsource/baloo-2/800.css";
-import { Loop, type PointerInfo, Stage } from "../core/stage";
-import { currentLocale } from "../core/i18n";
 import {
-  type GameContext,
-  type GameInstance,
+  type GameHooks,
+  type PointerInfo,
+  type Runtime,
+  type StageHandlers,
   SUMMARY_KEY,
-} from "../core/types";
+  inRect,
+} from "../core";
 import {
   blit,
   drawBattleship,
@@ -24,7 +25,6 @@ import {
   BOSS_HALF_H,
   ENEMIES,
   ENERGY_FULL,
-  H,
   MAX_BOMBS,
   MAX_HP,
   RAPID_TIME,
@@ -69,17 +69,11 @@ interface Button {
 
 const SHADOW = { x: 16, y: 26 };
 
-export function startGame(
-  root: HTMLElement,
-  gameCtx: GameContext,
-): GameInstance {
-  const { storage, audio, reportScore } = gameCtx;
+export function setup(rt: Runtime): GameHooks {
+  const { stage, ctx, keys } = rt;
+  const { storage, audio, reportScore } = rt.game;
   // Resolved per frame: the player can switch language mid-run
-  const tr = () => STRINGS[currentLocale(gameCtx)];
-  // Canvas text silently falls back until the face is loaded; ask for it up front.
-  void document.fonts?.load('800 20px "Baloo 2"');
-  const stage = new Stage(root, W, H, { bleed: true });
-  const { ctx } = stage;
+  const tr = () => STRINGS[rt.locale()];
   const sprites = makeSprites();
   const shadows = {
     hero: shadowOf(sprites.hero),
@@ -125,7 +119,6 @@ export function startGame(
 
   // ---------------------------------------------------------- input
 
-  const keys = new Set<string>();
   let drag: { id: number; x: number; y: number } | null = null;
   let pendingDx = 0;
   let pendingDy = 0;
@@ -148,10 +141,6 @@ export function startGame(
   });
   const inCircle = (p: { x: number; y: number }, b: Button) =>
     (p.x - b.x) ** 2 + (p.y - b.y) ** 2 <= (b.r + 10) ** 2;
-  const inRect = (
-    p: { x: number; y: number },
-    r: { x: number; y: number; w: number; h: number },
-  ) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
   function restart() {
     state = fresh();
@@ -177,9 +166,8 @@ export function startGame(
     });
   }
 
-  stage.onPointer({
+  const pointer: StageHandlers = {
     down(p: PointerInfo) {
-      audio.unlock();
       if (state.phase === "over") {
         if (inRect(p, overlayBtns().primary)) restart();
         return;
@@ -212,7 +200,7 @@ export function startGame(
     up(p: PointerInfo) {
       if (drag && p.id === drag.id) drag = null;
     },
-  });
+  };
 
   const MOVE_KEYS: Record<string, [number, number]> = {
     ArrowLeft: [-1, 0],
@@ -226,18 +214,13 @@ export function startGame(
   };
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.code in MOVE_KEYS || e.code === "Space") e.preventDefault();
-    keys.add(e.code);
     if (e.repeat) return;
-    audio.unlock();
     if (e.code === "KeyJ" || e.code === "KeyZ") skillQueued = true;
     if (e.code === "Space" || e.code === "KeyK" || e.code === "KeyX")
       bombQueued = true;
     if (e.code === "Escape" || e.code === "KeyP") togglePause();
     if (e.code === "Enter" && state.phase === "over") restart();
   };
-  const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code);
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
 
   function readInput(): Input {
     let mx = 0;
@@ -571,7 +554,6 @@ export function startGame(
       pendingDx = 0;
       pendingDy = 0;
     }
-    draw();
   }
 
   function draw() {
@@ -1140,28 +1122,13 @@ export function startGame(
     button(overlayBtns().primary, tr().flyAgain, true);
   }
 
-  const loop = new Loop(step);
-  loop.start();
-  const onVisibility = () => {
-    if (document.hidden) {
-      if (state.phase !== "over") paused = true;
-      loop.stop();
-    } else loop.start();
-  };
-  document.addEventListener("visibilitychange", onVisibility);
-
   return {
-    pause: () => {
+    update: step,
+    render: draw,
+    pointer,
+    keydown: onKeyDown,
+    suspend() {
       if (state.phase !== "over") paused = true;
-      loop.stop();
-    },
-    resume: () => loop.start(),
-    destroy() {
-      loop.stop();
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      document.removeEventListener("visibilitychange", onVisibility);
-      stage.destroy();
     },
   };
 }

@@ -1,11 +1,13 @@
 import "@fontsource/baloo-2/800.css";
-import { type Locale, currentLocale } from "../core/i18n";
-import { Loop, type PointerInfo, Stage } from "../core/stage";
 import {
-  type GameContext,
-  type GameInstance,
+  type GameHooks,
+  type Locale,
+  type PointerInfo,
+  type Runtime,
+  type StageHandlers,
   SUMMARY_KEY,
-} from "../core/types";
+  inRect,
+} from "../core";
 import {
   HERO_WEAPONS,
   OUTLINE,
@@ -24,7 +26,6 @@ import {
 } from "./art";
 import {
   GROUND_Y,
-  H,
   HERO_X,
   SHIELDS,
   SPACING,
@@ -85,15 +86,13 @@ const SCORE: Record<Locale, Intl.NumberFormat> = {
   en: new Intl.NumberFormat(STRINGS.en.numberLocale),
 };
 
-export function startGame(root: HTMLElement, game: GameContext): GameInstance {
-  const { storage, audio, reportScore } = game;
+export function setup(rt: Runtime): GameHooks {
+  const { stage, ctx } = rt;
+  const { storage, audio, reportScore } = rt.game;
   // The player can switch language mid-run, so look it up whenever we draw
-  const locale = () => currentLocale(game);
+  const { locale } = rt;
   const tr = () => STRINGS[locale()];
   const fmt = (n: number) => SCORE[locale()].format(n);
-  void document.fonts?.load('800 20px "Baloo 2"');
-  const stage = new Stage(root, W, H, { bleed: true });
-  const { ctx } = stage;
 
   let state: GameState = createGame();
   let t = 0;
@@ -317,19 +316,10 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
     b: { x: number; y: number; s: number },
   ) => p.x >= b.x && p.x <= b.x + b.s && p.y >= b.y && p.y <= b.y + b.s;
 
-  stage.onPointer({
+  const pointer: StageHandlers = {
     down(p: PointerInfo) {
-      audio.unlock();
       if (state.over) {
-        if (
-          defeatT > 0.8 &&
-          p.x >= RESTART.x &&
-          p.x <= RESTART.x + RESTART.w &&
-          p.y >= RESTART.y &&
-          p.y <= RESTART.y + RESTART.h
-        ) {
-          restart();
-        }
+        if (defeatT > 0.8 && inRect(p, RESTART)) restart();
         return;
       }
       for (const u of ["weapon", "shield"] as const) {
@@ -342,7 +332,7 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
     up() {
       pressed = null;
     },
-  });
+  };
 
   // ---------------------------------------------------------- frame
 
@@ -402,7 +392,6 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
     goldBump = Math.max(0, goldBump - dt);
     shake = Math.max(0, shake - dt);
     if (defeatT >= 0) defeatT += dt;
-    draw();
   }
 
   function draw() {
@@ -660,18 +649,5 @@ export function startGame(root: HTMLElement, game: GameContext): GameInstance {
     ctx.restore();
   }
 
-  const loop = new Loop(step);
-  loop.start();
-  const onVisibility = () => (document.hidden ? loop.stop() : loop.start());
-  document.addEventListener("visibilitychange", onVisibility);
-
-  return {
-    pause: () => loop.stop(),
-    resume: () => loop.start(),
-    destroy() {
-      loop.stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-      stage.destroy();
-    },
-  };
+  return { update: step, render: draw, pointer };
 }
