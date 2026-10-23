@@ -30,7 +30,11 @@ bun run dev        # portal on http://localhost:5173 (Vite default)
 bun run gate       # build → lint + layout audit → typecheck → tests (keep it green)
 bun run deploy     # build and `wrangler deploy` (needs Cloudflare credentials)
 bun run ui:add x   # shadcn add for apps/web, with the `#/` alias fix applied
+bun run secrets    # gitleaks over the whole git history (CI runs the same)
 ```
+
+CI: `.github/workflows/secret-scan.yml` runs gitleaks on every push to `main`,
+every PR and weekly; findings fail the job and appear under Security → Code scanning.
 
 ## Accounts, leaderboard and D1
 

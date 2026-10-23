@@ -23,7 +23,8 @@
     "gate": "bun run build && bun run lint && bun run typecheck && bun run test",
     "test": "bun run --filter '*' test",
     "ui:add": "node scripts/ui-add.mjs",
-    "deploy": "bun run --cwd apps/web deploy"
+    "deploy": "bun run --cwd apps/web deploy",
+    "secrets": "gitleaks git --redact --no-banner ."
   },
   "//deps": "The root holds ONLY what runs ACROSS the tree. A dependency parked here that one app needs is how versions silently drift: both apps resolve it, only one declares it, and bumping it for one bumps it for both. Everything else lives in apps/*/package.json.",
   "devDependencies": {
