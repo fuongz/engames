@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "../core";
 
 // Every player-visible line. game.ts resolves these at draw time, so switching
 // language in the portal shows on the next frame.

@@ -1,3 +1,7 @@
+import type { Rect } from "./math";
+
+export type { Rect } from "./math";
+
 export interface PointerInfo {
   x: number;
   y: number;
@@ -10,13 +14,6 @@ export interface StageOptions {
    * on a 9:19.5 phone has no black bars. Read `view` for the visible area.
    */
   bleed?: boolean;
-}
-
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
 }
 
 export interface StageHandlers {

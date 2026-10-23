@@ -1,7 +1,6 @@
 // Key art for the portal, composed from the game's own drawing code. Not
 // imported by the game: `bun run art` renders it to poster.webp / banner.webp.
-import type { Locale, Localized } from "../core/i18n";
-import { fitFontSize } from "../core/text";
+import { type Locale, type Localized, fitFontSize } from "../core";
 import { blit, drawBeam, drawBoss, drawFlames, drawPortal, drawRider, drawSky, makeSky, makeSprites, FONT, text } from "./art";
 import { H, W } from "./config";
 

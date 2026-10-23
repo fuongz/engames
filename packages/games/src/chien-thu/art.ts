@@ -12,7 +12,8 @@ import {
   type EnemyKind,
   type Species,
 } from "./config";
-import { SLOTS, mulberry32 } from "./logic";
+import { mulberry32 } from "../core";
+import { SLOTS } from "./logic";
 
 // Everything is drawn procedurally in the thick-outline cartoon style of the
 // reference ad, so the game ships with zero image assets.

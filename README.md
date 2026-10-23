@@ -16,7 +16,7 @@ apps/web/          portal — TanStack Start (SPA mode on Workers) + Tailwind v4
   public/          manifest.webmanifest, sw.js, icons/, _headers
   wrangler.jsonc   Worker, D1 binding `DB` (prod-engames), custom domain
 packages/games/    the games — framework-free TypeScript on <canvas>
-  src/core/        Stage (DPR canvas, letterbox, pointer mapping), Loop, AudioBus, storage
+  src/core/        the engine: defineGame runtime, Stage, Loop, math/rng, AudioBus, storage
   src/registry.ts  discovers every src/<slug>/manifest.ts
   src/chien-thu/   Chiến Thú Hỗn Chiến (portrait merge-defense), see RE_NOTES.md
   src/tinh-tu/     Tinh Tú Phi Hành (landscape shoot 'em up), see RE_NOTES.md
@@ -69,7 +69,10 @@ before deploying code that needs the new columns.
 
 1. Create `packages/games/src/<slug>/` with:
    - `manifest.ts` — default-export a `GameManifest` (`slug` must equal the folder name).
-   - `index.ts` — default-export a `GameModule`: `mount(root, ctx)` returns `{ destroy, pause?, resume? }`.
+   - `index.ts` — `export default defineGame({ width, height, bleed: true, fonts }, setup)`;
+     `game.ts` exports `setup(rt)` returning `{ update, render, pointer, keydown, suspend, dispose }`.
+     The runtime owns the loop, pause/visibility, keyboard and teardown — see
+     [`docs/standards/game-engine.md`](docs/standards/game-engine.md).
    - key art imported from the manifest: `poster` (3:4, title baked in, for cards;
      one per language, `{ vi: poster.webp, en: poster-en.webp }`) and `banner`
      (2:1, no text, subject on the right, for the home hero).
@@ -77,20 +80,21 @@ before deploying code that needs the new columns.
      the game's own drawing code, then `bun run --cwd packages/games art` writes the `.webp` files.
    - `title`, `tagline`, `description`, `controls`, `tags` and `inspiredBy` are `{ vi, en }`.
    - keep every drawn string in a `strings.ts` `Localized` catalog and resolve it at
-     draw time with `currentLocale(ctx)` from `../core/i18n`, so a language switch
+     draw time with `rt.locale()`, so a language switch
      shows on the next frame; report `detail` in the current language.
    - optionally write a one-line best result to `ctx.storage` under `SUMMARY_KEY`,
      as `{ vi, en }`; cards show it instead of the release year.
    - set `orientation: "landscape"` for sideways games: phones held upright get a
      "rotate your phone" overlay, and Android locks to landscape when play starts.
-2. Draw on a `Stage` from `../core/stage` (pass `{ bleed: true }` and anchor HUD to `stage.view`
-   so wide or tall screens have no black bars) and use `ctx.audio` / `ctx.storage` so the
-   portal's mute button and per-game saves work.
+2. Draw on `rt.stage` (anchor the HUD to `stage.view` so wide or tall screens have
+   no black bars) and use `rt.game.audio` / `rt.game.storage` so the portal's mute
+   button and per-game saves work. Import everything from `../core`.
 3. That's it: the registry finds the folder, the home grid lists it, and
    `/games/<slug>` lazy-loads its chunk. No portal code changes.
 
-Keep game rules in a pure module (like `chien-thu/logic.ts`) so they can be
-unit-tested and balance-simulated without a browser.
+Keep game rules in a pure `logic.ts` (only `../core/math` and `./config` imports)
+so they can be unit-tested and balance-simulated without a browser; a test fails
+the gate if one reaches for the DOM.
 
 ## Mobile and PWA notes
 

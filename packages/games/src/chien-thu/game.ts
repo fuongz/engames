@@ -1,11 +1,12 @@
 import "@fontsource/baloo-2/800.css";
-import { currentLocale } from "../core/i18n";
 import {
-  type GameContext,
-  type GameInstance,
+  type GameHooks,
+  type PointerInfo,
+  type Runtime,
+  type StageHandlers,
   SUMMARY_KEY,
-} from "../core/types";
-import { Loop, Stage, type PointerInfo } from "../core/stage";
+  inRect,
+} from "../core";
 import {
   CENTER,
   ENEMIES,
@@ -92,20 +93,11 @@ const EVOLVE_REVEAL = 1.9;
 /** Matches the tree line at the top and bottom of the background. */
 const FOREST = "#2f8a3c";
 
-const inRect = (p: Vec, r: { x: number; y: number; w: number; h: number }) =>
-  p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-
-export function startGame(
-  root: HTMLElement,
-  gameCtx: GameContext,
-): GameInstance {
-  const { storage, audio, reportScore } = gameCtx;
+export function setup(rt: Runtime): GameHooks {
+  const { stage, ctx } = rt;
+  const { storage, audio, reportScore } = rt.game;
   // The player can flip the language mid-run, so look the catalog up per use.
-  const tr = () => STRINGS[currentLocale(gameCtx)];
-  // Canvas text silently falls back until the face is loaded; ask for it up front.
-  void document.fonts?.load('800 20px "Baloo 2"');
-  const stage = new Stage(root, W, H, { bleed: true });
-  const { ctx } = stage;
+  const tr = () => STRINGS[rt.locale()];
   const background = renderBackground();
 
   let state: GameState = createGame();
@@ -305,9 +297,8 @@ export function startGame(
 
   // ---------------------------------------------------------- input
 
-  stage.onPointer({
+  const pointer: StageHandlers = {
     down(p: PointerInfo) {
-      audio.unlock();
       if (evolution) {
         if (evolution.t > EVOLVE_REVEAL + 0.4) evolution = null;
         return;
@@ -348,7 +339,7 @@ export function startGame(
       drag = null;
       state.held = null;
     },
-  });
+  };
 
   // ---------------------------------------------------------- frame
 
@@ -400,7 +391,6 @@ export function startGame(
       });
     }
 
-    draw();
   }
 
   function critterPos(id: number, slot: number): Vec {
@@ -824,7 +814,7 @@ export function startGame(
       text(ctx, tr().evolved, cx, 230, 38, "#fff3c4");
       text(
         ctx,
-        speciesFor(ev.level).name[currentLocale(gameCtx)],
+        speciesFor(ev.level).name[rt.locale()],
         cx,
         cy + 165,
         40,
@@ -899,19 +889,12 @@ export function startGame(
     text(ctx, tr().playAgain, W / 2, RESTART.y + RESTART.h / 2 + 1, 30);
   }
 
-  const loop = new Loop(step);
-  loop.start();
-  const onVisibility = () => (document.hidden ? loop.stop() : loop.start());
-  document.addEventListener("visibilitychange", onVisibility);
-
   return {
-    pause: () => loop.stop(),
-    resume: () => loop.start(),
-    destroy() {
+    update: step,
+    render: draw,
+    pointer,
+    dispose() {
       if (state.wave > 0) saveRun();
-      loop.stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-      stage.destroy();
     },
   };
 }

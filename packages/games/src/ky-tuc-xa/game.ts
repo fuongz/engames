@@ -1,11 +1,12 @@
 import "@fontsource/baloo-2/800.css";
-import { currentLocale } from "../core/i18n";
-import { Loop, type PointerInfo, Stage } from "../core/stage";
 import {
-  type GameContext,
-  type GameInstance,
+  type GameHooks,
+  type PointerInfo,
+  type Runtime,
+  type StageHandlers,
   SUMMARY_KEY,
-} from "../core/types";
+  inRect,
+} from "../core";
 import {
   PALETTES,
   bolt,
@@ -126,8 +127,6 @@ const HUD_BOTTOM = 92;
 const LOOK_RETURN = 2.5;
 const fmtTime = (s: number) =>
   `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-const inRect = (p: Pt, r: Rect) =>
-  p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
@@ -140,16 +139,11 @@ const MOVE_KEYS: Record<string, [number, number]> = {
   KeyS: [0, 1],
 };
 
-export function startGame(
-  root: HTMLElement,
-  gameCtx: GameContext,
-): GameInstance {
-  const { storage, audio, reportScore } = gameCtx;
+export function setup(rt: Runtime): GameHooks {
+  const { stage, ctx, keys } = rt;
+  const { storage, audio, reportScore } = rt.game;
   // Resolved per frame: the player can switch language mid-run
-  const tr = () => STRINGS[currentLocale(gameCtx)];
-  void document.fonts?.load('800 20px "Baloo 2"');
-  const stage = new Stage(root, W, H, { bleed: true });
-  const { ctx } = stage;
+  const tr = () => STRINGS[rt.locale()];
   const map = makeMap();
   const coarse =
     typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
@@ -179,7 +173,6 @@ export function startGame(
   const look = { x: 0, y: 0 };
   let lookIdle = 0;
   let gesture: Gesture | null = null;
-  const keys = new Set<string>();
 
   const view = () => stage.view;
   const top = () => view().y;
@@ -424,9 +417,8 @@ export function startGame(
     else if (panel.kind === "door") pending.push({ type: "upgradeDoor" });
   }
 
-  stage.onPointer({
+  const pointer: StageHandlers = {
     down(p: PointerInfo) {
-      audio.unlock();
       if (tapUi(p)) return;
       if (gesture) return;
       const awake = !player(state).asleep && state.phase === "setup";
@@ -465,13 +457,11 @@ export function startGame(
       gesture = null;
       if (g.mode === "look" && !g.moved) tapWorld({ x: g.x, y: g.y });
     },
-  });
+  };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.code in MOVE_KEYS || e.code === "Space") e.preventDefault();
-    keys.add(e.code);
     if (e.repeat) return;
-    audio.unlock();
     if (e.code === "Escape") {
       if (panel) panel = null;
       else if (!noticeOpen && state.phase !== "over") paused = !paused;
@@ -483,9 +473,6 @@ export function startGame(
     }
     if (e.code === "KeyR") pending.push({ type: "repair" });
   };
-  const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code);
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
 
   /** Keys plus the stick, as one vector with length ≤ 1. */
   function moveVector(): Pt {
@@ -796,7 +783,6 @@ export function startGame(
     const k = Math.min(1, dt * (player(state).asleep ? 6 : 10));
     cam.x += (target.x - cam.x) * k;
     cam.y += (target.y - cam.y) * k;
-    draw();
   }
 
   function draw() {
@@ -1555,32 +1541,14 @@ export function startGame(
   }
 
   snapCamera();
-  const loop = new Loop(step);
-  loop.start();
-  const onVisibility = () => {
-    if (document.hidden) {
-      if (state.phase !== "over" && !noticeOpen) paused = true;
-      keys.clear();
-      gesture = null;
-      loop.stop();
-    } else loop.start();
-  };
-  document.addEventListener("visibilitychange", onVisibility);
-
   return {
-    pause: () => {
+    update: step,
+    render: draw,
+    pointer,
+    keydown: onKeyDown,
+    suspend() {
       if (state.phase !== "over" && !noticeOpen) paused = true;
-      keys.clear();
       gesture = null;
-      loop.stop();
-    },
-    resume: () => loop.start(),
-    destroy() {
-      loop.stop();
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      document.removeEventListener("visibilitychange", onVisibility);
-      stage.destroy();
     },
   };
 }

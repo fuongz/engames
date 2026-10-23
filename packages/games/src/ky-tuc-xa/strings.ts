@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "../core";
 import type { BuildKind } from "./config";
 import type { BotName } from "./logic";
 

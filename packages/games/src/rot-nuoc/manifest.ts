@@ -1,4 +1,4 @@
-import type { GameManifest } from "../core/types";
+import type { GameManifest } from "../core";
 import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";

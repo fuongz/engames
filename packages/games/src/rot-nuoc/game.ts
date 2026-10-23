@@ -1,11 +1,13 @@
 import "@fontsource/baloo-2/800.css";
-import { currentLocale } from "../core/i18n";
-import { Loop, type PointerInfo, Stage } from "../core/stage";
 import {
-  type GameContext,
-  type GameInstance,
+  type GameHooks,
+  type PointerInfo,
+  type Rect,
+  type Runtime,
   SUMMARY_KEY,
-} from "../core/types";
+  inRect,
+  smoothstep as ease,
+} from "../core";
 import {
   CONFETTI,
   type Glyph,
@@ -66,13 +68,6 @@ interface Anim {
   t: number;
 }
 
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
 interface Bit {
   x: number;
   y: number;
@@ -84,19 +79,11 @@ interface Bit {
 }
 
 const TILT = 1.15; // ~66°, ad: the tube leans well over the target
-const inRect = (p: { x: number; y: number }, r: Rect) =>
-  p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-const ease = (k: number) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
 
-export function startGame(
-  root: HTMLElement,
-  gameCtx: GameContext,
-): GameInstance {
-  const { storage, audio, reportScore } = gameCtx;
-  const tr = () => STRINGS[currentLocale(gameCtx)];
-  void document.fonts?.load('800 20px "Baloo 2"');
-  const stage = new Stage(root, W, H, { bleed: true });
-  const { ctx } = stage;
+export function setup(rt: Runtime): GameHooks {
+  const { stage, ctx } = rt;
+  const { storage, audio, reportScore } = rt.game;
+  const tr = () => STRINGS[rt.locale()];
   const backdrop = makeBackdrop();
 
   const progress: Progress = {
@@ -374,9 +361,7 @@ export function startGame(
 
   // ---------------------------------------------------------- input
 
-  stage.onPointer({
-    down(p: PointerInfo) {
-      audio.unlock();
+  function onPointerDown(p: PointerInfo) {
       if (won) {
         if (won.t > 0.6 && inRect(p, nextBtn())) nextLevel();
         return;
@@ -390,12 +375,10 @@ export function startGame(
         if (inRect(p, tubeRect(i))) return tapTube(i);
       }
       selected = null;
-    },
-  });
+  }
 
   const onKey = (e: KeyboardEvent) => {
     if (e.repeat) return;
-    audio.unlock();
     if (e.code === "KeyZ") doUndo();
     else if (e.code === "KeyR") doRestart();
     else if (e.code === "KeyT") doAddTube();
@@ -409,7 +392,6 @@ export function startGame(
       if (i < board.tubes.length && !won) tapTube(i);
     }
   };
-  window.addEventListener("keydown", onKey);
 
   // ---------------------------------------------------------- frame
 
@@ -434,7 +416,6 @@ export function startGame(
       if (toast.t > 2.2) toast = null;
     }
     if (won) won.t += dt;
-    draw();
   }
 
   /** Group a tube into layers, then adjust for any pour still animating into or out of it. */
@@ -661,19 +642,10 @@ export function startGame(
     ctx.globalAlpha = 1;
   }
 
-  const loop = new Loop(step);
-  loop.start();
-  const onVisibility = () => (document.hidden ? loop.stop() : loop.start());
-  document.addEventListener("visibilitychange", onVisibility);
-
   return {
-    pause: () => loop.stop(),
-    resume: () => loop.start(),
-    destroy() {
-      loop.stop();
-      window.removeEventListener("keydown", onKey);
-      document.removeEventListener("visibilitychange", onVisibility);
-      stage.destroy();
-    },
+    update: step,
+    render: draw,
+    pointer: { down: onPointerDown },
+    keydown: onKey,
   };
 }

@@ -1,8 +1,8 @@
-import type { GameModule } from "../core/types";
-import { startGame } from "./game";
+import { defineGame } from "../core";
+import { H, W } from "./config";
+import { setup } from "./game";
 
-const game: GameModule = {
-  mount: (root, ctx) => startGame(root, ctx),
-};
-
-export default game;
+export default defineGame(
+  { width: W, height: H, bleed: true, fonts: ['800 20px "Baloo 2"'] },
+  setup,
+);
