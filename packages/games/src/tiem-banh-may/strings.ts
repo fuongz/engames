@@ -1,0 +1,583 @@
+import type { Localized } from "../core/i18n";
+import type { MixMode, PipeMode, StoveMode, WaitMode, Weather } from "./config";
+import type { Grade, Note } from "./logic";
+
+// Every player-visible line. game.ts resolves these at draw time, so switching
+// language in the portal shows on the next frame. Names of cakes, ingredients
+// and customers live with their catalogs in config.ts.
+
+export interface Strings {
+  num: (n: number) => string;
+  coins: (n: number) => string;
+  day: (n: number) => string;
+  weekdays: string[];
+  weather: Record<Weather, string>;
+  workLeft: (minutes: number) => string;
+  minutes: (n: number) => string;
+  loading: string;
+  needSignIn: string;
+  loadFailed: string;
+  retry: string;
+  saveFailed: string;
+  conflict: string;
+  reload: string;
+
+  forecast: (day: number) => string;
+  crowd: (n: number) => string;
+  trend: (cake: string) => string;
+  vipRumour: string;
+  preorder: (who: string, qty: number, cake: string, time: string) => string;
+  noPreorder: string;
+  market: string;
+  book: string;
+  bake: string;
+  open: string;
+  hintMarket: string;
+  hintBake: string;
+  hintOpen: string;
+  hintTimeUp: string;
+  display: (n: number, cap: number) => string;
+  emptyDisplay: string;
+
+  pack: (amount: number, unit: "g" | "ml" | "egg") => string;
+  amount: (amount: number, unit: "g" | "ml" | "egg", spoon: boolean) => string;
+  inPantry: (q: string) => string;
+  fresh: (days: number) => string;
+  checkout: (minutes: number) => string;
+  total: string;
+  noCoins: string;
+  noTime: string;
+
+  recipesTab: string;
+  upgradesTab: string;
+  owned: string;
+  mastery: (n: number, of: number) => string;
+  mastered: string;
+  yieldLine: (n: number, price: number) => string;
+  timeLine: (m: number) => string;
+  upgradeInfo: Record<"mixer" | "oven2" | "display" | "fridge", string>;
+  close: string;
+  bought: string;
+
+  make: string;
+  makeFast: string;
+  missing: (ing: string) => string;
+  displayFull: string;
+  needTime: string;
+
+  stepAdd: (amount: string, ing: string) => string;
+  stepMix: Record<MixMode, string>;
+  turns: (n: number) => string;
+  stepStove: Record<StoveMode, string>;
+  stepWait: (mode: WaitMode, m: number) => string;
+  stepOven: (t: number, m: number) => string;
+  stepPipe: Record<PipeMode, string>;
+  pickIng: string;
+  holdPour: string;
+  tapAdd: (unit: string) => string;
+  spoonUnit: string;
+  eggUnit: string;
+  added: string;
+  spin: string;
+  done: string;
+  useMixer: string;
+  stoveHint: string;
+  offHeat: string;
+  heatOn: string;
+  ovenSet: string;
+  ovenIn: string;
+  ovenOut: string;
+  pipeHint: string;
+  waiting: string;
+  next: string;
+  grade: Record<Grade, string>;
+  note: (key: Note, ing?: string) => string;
+  fail: Record<"burnt" | "raw" | "flat", string>;
+  ruined: string;
+  baked: (n: number, cake: string) => string;
+  store: string;
+  bin: string;
+
+  opening: string;
+  discount: string;
+  discountOn: string;
+  closeEarly: string;
+  give: string;
+  soldOut: string;
+  vipWants: string;
+  preorderTag: string;
+  totalPaid: (total: number, paid: number) => string;
+  counted: (n: number) => string;
+  giveChange: string;
+  recount: string;
+  exactPaid: string;
+  pickBox: string;
+  pieces: (n: number) => string;
+  box: (n: number) => string;
+  boxSmall: string;
+  thanks: string;
+  tip: (n: number) => string;
+  shortChange: string;
+  overChange: (n: number) => string;
+  walked: string;
+  queueFull: string;
+  vipHappy: string;
+  vipSad: string;
+  notOrdered: string;
+  preorderMissing: string;
+  closed: string;
+
+  reportTitle: (day: number) => string;
+  revenue: string;
+  tips: string;
+  boxes: string;
+  ingredients: string;
+  wasted: (n: number) => string;
+  spoiled: string;
+  profit: string;
+  loss: string;
+  overGiven: (n: number) => string;
+  served: (n: number) => string;
+  walkedOff: (n: number) => string;
+  soldOutLine: string;
+  rep: (a: number, b: number) => string;
+  vipReport: Record<"happy" | "sad" | "missed", string>;
+  preorderReport: (done: number, missed: number) => string;
+  bailout: (n: number) => string;
+  nextDay: string;
+
+  /** Card summary and leaderboard detail. */
+  summary: (day: number, coins: number) => string;
+  detail: (day: number) => string;
+}
+
+const viNum = (n: number) => Math.round(n).toLocaleString("vi-VN");
+const enNum = (n: number) => Math.round(n).toLocaleString("en-US");
+
+const hm = (m: number, h: string) => {
+  const hours = Math.floor(m / 60);
+  const mins = Math.round(m % 60);
+  return hours
+    ? `${hours}${h}${mins ? String(mins).padStart(2, "0") : ""}`
+    : `${mins}'`;
+};
+
+export const STRINGS: Localized<Strings> = {
+  vi: {
+    num: viNum,
+    coins: (n) => `${viNum(n)} xu`,
+    day: (n) => `Ngày ${n}`,
+    weekdays: [
+      "Thứ Hai",
+      "Thứ Ba",
+      "Thứ Tư",
+      "Thứ Năm",
+      "Thứ Sáu",
+      "Thứ Bảy",
+      "Chủ Nhật",
+    ],
+    weather: { sunny: "Nắng đẹp", cloudy: "Nhiều mây", rainy: "Mưa" },
+    workLeft: (m) => `Còn ${hm(m, "h")} làm việc`,
+    minutes: (n) => `${n} phút`,
+    loading: "Đang mở cửa tiệm...",
+    needSignIn: "Đăng nhập để vào tiệm bánh của bạn",
+    loadFailed: "Không tải được tiệm bánh. Kiểm tra mạng rồi thử lại nhé.",
+    retry: "Thử lại",
+    saveFailed: "Chưa lưu được, đang thử lại...",
+    conflict: "Tiệm vừa được mở ở thiết bị khác.",
+    reload: "Tải lại",
+
+    forecast: (d) => `Dự báo ngày ${d}`,
+    crowd: (n) =>
+      `${n < 16 ? "Vắng khách" : n < 26 ? "Khách vừa" : "Đông khách"} · ~${n} khách`,
+    trend: (cake) => `Đang chuộng: ${cake}`,
+    vipRumour: "Nghe đồn nhà phê bình ẩm thực sẽ ghé!",
+    preorder: (who, qty, cake, time) =>
+      `${who} đặt ${qty} ${cake}, lấy lúc ${time}`,
+    noPreorder: "Chưa có đơn đặt trước",
+    market: "Đi chợ",
+    book: "Sổ công thức",
+    bake: "Làm bánh",
+    open: "Mở cửa",
+    hintMarket: "Kho trống trơn. Đi chợ mua nguyên liệu trước nhé!",
+    hintBake: "Có nguyên liệu rồi, vào bếp làm bánh thôi!",
+    hintOpen: "Bánh đã lên kệ. Mở cửa khi bạn sẵn sàng!",
+    hintTimeUp: "Hết giờ làm việc rồi. Đến giờ mở cửa!",
+    display: (n, cap) => `Tủ kính ${n}/${cap}`,
+    emptyDisplay: "Tủ kính còn trống",
+
+    pack: (a, u) =>
+      u === "egg"
+        ? `${a} quả`
+        : a >= 1000
+          ? `${a / 1000} ${u === "g" ? "kg" : "lít"}`
+          : `${a} ${u}`,
+    amount: (a, u, spoon) =>
+      u === "egg" ? `${a} quả` : spoon ? `${a / 5} thìa` : `${a} ${u}`,
+    inPantry: (q) => `Kho: ${q}`,
+    fresh: (d) => `Tươi · ${d} ngày`,
+    checkout: (m) => `Thanh toán · ${m} phút`,
+    total: "Tổng",
+    noCoins: "Không đủ xu",
+    noTime: "Không đủ giờ làm việc",
+
+    recipesTab: "Công thức",
+    upgradesTab: "Nâng cấp",
+    owned: "Đã có",
+    mastery: (n, of) => `Đã làm ${n}/${of} mẻ`,
+    mastered: "Thuần thục",
+    yieldLine: (n, p) => `Ra ${n} cái · ${p} xu/cái`,
+    timeLine: (m) => `${m} phút một mẻ`,
+    upgradeInfo: {
+      mixer: "Đánh bông tự động, bớt 10 phút",
+      fridge: "Đồ tươi để được 5 ngày",
+      display: "Tủ kính chứa 90 cái",
+      oven2: "Thời gian nướng giảm một nửa",
+    },
+    close: "Đóng",
+    bought: "Đã mua!",
+
+    make: "Làm",
+    makeFast: "Làm nhanh 2★",
+    missing: (ing) => `Thiếu ${ing.toLowerCase()}`,
+    displayFull: "Tủ kính đầy",
+    needTime: "Không đủ giờ",
+
+    stepAdd: (amount, ing) => `${amount} ${ing.toLowerCase()}`,
+    stepMix: {
+      cream: "Đánh bông bơ đường",
+      whisk: "Đánh bông",
+      fold: "Trộn nhẹ tay",
+      knead: "Nhồi bột",
+      stir: "Khuấy đều",
+    },
+    turns: (n) => `${n} vòng`,
+    stepStove: { caramel: "Thắng caramel", fry: "Chiên vàng", cook: "Nấu bột" },
+    stepWait: (mode, m) =>
+      mode === "proof" ? `Ủ bột ${m} phút` : `Để nguội ${m} phút`,
+    stepOven: (t, m) => `Nướng ${t}°C · ${m} phút`,
+    stepPipe: {
+      frost: "Bắt kem",
+      glaze: "Phủ sốt dâu",
+      fill: "Bơm kem",
+      cream: "Phủ kem, xếp dâu",
+    },
+    pickIng: "Chọn đúng nguyên liệu trên kệ",
+    holdPour: "Giữ để đổ, thả tay để dừng",
+    tapAdd: (u) => `Chạm để thêm 1 ${u}`,
+    spoonUnit: "thìa",
+    eggUnit: "quả",
+    added: "Cho vào tô",
+    spin: "Xoay vòng quanh tô",
+    done: "Xong",
+    useMixer: "Dùng máy",
+    stoveHint: "Bật lửa, nhấc ra khi vừa màu",
+    offHeat: "Nhấc ra",
+    heatOn: "Bật lửa",
+    ovenSet: "Chỉnh nhiệt rồi cho vào lò",
+    ovenIn: "Cho vào lò",
+    ovenOut: "Lấy ra",
+    pipeHint: "Giữ để bóp, thả tay khi vừa",
+    waiting: "Đang chờ...",
+    next: "Tiếp",
+    grade: {
+      perfect: "Hoàn hảo!",
+      good: "Tốt",
+      minor: "Hơi lệch",
+      major: "Hỏng rồi!",
+    },
+    note: (key, ing = "") =>
+      ({
+        exact: "Chuẩn!",
+        tooMuch: `Thừa ${ing.toLowerCase()}`,
+        tooLittle: `Thiếu ${ing.toLowerCase()}`,
+        wrongIngredient: `Công thức không có ${ing.toLowerCase()}!`,
+        outOfOrder: `Chưa tới lượt ${ing.toLowerCase()}`,
+        undermixed: "Trộn chưa đủ",
+        overmixed: "Trộn quá tay",
+        underdone: "Chưa tới",
+        overdone: "Quá lửa",
+        tooHot: "Lò nóng quá",
+        tooCold: "Lò nguội quá",
+        sloppy: "Chưa khéo tay",
+      })[key],
+    fail: {
+      burnt: "Bánh cháy đen!",
+      raw: "Bánh còn sống!",
+      flat: "Bánh xẹp lép!",
+    },
+    ruined: "Mẻ này hỏng rồi...",
+    baked: (n, cake) => `Ra lò ${n} ${cake.toLowerCase()}`,
+    store: "Cất vào tủ kính",
+    bin: "Bỏ đi",
+
+    opening: "Đang mở cửa",
+    discount: "Giảm 30%",
+    discountOn: "Đang giảm giá",
+    closeEarly: "Đóng cửa sớm",
+    give: "Giao bánh",
+    soldOut: "Hết mất rồi...",
+    vipWants: "Chỉ nhận bánh 3★",
+    preorderTag: "Đơn đặt trước",
+    totalPaid: (t, p) => `Tổng ${viNum(t)} · Khách đưa ${viNum(p)}`,
+    counted: (n) => `Tiền thối: ${viNum(n)}`,
+    giveChange: "Đưa tiền thối",
+    recount: "Đếm lại",
+    exactPaid: "Khách trả đủ tiền",
+    pickBox: "Chọn hộp vừa khít",
+    pieces: (n) => `${n} cái`,
+    box: (n) => `Hộp ${n}`,
+    boxSmall: "Không vừa!",
+    thanks: "Cảm ơn!",
+    tip: (n) => `+${n} tip`,
+    shortChange: "Thối thiếu rồi!",
+    overChange: (n) => `Thối dư ${n} xu`,
+    walked: "Đợi lâu quá, đi thôi...",
+    queueFull: "Đông quá, khách bỏ đi",
+    vipHappy: "Tuyệt hảo! Nhà phê bình hài lòng",
+    vipSad: "Nhà phê bình thất vọng...",
+    notOrdered: "Khách không gọi món này",
+    preorderMissing: "Không có bánh cho đơn đặt!",
+    closed: "Đóng cửa!",
+
+    reportTitle: (d) => `Tổng kết ngày ${d}`,
+    revenue: "Tiền bán bánh",
+    tips: "Tiền tip",
+    boxes: "Tiền hộp",
+    ingredients: "Nguyên liệu đã dùng",
+    wasted: (n) => `Bánh bỏ đi (${n} cái)`,
+    spoiled: "Nguyên liệu hỏng",
+    profit: "Lãi",
+    loss: "Lỗ",
+    overGiven: (n) => `Thối dư ${viNum(n)} xu`,
+    served: (n) => `Phục vụ ${n} khách`,
+    walkedOff: (n) => `${n} khách bỏ về`,
+    soldOutLine: "Khách muốn mà hết",
+    rep: (a, b) => `Danh tiếng ${a} → ${b}`,
+    vipReport: {
+      happy: "Nhà phê bình khen nức nở!",
+      sad: "Nhà phê bình chê bánh...",
+      missed: "Nhà phê bình về tay không",
+    },
+    preorderReport: (d, m) =>
+      `Đơn đặt trước: ${d} xong${m ? `, ${m} lỡ hẹn` : ""}`,
+    bailout: (n) => `Bác hàng xóm cho mượn ${n} xu. Cố lên!`,
+    nextDay: "Sang ngày mới",
+
+    summary: (d, c) => `Ngày ${d} · ${viNum(c)} xu`,
+    detail: (d) => `Ngày ${d}`,
+  },
+  en: {
+    num: enNum,
+    coins: (n) => `${enNum(n)} coins`,
+    day: (n) => `Day ${n}`,
+    weekdays: [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+    ],
+    weather: { sunny: "Sunny", cloudy: "Cloudy", rainy: "Rainy" },
+    workLeft: (m) => `${hm(m, "h")} of work left`,
+    minutes: (n) => `${n} min`,
+    loading: "Opening the bakery...",
+    needSignIn: "Sign in to open your bakery",
+    loadFailed:
+      "Couldn't load your bakery. Check your connection and try again.",
+    retry: "Try again",
+    saveFailed: "Not saved yet, retrying...",
+    conflict: "Your bakery was just opened on another device.",
+    reload: "Reload",
+
+    forecast: (d) => `Forecast for day ${d}`,
+    crowd: (n) =>
+      `${n < 16 ? "Quiet" : n < 26 ? "Steady" : "Busy"} · ~${n} customers`,
+    trend: (cake) => `In demand: ${cake}`,
+    vipRumour: "Word is a food critic is coming!",
+    preorder: (who, qty, cake, time) =>
+      `${who} ordered ${qty} ${cake}, pickup ${time}`,
+    noPreorder: "No pre-orders yet",
+    market: "Market",
+    book: "Recipe book",
+    bake: "Bake",
+    open: "Open shop",
+    hintMarket: "The pantry is empty. Go to the market first!",
+    hintBake: "Ingredients are in. Time to bake!",
+    hintOpen: "Cakes are on display. Open when you're ready!",
+    hintTimeUp: "Out of working hours. Time to open!",
+    display: (n, cap) => `Display ${n}/${cap}`,
+    emptyDisplay: "The display is empty",
+
+    pack: (a, u) =>
+      u === "egg"
+        ? `${a} eggs`
+        : a >= 1000
+          ? `${a / 1000} ${u === "g" ? "kg" : "L"}`
+          : `${a} ${u}`,
+    amount: (a, u, spoon) =>
+      u === "egg"
+        ? `${a} ${a === 1 ? "egg" : "eggs"}`
+        : spoon
+          ? `${a / 5} tsp`
+          : `${a} ${u}`,
+    inPantry: (q) => `Pantry: ${q}`,
+    fresh: (d) => `Fresh · ${d} days`,
+    checkout: (m) => `Pay · ${m} min`,
+    total: "Total",
+    noCoins: "Not enough coins",
+    noTime: "Not enough working time",
+
+    recipesTab: "Recipes",
+    upgradesTab: "Upgrades",
+    owned: "Owned",
+    mastery: (n, of) => `Baked ${n}/${of} batches`,
+    mastered: "Mastered",
+    yieldLine: (n, p) => `Makes ${n} · ${p} coins each`,
+    timeLine: (m) => `${m} min a batch`,
+    upgradeInfo: {
+      mixer: "Whisks for you, 10 min faster",
+      fridge: "Fresh goods last 5 days",
+      display: "Display holds 90",
+      oven2: "Oven time halved",
+    },
+    close: "Close",
+    bought: "Bought!",
+
+    make: "Bake",
+    makeFast: "Quick bake 2★",
+    missing: (ing) => `Need ${ing.toLowerCase()}`,
+    displayFull: "Display full",
+    needTime: "Not enough time",
+
+    stepAdd: (amount, ing) => `${amount} ${ing.toLowerCase()}`,
+    stepMix: {
+      cream: "Cream butter & sugar",
+      whisk: "Whisk",
+      fold: "Fold gently",
+      knead: "Knead",
+      stir: "Stir",
+    },
+    turns: (n) => `${n} turns`,
+    stepStove: {
+      caramel: "Make caramel",
+      fry: "Fry golden",
+      cook: "Cook the paste",
+    },
+    stepWait: (mode, m) =>
+      mode === "proof" ? `Proof ${m} min` : `Cool ${m} min`,
+    stepOven: (t, m) => `Bake ${t}°C · ${m} min`,
+    stepPipe: {
+      frost: "Pipe the frosting",
+      glaze: "Dip in glaze",
+      fill: "Fill with cream",
+      cream: "Cream & strawberries",
+    },
+    pickIng: "Pick the right ingredient",
+    holdPour: "Hold to pour, let go to stop",
+    tapAdd: (u) => `Tap to add 1 ${u}`,
+    spoonUnit: "tsp",
+    eggUnit: "egg",
+    added: "Into the bowl",
+    spin: "Circle round the bowl",
+    done: "Done",
+    useMixer: "Use mixer",
+    stoveHint: "Turn on the heat, take it off at the right colour",
+    offHeat: "Off the heat",
+    heatOn: "Heat on",
+    ovenSet: "Set the temperature, then bake",
+    ovenIn: "Into the oven",
+    ovenOut: "Take it out",
+    pipeHint: "Hold to squeeze, let go when it's right",
+    waiting: "Waiting...",
+    next: "Next",
+    grade: {
+      perfect: "Perfect!",
+      good: "Good",
+      minor: "A bit off",
+      major: "Ruined!",
+    },
+    note: (key, ing = "") =>
+      ({
+        exact: "Spot on!",
+        tooMuch: `Too much ${ing.toLowerCase()}`,
+        tooLittle: `Not enough ${ing.toLowerCase()}`,
+        wrongIngredient: `No ${ing.toLowerCase()} in this recipe!`,
+        outOfOrder: `Not ${ing.toLowerCase()} yet`,
+        undermixed: "Undermixed",
+        overmixed: "Overmixed",
+        underdone: "Not done yet",
+        overdone: "Overdone",
+        tooHot: "Oven too hot",
+        tooCold: "Oven too cold",
+        sloppy: "A bit messy",
+      })[key],
+    fail: {
+      burnt: "Burnt to a crisp!",
+      raw: "Still raw inside!",
+      flat: "Flat as a pancake!",
+    },
+    ruined: "This batch is ruined...",
+    baked: (n, cake) => `${n} ${cake.toLowerCase()} out of the oven`,
+    store: "Put on display",
+    bin: "Bin it",
+
+    opening: "Open",
+    discount: "30% off",
+    discountOn: "On sale",
+    closeEarly: "Close early",
+    give: "Hand over",
+    soldOut: "All gone...",
+    vipWants: "3★ cakes only",
+    preorderTag: "Pre-order",
+    totalPaid: (t, p) => `Total ${enNum(t)} · Paid ${enNum(p)}`,
+    counted: (n) => `Change: ${enNum(n)}`,
+    giveChange: "Give change",
+    recount: "Recount",
+    exactPaid: "Paid the exact amount",
+    pickBox: "Pick the snuggest box",
+    pieces: (n) => `${n} ${n === 1 ? "piece" : "pieces"}`,
+    box: (n) => `Box of ${n}`,
+    boxSmall: "Won't fit!",
+    thanks: "Thank you!",
+    tip: (n) => `+${n} tip`,
+    shortChange: "You short-changed me!",
+    overChange: (n) => `${n} coins too much change`,
+    walked: "Too slow, I'm off...",
+    queueFull: "Too crowded, they left",
+    vipHappy: "Superb! The critic is delighted",
+    vipSad: "The critic is disappointed...",
+    notOrdered: "Not what they ordered",
+    preorderMissing: "No cakes for the pre-order!",
+    closed: "Closed!",
+
+    reportTitle: (d) => `Day ${d} summary`,
+    revenue: "Sales",
+    tips: "Tips",
+    boxes: "Boxes",
+    ingredients: "Ingredients used",
+    wasted: (n) => `Binned cakes (${n})`,
+    spoiled: "Spoiled ingredients",
+    profit: "Profit",
+    loss: "Loss",
+    overGiven: (n) => `${enNum(n)} coins too much change`,
+    served: (n) => `Served ${n} customers`,
+    walkedOff: (n) => `${n} walked off`,
+    soldOutLine: "Wanted but sold out",
+    rep: (a, b) => `Reputation ${a} → ${b}`,
+    vipReport: {
+      happy: "The critic raved about you!",
+      sad: "The critic panned your cakes...",
+      missed: "The critic left empty-handed",
+    },
+    preorderReport: (d, m) =>
+      `Pre-orders: ${d} done${m ? `, ${m} missed` : ""}`,
+    bailout: (n) => `Your neighbour lent you ${n} coins. Hang in there!`,
+    nextDay: "Next day",
+
+    summary: (d, c) => `Day ${d} · ${enNum(c)} coins`,
+    detail: (d) => `Day ${d}`,
+  },
+};

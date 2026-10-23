@@ -112,6 +112,8 @@ export const en: Messages = {
     showMore: "Show more",
     showLess: "Show less",
     inspiredBy: "Inspired by {source}",
+    signInToPlay: "Sign in to play",
+    accountHint: "This game saves your progress to your Google account.",
   },
   online: {
     coop: "Play online co-op",

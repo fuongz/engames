@@ -16,10 +16,14 @@ export { type PointerInfo, Stage, type StageHandlers } from "./stage";
 export type { GameStorage } from "./storage";
 export { fitFontSize } from "./text";
 export {
+  type CloudSave,
+  type CloudSaveResult,
+  type CloudSlot,
   type GameContext,
   type GameInstance,
   type GameManifest,
   type GameModule,
   type OnlineMatch,
+  type ScoreReport,
   SUMMARY_KEY,
 } from "./types";

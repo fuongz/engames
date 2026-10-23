@@ -47,6 +47,9 @@ export { SUMMARY_KEY, summaryText } from "./core/types";
 export { DEFAULT_LOCALE, LOCALES, isLocale } from "./core/i18n";
 export type { Locale, Localized } from "./core/i18n";
 export type {
+  CloudSave,
+  CloudSaveResult,
+  CloudSlot,
   GameCategory,
   GameManifest,
   GameModule,

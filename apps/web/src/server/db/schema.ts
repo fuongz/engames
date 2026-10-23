@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // The runtime schema — the ONE thing you hand-edit. Change it, then:
 //   bun run db:generate        # writes SQL into ./drizzle
@@ -113,3 +113,29 @@ export const score = sqliteTable(
 );
 
 export type ScoreRow = typeof score.$inferSelect;
+
+// ---------------------------------------------------------------- Saved games
+
+/**
+ * One save slot per signed-in player per game, for games whose progress lives
+ * on the account (`requiresAccount`). `data` is the game's own JSON, checked by
+ * its `save.ts` rules before it gets here; `version` is bumped on every write so
+ * two devices can't silently overwrite each other.
+ */
+export const gameSave = sqliteTable(
+  "game_save",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameSlug: text("game_slug").notNull(),
+    data: text("data").notNull(),
+    version: integer("version").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.gameSlug] })],
+);
+
+export type GameSaveRow = typeof gameSave.$inferSelect;

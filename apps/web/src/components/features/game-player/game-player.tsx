@@ -1,5 +1,6 @@
 import {
   ArrowLeft01Icon,
+  GoogleIcon,
   InformationCircleIcon,
   FullScreenIcon,
   RankingIcon,
@@ -12,15 +13,27 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
-import { audioBus, createStorage, type GameManifest, type GameModule, type OnlineMatch, loadGame, type ScoreReport } from "@web-games/games";
+import {
+  audioBus,
+  type CloudSave,
+  createStorage,
+  type GameManifest,
+  type GameModule,
+  type OnlineMatch,
+  loadGame,
+  type ScoreReport,
+} from "@web-games/games";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/ui/dialog";
 import { Progress } from "#/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { useLocale, useMessages } from "#/hooks/use-messages";
+import { useSession } from "#/hooks/use-session";
+import { signInWithGoogle } from "#/lib/auth-client";
 import { EASE_OUT, FADE, RISE_BLUR, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
+import { loadGameSave, storeGameSave } from "#/server/saves";
 import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
 import { OnlineEntry } from "#/components/features/online/online-entry";
@@ -75,6 +88,11 @@ export function GamePlayer({
   const [needsRotate, setNeedsRotate] = useState(false);
   const recordPlay = usePlayStats((s) => s.recordPlay);
   const landscape = game.orientation === "landscape";
+  // Games that keep progress on the account get a save slot; guests sign in first
+  const { data: session, isPending: sessionPending } = useSession();
+  const userId = session?.user.id;
+  const userName = session?.user.name;
+  const needsSignIn = game.requiresAccount === true && !userId;
 
   useEffect(() => {
     let alive = true;
@@ -130,8 +148,25 @@ export function GamePlayer({
     if (!module || !stage) return;
     instanceRef.current?.destroy();
     stage.replaceChildren();
+    const cloud: CloudSave | undefined =
+      game.requiresAccount && userId
+        ? {
+            player: userName ?? "",
+            playerId: userId,
+            load: async () => {
+              const slot = await loadGameSave({ data: { slug: game.slug } });
+              return slot && { data: JSON.parse(slot.json), version: slot.version };
+            },
+            // The server scores the save itself; only the label travels with it
+            save: async (data, version, score) => {
+              const r = await storeGameSave({ data: { slug: game.slug, json: JSON.stringify(data), version, detail: score?.detail } });
+              return r.ok ? r : { ok: false, conflict: { data: JSON.parse(r.conflict.json), version: r.conflict.version } };
+            },
+          }
+        : undefined;
     instanceRef.current = module.mount(stage, {
       online: match,
+      cloud,
       storage: createStorage(game.slug),
       audio: audioBus,
       // Read live: games redraw every frame, so a language switch shows at once
@@ -142,7 +177,7 @@ export function GamePlayer({
         reportTimer.current = setTimeout(() => setReport(r), REPORT_DELAY);
       },
     });
-  }, [module, game.slug]);
+  }, [module, game.slug, game.requiresAccount, userId, userName]);
 
   const unmount = useCallback(() => {
     instanceRef.current?.destroy();
@@ -173,6 +208,13 @@ export function GamePlayer({
       setStarted(false);
     };
   }, [online, unmount]);
+
+  // Signed out mid-game: the save slot is gone, so is the game
+  useEffect(() => {
+    if (!needsSignIn || sessionPending) return;
+    unmount();
+    setStarted(false);
+  }, [needsSignIn, sessionPending, unmount]);
 
   const leaveRoom = () => {
     unmount();
@@ -241,7 +283,12 @@ export function GamePlayer({
           <ToolButton label={muted ? m.player.unmute : m.player.mute} onClick={() => audioBus.setMuted(!muted)}>
             <HugeiconsIcon icon={muted ? VolumeOffIcon : VolumeHighIcon} />
           </ToolButton>
-          <ToolButton label={m.player.restart} disabled={!started || online !== null} onClick={() => mount()} className="[@media(max-height:500px)]:hidden">
+          <ToolButton
+            label={m.player.restart}
+            disabled={!started || online !== null || game.requiresAccount === true}
+            onClick={() => mount()}
+            className="[@media(max-height:500px)]:hidden"
+          >
             <HugeiconsIcon icon={Refresh01Icon} />
           </ToolButton>
           {/* Phones already get a full-screen view (and iOS has no fullscreen API) */}
@@ -269,7 +316,9 @@ export function GamePlayer({
         <AnimatePresence>
           {online
             ? module && <OnlineSession game={game} code={online} onMatch={onMatch} onLeave={leaveRoom} />
-            : !started && <StartScreen game={game} ready={module !== null} failed={failed} onStart={start} />}
+            : !started && (
+                <StartScreen game={game} ready={module !== null && !sessionPending} failed={failed} needsSignIn={needsSignIn} onStart={start} />
+              )}
         </AnimatePresence>
         {needsRotate && <RotateHint />}
       </div>
@@ -355,11 +404,14 @@ function StartScreen({
   game,
   ready,
   failed,
+  needsSignIn,
   onStart,
 }: {
   game: GameManifest;
   ready: boolean;
   failed: boolean;
+  /** The game keeps progress on the account and nobody is signed in. */
+  needsSignIn: boolean;
   onStart: () => void;
 }) {
   const locale = useLocale();
@@ -401,6 +453,14 @@ function StartScreen({
         <motion.div variants={piece} className="grid w-full justify-items-center gap-4 [@media(max-height:500px)]:gap-3">
           {failed ? (
             <p className="text-sm text-destructive">{m.player.loadFailed}</p>
+          ) : ready && needsSignIn ? (
+            <>
+              <Button size="lg" className="h-12 w-full max-w-60 rounded-full text-base font-semibold" onClick={() => void signInWithGoogle()} data-cuelume-emphasis="strong">
+                <HugeiconsIcon icon={GoogleIcon} data-icon="inline-start" />
+                {m.player.signInToPlay}
+              </Button>
+              <p className="max-w-64 text-xs text-muted-foreground">{m.player.accountHint}</p>
+            </>
           ) : (
             <>
               <Button size="lg" className="h-12 w-full max-w-60 rounded-full text-base font-semibold" disabled={!ready} onClick={onStart} data-cuelume-emphasis="strong">

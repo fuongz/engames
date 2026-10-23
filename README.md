@@ -21,6 +21,7 @@ packages/games/    the games — framework-free TypeScript on <canvas>
   src/registry.ts  discovers every src/<slug>/manifest.ts
   src/chien-thu/   Chiến Thú Hỗn Chiến (portrait merge-defense), see RE_NOTES.md
   src/tinh-tu/     Tinh Tú Phi Hành (landscape shoot 'em up), see RE_NOTES.md
+  src/tiem-banh-may/  Tiệm Bánh Mây (bakery sim, saved to the account), see DESIGN.md
 ```
 
 ## Commands
@@ -41,10 +42,17 @@ every PR and weekly; findings fail the job and appear under Security → Code sc
 
 ## Accounts, leaderboard and D1
 
-Sign-in (Google via Better Auth) exists only to put a name on leaderboards.
-Signed-in players keep their best score per game; guests type a name at game
-over and every guest run is its own row. Games report a finished run with
-`ctx.reportScore({ score, detail })`; the portal shows the save dialog.
+Sign-in (Google via Better Auth) puts a name on leaderboards, and keeps the
+progress of games that live on the account. Signed-in players keep their best
+score per game; guests type a name at game over and every guest run is its own
+row. Games report a finished run with `ctx.reportScore({ score, detail })`; the
+portal shows the save dialog.
+
+A game with `requiresAccount: true` in its manifest (Tiệm Bánh Mây) asks guests
+to sign in, and gets `ctx.cloud`: one save slot per player in the D1 `game_save`
+table, versioned so two devices can't overwrite each other. The server runs every
+save through the game's own `save.ts` rules (shape, plausibility, leaderboard
+score) before storing it (`apps/web/src/server/saves.ts`).
 
 One-time setup:
 
@@ -105,6 +113,9 @@ before deploying code that needs the new columns.
      as `{ vi, en }`; cards show it instead of the release year.
    - set `orientation: "landscape"` for sideways games: phones held upright get a
      "rotate your phone" overlay, and Android locks to landscape when play starts.
+   - progress that must follow the player (money, unlocks): set `requiresAccount`
+     and add a pure `save.ts` exporting `rules` (see `src/saves.ts`); load and
+     save through `ctx.cloud` instead of `ctx.storage`.
 2. Draw on `rt.stage` (anchor the HUD to `stage.view` so wide or tall screens have
    no black bars) and use `rt.game.audio` / `rt.game.storage` so the portal's mute
    button and per-game saves work. Import everything from `../core`.

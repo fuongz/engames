@@ -111,6 +111,8 @@ export const vi = {
     showMore: "Xem thêm",
     showLess: "Thu gọn",
     inspiredBy: "Lấy cảm hứng từ {source}",
+    signInToPlay: "Đăng nhập để chơi",
+    accountHint: "Game này lưu tiến trình theo tài khoản Google của bạn.",
   },
   online: {
     coop: "Chơi online cùng bạn",
