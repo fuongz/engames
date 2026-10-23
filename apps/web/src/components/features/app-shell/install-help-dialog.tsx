@@ -1,11 +1,17 @@
 import { PlusSignSquareIcon, Share08Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { ReactNode } from "react";
+import { RichText } from "#/components/shared/i18n/rich-text";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "#/components/ui/dialog";
+import { useMessages } from "#/hooks/use-messages";
 import { useInstallStore } from "#/stores/install";
 
-/** iOS has no install prompt API, so "Cài app" opens these Safari steps instead. */
+/** Icons for the Safari steps: Share, then Add to Home Screen, then nothing. */
+const STEP_ICONS = [Share08Icon, PlusSignSquareIcon, undefined];
+
+/** iOS has no install prompt API, so "Install the app" opens these Safari steps instead. */
 export function InstallHelpDialog() {
+  const m = useMessages();
   const open = useInstallStore((s) => s.iosHelpOpen);
   const setOpen = useInstallStore((s) => s.setIosHelpOpen);
 
@@ -13,19 +19,15 @@ export function InstallHelpDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Thêm Engames vào màn hình chính</DialogTitle>
-          <DialogDescription>Chơi toàn màn hình như app thật, mở nhanh từ màn hình chính và chơi được cả khi offline.</DialogDescription>
+          <DialogTitle>{m.installHelp.title}</DialogTitle>
+          <DialogDescription>{m.installHelp.description}</DialogDescription>
         </DialogHeader>
         <ol className="grid gap-2.5">
-          <Step n={1} icon={Share08Icon}>
-            Bấm nút <b>Chia sẻ</b> trên thanh Safari
-          </Step>
-          <Step n={2} icon={PlusSignSquareIcon}>
-            Chọn <b>Thêm vào MH chính</b>
-          </Step>
-          <Step n={3}>
-            Bấm <b>Thêm</b> rồi mở Engames từ màn hình chính
-          </Step>
+          {m.installHelp.steps.map((step, i) => (
+            <Step key={step} n={i + 1} icon={STEP_ICONS[i]}>
+              <RichText text={step} />
+            </Step>
+          ))}
         </ol>
       </DialogContent>
     </Dialog>

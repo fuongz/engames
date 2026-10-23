@@ -68,12 +68,6 @@ export const BOSS_HALF_H = 190;
 
 export type PickupKind = "power" | "bomb" | "heal" | "coin";
 
-export const PICKUP_TEXT: Record<Exclude<PickupKind, "coin">, string> = {
-  power: "Tăng hỏa lực!",
-  bomb: "+1 bom",
-  heal: "Sửa máy bay",
-};
-
 /** HP and fire rate multiplier for later stages (the game loops after each boss). */
 export function stageScale(stage: number) {
   return 1 + (stage - 1) * 0.35;

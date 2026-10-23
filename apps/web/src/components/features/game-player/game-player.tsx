@@ -17,7 +17,9 @@ import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/ui/dialog";
 import { Progress } from "#/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
+import { useLocale, useMessages } from "#/hooks/use-messages";
 import { cn } from "#/lib/utils";
+import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
 import { ScoreDialog, takePendingScore } from "./score-dialog";
 
@@ -40,6 +42,8 @@ export function GamePlayer({
   details: ReactNode;
   leaderboard: ReactNode;
 }) {
+  const locale = useLocale();
+  const m = useMessages();
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<GameInstance | null>(null);
@@ -120,6 +124,8 @@ export function GamePlayer({
     instanceRef.current = module.mount(stage, {
       storage: createStorage(game.slug),
       audio: audioBus,
+      // Read live: games redraw every frame, so a language switch shows at once
+      locale: () => useLocaleStore.getState().locale,
       reportScore: (r) => {
         if (r.score <= 0) return;
         clearTimeout(reportTimer.current);
@@ -173,29 +179,29 @@ export function GamePlayer({
             variant="ghost"
             size="icon"
             className="lg:hidden"
-            aria-label="Về trang chủ"
+            aria-label={m.player.back}
             nativeButton={false}
             render={<Link to="/" />}
           >
             <HugeiconsIcon icon={ArrowLeft01Icon} />
           </Button>
-          <h1 className="min-w-0 flex-1 truncate font-semibold [@media(max-height:500px)]:hidden">{game.title}</h1>
-          <ToolButton label="Bảng xếp hạng" className="lg:hidden" onClick={() => toggleBoard(true)}>
+          <h1 className="min-w-0 flex-1 truncate font-semibold [@media(max-height:500px)]:hidden">{game.title[locale]}</h1>
+          <ToolButton label={m.player.leaderboard} className="lg:hidden" onClick={() => toggleBoard(true)}>
             <HugeiconsIcon icon={RankingIcon} />
           </ToolButton>
-          <ToolButton label="Hướng dẫn" className="lg:hidden" onClick={() => toggleInfo(true)}>
+          <ToolButton label={m.player.help} className="lg:hidden" onClick={() => toggleInfo(true)}>
             <HugeiconsIcon icon={InformationCircleIcon} />
           </ToolButton>
-          <ToolButton label={muted ? "Bật âm thanh" : "Tắt âm thanh"} onClick={() => audioBus.setMuted(!muted)}>
+          <ToolButton label={muted ? m.player.unmute : m.player.mute} onClick={() => audioBus.setMuted(!muted)}>
             <HugeiconsIcon icon={muted ? VolumeOffIcon : VolumeHighIcon} />
           </ToolButton>
-          <ToolButton label="Chơi lại từ đầu" disabled={!started} onClick={mount} className="[@media(max-height:500px)]:hidden">
+          <ToolButton label={m.player.restart} disabled={!started} onClick={mount} className="[@media(max-height:500px)]:hidden">
             <HugeiconsIcon icon={Refresh01Icon} />
           </ToolButton>
           {/* Phones already get a full-screen view (and iOS has no fullscreen API) */}
           {canFullscreen && (
             <ToolButton
-              label="Toàn màn hình"
+              label={m.player.fullscreen}
               className="hidden lg:inline-flex"
               onClick={() => void rootRef.current?.requestFullscreen()}
             >
@@ -222,7 +228,7 @@ export function GamePlayer({
       <Dialog open={infoOpen} onOpenChange={toggleInfo}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{game.title}</DialogTitle>
+            <DialogTitle>{game.title[locale]}</DialogTitle>
           </DialogHeader>
           {details}
         </DialogContent>
@@ -231,7 +237,7 @@ export function GamePlayer({
       <Dialog open={boardOpen} onOpenChange={toggleBoard}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Bảng xếp hạng</DialogTitle>
+            <DialogTitle>{m.player.leaderboard}</DialogTitle>
           </DialogHeader>
           {leaderboard}
         </DialogContent>
@@ -253,12 +259,13 @@ async function lockLandscape(el: HTMLElement | null) {
 }
 
 function RotateHint() {
+  const m = useMessages();
   return (
     <div className="absolute inset-0 z-20 grid place-items-center bg-background/90 p-8 text-center backdrop-blur-md">
       <div className="grid justify-items-center gap-4">
         <HugeiconsIcon icon={SmartphoneIcon} className="size-14 animate-[spin_2.4s_ease-in-out_infinite] text-primary motion-reduce:animate-none" />
-        <p className="text-lg font-semibold">Xoay ngang điện thoại để chơi</p>
-        <p className="max-w-64 text-sm text-muted-foreground">Game này chơi ở màn hình ngang. Nhớ tắt khóa xoay màn hình nếu đang bật.</p>
+        <p className="text-lg font-semibold">{m.player.rotateTitle}</p>
+        <p className="max-w-64 text-sm text-muted-foreground">{m.player.rotateHint}</p>
       </div>
     </div>
   );
@@ -302,29 +309,31 @@ function StartScreen({
   failed: boolean;
   onStart: () => void;
 }) {
+  const locale = useLocale();
+  const m = useMessages();
   return (
     // container-type:size lets the poster size itself by the frame's height (cqh),
-    // so the Chơi button always fits, even in a short 16:9 desktop frame.
+    // so the Play button always fits, even in a short 16:9 desktop frame.
     <div className="absolute inset-0 grid place-items-center overflow-hidden p-6 [container-type:size]">
       <img src={game.banner} alt="" aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-50 blur-2xl" />
       <div className="relative grid w-full max-w-xs justify-items-center gap-4 text-center [@media(max-height:500px)]:gap-3">
         {/* A sideways phone has no room for the poster; show the title instead */}
         <img
-          src={game.poster}
+          src={game.poster[locale]}
           alt=""
           className="aspect-[3/4] h-[min(42cqh,320px)] w-auto rounded-3xl object-cover shadow-2xl ring-1 ring-border [@media(max-height:500px)]:hidden"
         />
-        <h2 className="hidden text-2xl font-bold tracking-tight [@media(max-height:500px)]:block">{game.title}</h2>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{game.tagline}</p>
+        <h2 className="hidden text-2xl font-bold tracking-tight [@media(max-height:500px)]:block">{game.title[locale]}</h2>
+        <p className="line-clamp-2 text-sm text-muted-foreground">{game.tagline[locale]}</p>
         {failed ? (
-          <p className="text-sm text-destructive">Không tải được game. Kiểm tra mạng rồi thử lại nhé.</p>
+          <p className="text-sm text-destructive">{m.player.loadFailed}</p>
         ) : (
           <>
             <Button size="lg" className="h-12 w-full max-w-60 rounded-full text-base font-semibold" disabled={!ready} onClick={onStart}>
               <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />
-              {ready ? "Chơi" : "Đang tải..."}
+              {ready ? m.player.play : m.player.loading}
             </Button>
-            {!ready && <Progress value={null} className="w-full max-w-60" aria-label="Đang tải game" />}
+            {!ready && <Progress value={null} className="w-full max-w-60" aria-label={m.player.loadingLabel} />}
           </>
         )}
       </div>

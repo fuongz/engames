@@ -1,6 +1,8 @@
 // Key art for the portal, composed from the game's own drawing code. Not
 // imported by the game: `bun run art` renders it to poster.webp / banner.webp.
-import { drawArrow, drawCoin, drawEnemy, drawFlame, drawHero, drawHpBar, drawScene, text } from "./art";
+import type { Locale, Localized } from "../core/i18n";
+import { fitFontSize } from "../core/text";
+import { drawArrow, drawCoin, drawEnemy, drawFlame, drawHero, drawHpBar, drawScene, FONT, text } from "./art";
 import { GROUND_Y, H, HERO_X, W } from "./config";
 
 /** The battle line in game coordinates (540×960). */
@@ -19,8 +21,14 @@ function scene(ctx: CanvasRenderingContext2D, background = true) {
   for (const [x, y] of [[214, 380], [244, 350], [190, 345]]) drawCoin(ctx, x, y, 12);
 }
 
+/** The poster's two title lines; the manifest holds the same name as one string. */
+const POSTER_TITLE: Localized<[string, string]> = {
+  vi: ["HÀNH TRÌNH", "ANH HÙNG"],
+  en: ["HERO'S", "JOURNEY"],
+};
+
 /** 600×800 poster with the title baked in. */
-export function renderPoster(canvas: HTMLCanvasElement) {
+export function renderPoster(canvas: HTMLCanvasElement, locale: Locale = "vi") {
   canvas.width = 600;
   canvas.height = 800;
   const ctx = canvas.getContext("2d");
@@ -37,8 +45,9 @@ export function renderPoster(canvas: HTMLCanvasElement) {
   fade.addColorStop(1, "rgba(20,40,16,0.9)");
   ctx.fillStyle = fade;
   ctx.fillRect(0, 540, 600, 260);
-  text(ctx, "HÀNH TRÌNH", 300, 676, 76, "#ffe680");
-  text(ctx, "ANH HÙNG", 300, 744, 58, "#ffffff");
+  const [line1, line2] = POSTER_TITLE[locale];
+  text(ctx, line1, 300, 676, fitFontSize(ctx, line1, 76, 540, FONT), "#ffe680");
+  text(ctx, line2, 300, 744, fitFontSize(ctx, line2, 58, 540, FONT), "#ffffff");
 }
 
 /** 1200×600 banner: the fight on the right, calm grass on the left for the title. */

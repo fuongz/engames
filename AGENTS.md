@@ -123,6 +123,11 @@ node scripts/audit-layout.mjs   # 0 = layout is correct
   `bun test` can run them on bun:sqlite with the real migrations.
 - **Games report finished runs** with `ctx.reportScore({ score, detail })` — once
   per run end, never on quit. The portal owns the save/leaderboard UI.
+- **Two languages, everywhere.** Portal copy goes in `content/messages/{vi,en}.ts`
+  and is read with `useMessages()`; never a literal user-facing string in a
+  component. Games keep a `strings.ts` `Localized` catalog and read
+  `currentLocale(ctx)` at draw time. The language is saved per account
+  (`user.locale`) for signed-in players.
 - **Mobile first.** Check every UI change at 390×844; the player is full-screen
   below `lg` and must respect `env(safe-area-inset-*)`.
 

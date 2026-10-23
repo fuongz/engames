@@ -29,6 +29,8 @@ export const user = sqliteTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: integer("email_verified", { mode: "boolean" }).notNull().default(false),
   image: text("image"),
+  /** Preferred UI language ("vi" | "en"), a Better Auth additional field. Null until first synced. */
+  locale: text("locale"),
   ...timestamps,
 });
 

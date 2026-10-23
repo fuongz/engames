@@ -1,10 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { CHIEF_EVERY, ENEMIES, HERO_MAX_HP, QUEUE_SIZE, SHIELDS, WEAPONS } from "./config";
-import { type GameState, buy, canBuy, createGame, nextShield, nextWeapon, pickKind, slotX, update } from "./logic";
+import {
+  CHIEF_EVERY,
+  ENEMIES,
+  HERO_MAX_HP,
+  QUEUE_SIZE,
+  SHIELDS,
+  WEAPONS,
+} from "./config";
+import {
+  type GameState,
+  buy,
+  canBuy,
+  createGame,
+  nextShield,
+  nextWeapon,
+  pickKind,
+  slotX,
+  update,
+} from "./logic";
 
 const STEP = 1 / 30;
 
-function run(s: GameState, seconds: number, bot: (s: GameState) => void = () => {}) {
+function run(
+  s: GameState,
+  seconds: number,
+  bot: (s: GameState) => void = () => {},
+) {
   for (let t = 0; t < seconds && !s.over; t += STEP) {
     bot(s);
     update(s, STEP);
@@ -66,7 +87,7 @@ describe("upgrades", () => {
     expect(canBuy(s, "weapon")).toBe(false);
     s.gold = 200;
     expect(buy(s, "weapon")).toBe(true);
-    expect(WEAPONS[s.weapon].name).toBe("Rìu");
+    expect(WEAPONS[s.weapon].name.vi).toBe("Rìu");
     expect(s.gold).toBe(0);
     expect(nextWeapon(s)?.cost).toBe(WEAPONS[2].cost);
   });
@@ -88,7 +109,9 @@ function cheapest(s: GameState) {
     const options = [
       { u: "weapon" as const, c: nextWeapon(s)?.cost },
       { u: "shield" as const, c: nextShield(s)?.cost },
-    ].filter((o): o is { u: "weapon" | "shield"; c: number } => o.c !== undefined);
+    ].filter(
+      (o): o is { u: "weapon" | "shield"; c: number } => o.c !== undefined,
+    );
     const pick = options.sort((a, b) => a.c - b.c)[0];
     if (!pick || s.gold < pick.c || !buy(s, pick.u)) return;
   }
@@ -109,7 +132,8 @@ describe("balance", () => {
     });
     for (const k of idle) expect(k).toBeGreaterThanOrEqual(7);
     for (const k of idle) expect(k).toBeLessThanOrEqual(20);
-    const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+    const median = (xs: number[]) =>
+      [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
     expect(median(active)).toBeGreaterThanOrEqual(median(idle) * 4);
   });
 });

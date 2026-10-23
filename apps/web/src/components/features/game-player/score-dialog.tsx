@@ -7,14 +7,15 @@ import { LeaderboardList } from "#/components/shared/leaderboard/leaderboard-lis
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "#/components/ui/dialog";
 import { Input } from "#/components/ui/input";
+import { useLocale, useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
 import { signInWithGoogle } from "#/lib/auth-client";
+import { fmt, intlTag } from "#/lib/i18n";
 import { type LeaderboardEntry, type SaveResult, getLeaderboard, submitScore } from "#/server/leaderboard";
 
 const NAME_KEY = "engames:portal:playerName";
 const PENDING_KEY = "engames:portal:pendingScore";
 const PENDING_TTL = 30 * 60 * 1000;
-const SCORE = new Intl.NumberFormat("vi-VN");
 
 interface Pending extends ScoreReport {
   slug: string;
@@ -51,6 +52,9 @@ export function ScoreDialog({
   onClose: () => void;
   onReplay: () => void;
 }) {
+  const locale = useLocale();
+  const m = useMessages();
+  const score = new Intl.NumberFormat(intlTag(locale));
   const router = useRouter();
   const session = useSession();
   const signedIn = Boolean(session.data?.user);
@@ -74,7 +78,7 @@ export function ScoreDialog({
       void router.invalidate(); // refresh the board on the game page
     } catch {
       setStatus("error");
-      setError("Không lưu được điểm. Kiểm tra mạng rồi thử lại nhé.");
+      setError(m.score.saveFailed);
     }
   };
 
@@ -96,7 +100,7 @@ export function ScoreDialog({
     e.preventDefault();
     const trimmed = name.replace(/\s+/g, " ").trim();
     if (trimmed.length < 2) {
-      setError("Tên cần ít nhất 2 ký tự.");
+      setError(m.score.nameTooShort);
       return;
     }
     void save(trimmed);
@@ -112,17 +116,17 @@ export function ScoreDialog({
     <Dialog open onOpenChange={(open) => !open && close()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{status === "saved" ? "Đã lưu lên bảng xếp hạng!" : "Lưu điểm lên bảng xếp hạng"}</DialogTitle>
-          <DialogDescription>{game.title}</DialogDescription>
+          <DialogTitle>{status === "saved" ? m.score.savedTitle : m.score.saveTitle}</DialogTitle>
+          <DialogDescription>{game.title[locale]}</DialogDescription>
         </DialogHeader>
 
         <div className="grid justify-items-center gap-1 rounded-2xl bg-muted/60 py-4">
-          <span className="text-4xl font-bold tabular-nums">{SCORE.format(report.score)}</span>
+          <span className="text-4xl font-bold tabular-nums">{score.format(report.score)}</span>
           {report.detail && <span className="text-sm text-muted-foreground">{report.detail}</span>}
           {result && (
             <span className="mt-1 text-sm font-semibold text-primary">
-              Hạng #{result.rank}
-              {signedIn && !result.improved && ` · kỷ lục của bạn vẫn là ${SCORE.format(result.best)}`}
+              {fmt(m.score.rank, { rank: result.rank })}
+              {signedIn && !result.improved && fmt(m.score.stillBest, { best: score.format(result.best) })}
             </span>
           )}
         </div>
@@ -131,20 +135,20 @@ export function ScoreDialog({
           <LeaderboardList entries={board} highlightId={result?.id} />
         ) : signedIn ? (
           <p className="text-center text-sm text-muted-foreground">
-            {status === "error" ? error : `Đang lưu dưới tên ${session.data?.user.name}...`}
+            {status === "error" ? error : fmt(m.score.savingAs, { name: session.data?.user.name ?? "" })}
           </p>
         ) : (
           <form onSubmit={submitName} className="grid gap-3">
             <div className="grid gap-1.5">
               <label htmlFor={nameId} className="text-sm font-medium">
-                Tên hiển thị
+                {m.score.nameLabel}
               </label>
               <Input
                 id={nameId}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={20}
-                placeholder="Nhập tên của bạn"
+                placeholder={m.score.namePlaceholder}
                 autoFocus
                 className="h-11"
                 aria-invalid={error ? true : undefined}
@@ -152,11 +156,11 @@ export function ScoreDialog({
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" size="lg" className="h-11" disabled={status === "saving"}>
-              {status === "saving" ? "Đang lưu..." : "Lưu điểm"}
+              {status === "saving" ? m.score.saving : m.score.save}
             </Button>
             <Button type="button" variant="outline" size="lg" className="h-11" onClick={signInAndSave}>
               <HugeiconsIcon icon={GoogleIcon} data-icon="inline-start" />
-              Đăng nhập Google để lưu tự động
+              {m.score.signInToSave}
             </Button>
           </form>
         )}
@@ -166,10 +170,10 @@ export function ScoreDialog({
               clearPending();
               onReplay();
             }}>
-            Chơi lại
+            {m.score.playAgain}
           </Button>
           <Button variant="ghost" className="h-10 flex-1" onClick={close}>
-            {status === "saved" ? "Đóng" : "Bỏ qua"}
+            {status === "saved" ? m.score.close : m.score.skip}
           </Button>
         </div>
       </DialogContent>

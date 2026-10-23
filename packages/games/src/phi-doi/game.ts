@@ -1,5 +1,6 @@
 import "@fontsource/baloo-2/800.css";
 import { Loop, type PointerInfo, Stage } from "../core/stage";
+import { currentLocale } from "../core/i18n";
 import {
   type GameContext,
   type GameInstance,
@@ -26,7 +27,6 @@ import {
   H,
   MAX_BOMBS,
   MAX_HP,
-  PICKUP_TEXT,
   RAPID_TIME,
   SCROLL_SPEED,
   W,
@@ -41,6 +41,7 @@ import {
   energyReady,
   update,
 } from "./logic";
+import { STRINGS } from "./strings";
 
 interface Particle {
   x: number;
@@ -70,8 +71,11 @@ const SHADOW = { x: 16, y: 26 };
 
 export function startGame(
   root: HTMLElement,
-  { storage, audio, reportScore }: GameContext,
+  gameCtx: GameContext,
 ): GameInstance {
+  const { storage, audio, reportScore } = gameCtx;
+  // Resolved per frame: the player can switch language mid-run
+  const tr = () => STRINGS[currentLocale(gameCtx)];
   // Canvas text silently falls back until the face is loaded; ask for it up front.
   void document.fonts?.load('800 20px "Baloo 2"');
   const stage = new Stage(root, W, H, { bleed: true });
@@ -91,8 +95,14 @@ export function startGame(
   let scroll = 0;
   let particles: Particle[] = [];
   let booms: Boom[] = [];
-  let popup: { text: string; x: number; y: number; t: number } | null = null;
-  let banner: { title: string; sub: string; t: number } | null = null;
+  let popup: {
+    kind: "power" | "bomb" | "heal";
+    x: number;
+    y: number;
+    t: number;
+  } | null = null;
+  let banner: { kind: "clear" | "start"; stage: number; t: number } | null =
+    null;
   let warn = 0;
   let shake = 0;
   let hurtFlash = 0;
@@ -348,7 +358,12 @@ export function startGame(
             lastCoin = t;
           }
         } else {
-          popup = { text: PICKUP_TEXT[e.kind], x: e.x, y: e.y, t: 0 };
+          popup = {
+            kind: e.kind,
+            x: e.x,
+            y: e.y,
+            t: 0,
+          };
           sparks(
             e.x,
             e.y,
@@ -465,11 +480,7 @@ export function startGame(
         });
         break;
       case "stageClear":
-        banner = {
-          title: "HOÀN THÀNH",
-          sub: `Đã đánh chìm chiến hạm · Màn ${e.stage}`,
-          t: 0,
-        };
+        banner = { kind: "clear", stage: e.stage, t: 0 };
         for (const [i, f] of [523, 659, 784, 1046].entries())
           audio.tone({
             freq: f,
@@ -480,11 +491,7 @@ export function startGame(
           });
         break;
       case "stageStart":
-        banner = {
-          title: `MÀN ${e.stage}`,
-          sub: "Địch đông hơn và bắn nhanh hơn",
-          t: 0,
-        };
+        banner = { kind: "start", stage: e.stage, t: 0 };
         break;
       case "end":
         drag = null;
@@ -492,7 +499,7 @@ export function startGame(
         shake = 1;
         reportScore?.({
           score: state.score,
-          detail: `Màn ${state.stage} · ${state.coins} xu`,
+          detail: tr().detail(state.stage, state.coins),
         });
         for (const [i, f] of [440, 349, 262].entries())
           audio.tone({
@@ -513,7 +520,10 @@ export function startGame(
       best = state.score;
       storage.set("best", best);
     }
-    storage.set(SUMMARY_KEY, `Kỷ lục ${best} điểm`);
+    storage.set(SUMMARY_KEY, {
+      vi: `Kỷ lục ${best} điểm`,
+      en: `Best ${best} pts`,
+    });
   }
 
   // ---------------------------------------------------------- frame
@@ -732,7 +742,7 @@ export function startGame(
       ctx.globalAlpha = Math.min(1, (1.4 - popup.t) * 3);
       text(
         ctx,
-        popup.text,
+        tr().pickup[popup.kind],
         popup.x,
         popup.y - 30 - popup.t * 30,
         22,
@@ -746,7 +756,18 @@ export function startGame(
     if (hurtFlash > 0) vignette(`rgba(255,30,30,${hurtFlash})`);
     if (warn > 0) drawWarning();
     drawHud();
-    if (banner) drawBanner(banner.title, banner.sub, banner.t);
+    if (banner) {
+      const l = tr();
+      if (banner.kind === "clear") {
+        drawBanner(l.stageClearTitle, l.stageClearSub(banner.stage), banner.t);
+      } else {
+        drawBanner(
+          l.stage(banner.stage).toUpperCase(),
+          l.stageStartSub,
+          banner.t,
+        );
+      }
+    }
     if (s.phase === "intro") drawIntro();
     if (paused) drawPause();
     if (s.phase === "over" && booms.length === 0) drawResult();
@@ -829,11 +850,11 @@ export function startGame(
       const seg = 170;
       const off = ((t * 140 * dir) % seg) - seg;
       for (let x = v.x + off; x < v.x + v.w + seg; x += seg)
-        text(ctx, "!!! CẨN THẬN", x, cy + dy + 1, 16, "#ffb0a8", "left");
+        text(ctx, tr().warningStrip, x, cy + dy + 1, 16, "#ffb0a8", "left");
       ctx.restore();
     }
     const blink = Math.sin(t * 14) > -0.3;
-    if (blink) text(ctx, "CẢNH BÁO", W / 2, cy + 2, 54, "#ff4a4a");
+    if (blink) text(ctx, tr().warning, W / 2, cy + 2, 54, "#ff4a4a");
     ctx.restore();
   }
 
@@ -865,7 +886,7 @@ export function startGame(
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.fillRect(0, 0, bw * ratio, 6);
     ctx.restore();
-    text(ctx, `Màn ${s.stage}`, l, y0 + 30, 15, "#cfe0ff", "left", 700);
+    text(ctx, tr().stage(s.stage), l, y0 + 30, 15, "#cfe0ff", "left", 700);
 
     // Score, top centre-right; coins under it (ad: coin counter top right)
     const pb = pauseBtn();
@@ -900,7 +921,7 @@ export function startGame(
       ctx.fillRect(x - 3, y - 3, w + 6, 16);
       ctx.fillStyle = "#e8302a";
       ctx.fillRect(x, y, (w * Math.max(0, boss.hp)) / boss.maxHp, 10);
-      text(ctx, "CHIẾN HẠM", W / 2, y + 24, 14, "#ffb0a8", "center", 700);
+      text(ctx, tr().bossName, W / 2, y + 24, 14, "#ffb0a8", "center", 700);
     }
 
     if (s.phase !== "over") {
@@ -987,7 +1008,16 @@ export function startGame(
     ctx.fill();
     text(ctx, `${n}`, b.x + b.r - 4, b.y - b.r + 5, 14, "#ffffff");
     if (n >= MAX_BOMBS)
-      text(ctx, "đầy", b.x, b.y + b.r + 14, 12, "#cfe0ff", "center", 700);
+      text(
+        ctx,
+        tr().bombsFull,
+        b.x,
+        b.y + b.r + 14,
+        12,
+        "#cfe0ff",
+        "center",
+        700,
+      );
   }
 
   function drawBanner(title: string, sub: string, bt: number) {
@@ -1015,18 +1045,9 @@ export function startGame(
     ctx.beginPath();
     ctx.roundRect(W / 2 - 220, y - 44, 440, 88, 16);
     ctx.fill();
-    text(ctx, "Nhiệm vụ: sống sót qua", W / 2, y - 14, 26, "#ffffff");
-    text(ctx, "trận không chiến!", W / 2, y + 18, 26, "#ffffff");
-    text(
-      ctx,
-      "Kéo ngón tay ở bất kỳ đâu để bay",
-      W / 2,
-      y + 66,
-      16,
-      "#cfe0ff",
-      "center",
-      700,
-    );
+    text(ctx, tr().missionLine1, W / 2, y - 14, 26, "#ffffff");
+    text(ctx, tr().missionLine2, W / 2, y + 18, 26, "#ffffff");
+    text(ctx, tr().dragHint, W / 2, y + 66, 16, "#cfe0ff", "center", 700);
     ctx.globalAlpha = 1;
   }
 
@@ -1076,10 +1097,10 @@ export function startGame(
   }
 
   function drawPause() {
-    const y = panel("Tạm Dừng", 330);
+    const y = panel(tr().paused, 330);
     text(
       ctx,
-      `Điểm: ${state.score} · Màn ${state.stage}`,
+      tr().pauseScore(state.score, state.stage),
       W / 2,
       y + 100,
       20,
@@ -1087,27 +1108,18 @@ export function startGame(
       "center",
       700,
     );
-    text(
-      ctx,
-      "Phím: WASD bay · J hỏa lực · Space bom",
-      W / 2,
-      y + 134,
-      14,
-      "#a8b8e0",
-      "center",
-      600,
-    );
-    button(overlayBtns().primary, "Tiếp tục", true);
-    button(overlayBtns().secondary, "Chơi lại", false);
+    text(ctx, tr().keysHint, W / 2, y + 134, 14, "#a8b8e0", "center", 600);
+    button(overlayBtns().primary, tr().resume, true);
+    button(overlayBtns().secondary, tr().restart, false);
   }
 
   function drawResult() {
     const s = state;
-    const y = panel("Bị Bắn Hạ!", 300);
+    const y = panel(tr().shotDown, 300);
     text(ctx, `${s.score}`, W / 2, y + 102, 40, "#ffd36b");
     text(
       ctx,
-      `Màn ${s.stage} · ${s.coins} xu · ${s.bossesBeaten} chiến hạm`,
+      tr().resultLine(s.stage, s.coins, s.bossesBeaten),
       W / 2,
       y + 142,
       17,
@@ -1117,7 +1129,7 @@ export function startGame(
     );
     text(
       ctx,
-      s.score >= best ? "Kỷ lục mới!" : `Kỷ lục ${best}`,
+      s.score >= best ? tr().newBest : tr().best(best),
       W / 2,
       y + 170,
       15,
@@ -1125,7 +1137,7 @@ export function startGame(
       "center",
       700,
     );
-    button(overlayBtns().primary, "Bay lại", true);
+    button(overlayBtns().primary, tr().flyAgain, true);
   }
 
   const loop = new Loop(step);

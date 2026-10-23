@@ -52,13 +52,6 @@ export const BOSS_SCORE = 500;
 
 export type PickupKind = "pierce" | "multi" | "energy" | "capacity";
 
-export const PICKUP_TEXT: Record<PickupKind, string> = {
-  pierce: "Cấp đạn xuyên.", // ad
-  multi: "Tăng số lượng đạn.", // ad
-  energy: "Cung cấp Năng Lượng Tinh Tú.", // ad
-  capacity: "Mở rộng Năng Lượng Tinh Tú.",
-};
-
 /** Seconds between spawns at a given elapsed time; wave 2 (after the boss) is denser. */
 export function spawnInterval(elapsed: number, wave: number) {
   if (wave >= 2) return 0.42;

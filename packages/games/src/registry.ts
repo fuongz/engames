@@ -1,3 +1,4 @@
+import type { Localized } from "./core/i18n";
 import type { GameCategory, GameManifest, GameModule } from "./core/types";
 
 // Every folder with a manifest.ts is a game. Manifests are eager (small, needed
@@ -7,14 +8,18 @@ const manifestModules = import.meta.glob<GameManifest>("./*/manifest.ts", {
   eager: true,
   import: "default",
 });
-const gameLoaders = import.meta.glob<GameModule>("./*/index.ts", { import: "default" });
+const gameLoaders = import.meta.glob<GameModule>("./*/index.ts", {
+  import: "default",
+});
 
 const slugFromPath = (path: string) => path.split("/").at(-2) ?? "";
 
 export const games: GameManifest[] = Object.entries(manifestModules)
   .map(([path, manifest]) => {
     if (manifest.slug !== slugFromPath(path)) {
-      throw new Error(`Manifest slug "${manifest.slug}" must match folder "${slugFromPath(path)}"`);
+      throw new Error(
+        `Manifest slug "${manifest.slug}" must match folder "${slugFromPath(path)}"`,
+      );
     }
     return manifest;
   })
@@ -30,15 +35,22 @@ export async function loadGame(slug: string): Promise<GameModule> {
   return loader();
 }
 
-export const categories: { id: GameCategory; label: string }[] = [
-  { id: "hanh-dong", label: "Hành động" },
-  { id: "chien-thuat", label: "Chiến thuật" },
-  { id: "tri-tue", label: "Trí tuệ" },
-  { id: "phieu-luu", label: "Phiêu lưu" },
-  { id: "the-thao", label: "Thể thao" },
+export const categories: { id: GameCategory; label: Localized<string> }[] = [
+  { id: "hanh-dong", label: { vi: "Hành động", en: "Action" } },
+  { id: "chien-thuat", label: { vi: "Chiến thuật", en: "Strategy" } },
+  { id: "tri-tue", label: { vi: "Trí tuệ", en: "Puzzle" } },
+  { id: "phieu-luu", label: { vi: "Phiêu lưu", en: "Adventure" } },
+  { id: "the-thao", label: { vi: "Thể thao", en: "Sports" } },
 ];
 
-export { SUMMARY_KEY } from "./core/types";
-export type { GameCategory, GameManifest, GameModule, ScoreReport } from "./core/types";
+export { SUMMARY_KEY, summaryText } from "./core/types";
+export { DEFAULT_LOCALE, LOCALES, isLocale } from "./core/i18n";
+export type { Locale, Localized } from "./core/i18n";
+export type {
+  GameCategory,
+  GameManifest,
+  GameModule,
+  ScoreReport,
+} from "./core/types";
 export { audioBus } from "./core/audio";
 export { createStorage } from "./core/storage";

@@ -1,4 +1,5 @@
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
+import { useMessages } from "#/hooks/use-messages";
 import { routeTree } from "./routeTree.gen";
 
 export function getRouter() {
@@ -12,8 +13,13 @@ export function getRouter() {
     // `router.invalidate()` to force a refresh.
     defaultStaleTime: Infinity,
     scrollRestoration: true,
-    defaultNotFoundComponent: () => <div className="p-8 text-center text-muted-foreground">Không tìm thấy trang này.</div>,
+    defaultNotFoundComponent: NotFound,
   });
+}
+
+function NotFound() {
+  const m = useMessages();
+  return <div className="p-8 text-center text-muted-foreground">{m.notFound}</div>;
 }
 
 declare module "@tanstack/react-router" {

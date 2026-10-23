@@ -1,7 +1,9 @@
 // Key art for the portal (poster 3:4, banner 2:1), composed from the game's own
 // drawing code. Not imported by the game: `tools/render-art` runs it in a
 // browser and saves poster.webp / banner.webp next to this file.
-import { drawBlade, drawBladeTrail, drawCritter, drawEgg, drawEnemy, drawKid, renderBackground, text } from "./art";
+import type { Locale, Localized } from "../core/i18n";
+import { fitFontSize } from "../core/text";
+import { drawBlade, drawBladeTrail, drawCritter, drawEgg, drawEnemy, drawKid, renderBackground, FONT, text } from "./art";
 import { CENTER, TRACK_R, bladeCount, bladeHalf, bladeOrbit, speciesFor, type EnemyKind } from "./config";
 
 type Ctx = CanvasRenderingContext2D;
@@ -65,8 +67,14 @@ function vignette(ctx: Ctx, w: number, h: number) {
   ctx.fillRect(0, 0, w, h);
 }
 
+/** The poster's two title lines; the manifest holds the same name as one string. */
+const POSTER_TITLE: Localized<[string, string]> = {
+  vi: ["CHIẾN THÚ", "HỖN CHIẾN"],
+  en: ["CRITTER", "BRAWL"],
+};
+
 /** 600×800 poster with the title baked in, for game cards. */
-export function renderPoster(canvas: HTMLCanvasElement) {
+export function renderPoster(canvas: HTMLCanvasElement, locale: Locale = "vi") {
   canvas.width = 600;
   canvas.height = 800;
   const ctx = canvas.getContext("2d");
@@ -84,8 +92,9 @@ export function renderPoster(canvas: HTMLCanvasElement) {
   fade.addColorStop(1, "rgba(10,25,12,0.85)");
   ctx.fillStyle = fade;
   ctx.fillRect(0, 520, 600, 280);
-  text(ctx, "CHIẾN THÚ", 300, 668, 92, "#ffe066");
-  text(ctx, "HỖN CHIẾN", 300, 742, 56, "#fff");
+  const [line1, line2] = POSTER_TITLE[locale];
+  text(ctx, line1, 300, 668, fitFontSize(ctx, line1, 92, 540, FONT), "#ffe066");
+  text(ctx, line2, 300, 742, fitFontSize(ctx, line2, 56, 540, FONT), "#fff");
 }
 
 /** 1200×600 banner: art on the right, room for HTML text on the left. */

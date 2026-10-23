@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
 import { signInWithGoogle, signOut } from "#/lib/auth-client";
 import { cn } from "#/lib/utils";
@@ -21,6 +22,7 @@ import { cn } from "#/lib/utils";
  */
 export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
   const { data, isPending } = useSession();
+  const m = useMessages();
   const user = data?.user;
 
   if (isPending) return <div className={variant === "sidebar" ? "h-12" : "size-10"} aria-hidden />;
@@ -34,8 +36,8 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
       >
         <HugeiconsIcon icon={GoogleIcon} className="size-5 shrink-0" />
         <span className="grid min-w-0">
-          <span className="font-medium whitespace-nowrap">Đăng nhập Google</span>
-          <span className="truncate text-xs text-muted-foreground">Lưu tên trên bảng xếp hạng</span>
+          <span className="font-medium whitespace-nowrap">{m.account.signIn}</span>
+          <span className="truncate text-xs text-muted-foreground">{m.account.signInHint}</span>
         </span>
       </button>
     ) : (
@@ -43,7 +45,7 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
         variant="ghost"
         size="icon"
         className="size-10 rounded-full"
-        aria-label="Đăng nhập Google"
+        aria-label={m.account.signIn}
         onClick={() => void signInWithGoogle()}
       >
         <HugeiconsIcon icon={GoogleIcon} />
@@ -82,7 +84,7 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => void signOut()}>
           <HugeiconsIcon icon={Logout01Icon} />
-          Đăng xuất
+          {m.account.signOut}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

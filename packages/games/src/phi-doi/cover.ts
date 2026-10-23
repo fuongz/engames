@@ -1,5 +1,7 @@
 // Key art for the portal, composed from the game's own drawing code. Not
 // imported by the game: `bun run art` renders it to poster.webp / banner.webp.
+import type { Locale, Localized } from "../core/i18n";
+import { fitFontSize } from "../core/text";
 import {
   blit,
   drawBattleship,
@@ -7,6 +9,7 @@ import {
   glowDot,
   makeSea,
   makeSprites,
+  FONT,
   text,
 } from "./art";
 import { H, W, WINGMEN } from "./config";
@@ -54,8 +57,14 @@ function scene(ctx: CanvasRenderingContext2D, heroY: number, sea = true) {
   blit(ctx, sprites.pickups.power, 96, heroY - 30);
 }
 
+/** The poster's two title lines; the manifest holds the same name as one string. */
+const POSTER_TITLE: Localized<[string, string]> = {
+  vi: ["PHI ĐỘI", "1945"],
+  en: ["SQUADRON", "1945"],
+};
+
 /** 600×800 poster with the title baked in. */
-export function renderPoster(canvas: HTMLCanvasElement) {
+export function renderPoster(canvas: HTMLCanvasElement, locale: Locale = "vi") {
   canvas.width = 600;
   canvas.height = 800;
   const ctx = canvas.getContext("2d");
@@ -71,8 +80,9 @@ export function renderPoster(canvas: HTMLCanvasElement) {
   fade.addColorStop(1, "rgba(8,20,60,0.92)");
   ctx.fillStyle = fade;
   ctx.fillRect(0, 560, 600, 240);
-  text(ctx, "PHI ĐỘI", 300, 688, 96, "#ffe27a");
-  text(ctx, "1945", 300, 756, 54, "#ffffff");
+  const [line1, line2] = POSTER_TITLE[locale];
+  text(ctx, line1, 300, 688, fitFontSize(ctx, line1, 96, 540, FONT), "#ffe27a");
+  text(ctx, line2, 300, 756, fitFontSize(ctx, line2, 54, 540, FONT), "#ffffff");
 }
 
 /** 1200×600 banner: the squadron and battleship on the right, calm sea on the left. */
