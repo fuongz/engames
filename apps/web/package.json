@@ -1,6 +1,7 @@
 {
   "name": "@web-games/web",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "//imports": "One alias, declared HERE and mirrored in tsconfig.json `paths`. Nowhere else — `#` is a Node subpath prefix that vite, rolldown and `bun run` all resolve natively, so a vite `resolve.alias` would be a third place to forget.",

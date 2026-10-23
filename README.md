@@ -85,3 +85,9 @@ unit-tested and balance-simulated without a browser.
 - `sw.js` serves the shell offline and caches hashed assets as they load, so a game
   is playable offline once it has been opened. Bump `VERSION` there when the
   caching strategy changes.
+
+## License
+
+[MIT](LICENSE) © 2026 fuongz. The games are original code and art inspired by
+other titles (credited in each game's `inspiredBy` and `RE_NOTES.md`); those
+titles and their trademarks belong to their owners.
