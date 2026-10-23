@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { categories } from "@web-games/games";
 import { LibraryView } from "#/components/features/library/library-view";
 import { catalogs } from "#/content/messages";
+import { socialMeta } from "#/lib/seo";
 import { useLocaleStore } from "#/stores/locale";
 
 export const Route = createFileRoute("/library")({
@@ -16,7 +17,12 @@ export const Route = createFileRoute("/library")({
     };
   },
   // head runs outside React; it picks up a language switch on the next navigation
-  head: () => ({ meta: [{ title: catalogs[useLocaleStore.getState().locale].library.pageTitle }] }),
+  head: () => {
+    const m = catalogs[useLocaleStore.getState().locale];
+    return {
+      meta: [{ title: m.library.pageTitle }, ...socialMeta({ title: m.library.pageTitle, description: m.app.description, path: "/library" })],
+    };
+  },
   component: Library,
 });
 

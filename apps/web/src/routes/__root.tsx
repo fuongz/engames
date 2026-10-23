@@ -5,6 +5,7 @@ import { AppShell } from "#/components/features/app-shell/app-shell";
 import { TooltipProvider } from "#/components/ui/tooltip";
 import { catalogs } from "#/content/messages";
 import { registerServiceWorker } from "#/lib/pwa";
+import { socialMeta } from "#/lib/seo";
 import appCss from "#/styles/app.css?url";
 import { listenForInstall } from "#/stores/install";
 import { listenForLocale, useLocaleStore } from "#/stores/locale";
@@ -28,12 +29,20 @@ export const Route = createRootRoute({
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "Engames" },
+      // Link previews; pages override what they know better (a game's own card)
+      ...socialMeta({
+        title: catalogs[useLocaleStore.getState().locale].app.title,
+        description: catalogs[useLocaleStore.getState().locale].app.description,
+      }),
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "icon", href: "/icons/icon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
+      // ICO first for old browsers; SVG wins where supported. Browsers keep favicons
+      // by URL for a long time, so a new logo ships under a new file name (or ?v=).
+      { rel: "icon", href: "/favicon.ico?v=3", sizes: "32x32" },
+      { rel: "icon", href: "/icons/logo.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/icons/logo-apple-touch.png" },
     ],
   }),
   shellComponent: RootDocument,

@@ -1,4 +1,4 @@
-import { LibraryIcon, PlusSignIcon, Store01Icon, UserGroupIcon, VolumeHighIcon, VolumeOffIcon } from "@hugeicons/core-free-icons";
+import { Download04Icon, LibraryIcon, Store01Icon, UserGroupIcon, VolumeHighIcon, VolumeOffIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/games";
@@ -50,7 +50,7 @@ export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col gap-8 border-r bg-background px-5 py-7 lg:flex">
       <Link to="/" className="flex items-center gap-2.5 px-1">
-        <img src="/icons/icon.svg" alt="" className="size-9 rounded-xl" />
+        <img src="/icons/logo.svg" alt="" className="size-9 rounded-xl" />
         <span className="text-lg font-bold tracking-wide uppercase">Engames</span>
       </Link>
 
@@ -91,7 +91,7 @@ export function Sidebar() {
           className="flex items-center justify-between gap-2 rounded-2xl border bg-card px-4 py-3.5 text-left text-sm font-medium whitespace-nowrap transition-colors hover:border-primary/50 hover:bg-secondary"
         >
           {m.sidebar.install}
-          <HugeiconsIcon icon={PlusSignIcon} className="size-5 shrink-0 text-muted-foreground" />
+          <HugeiconsIcon icon={Download04Icon} className="size-5 shrink-0 text-muted-foreground" />
         </button>
       )}
     </aside>

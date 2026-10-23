@@ -3,6 +3,7 @@ import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
 import posterVi from "./poster.webp";
+import share from "./share.jpg";
 
 const manifest: GameManifest = {
   slug: "rot-nuoc",
@@ -21,14 +22,14 @@ const manifest: GameManifest = {
       "Nước chỉ rót lên lớp cùng màu hoặc vào ống trống; cả khối cùng màu trên cùng sẽ chảy sang nếu còn chỗ.",
       "Nút vàng: chơi lại màn, hoàn tác (có giới hạn lượt), thêm một ống trống (mỗi màn một lần).",
       "Mỗi màn qua được +1 lượt hoàn tác; hộp quà mở được sau mỗi 5 màn.",
-      "Máy tính: Z hoàn tác, R chơi lại, T thêm ống, phím số 1–9, 0 để chọn ống.",
+      "Máy tính: [Z] hoàn tác, [R] chơi lại, [T] thêm ống, [1]–[9] và [0] để chọn ống.",
     ],
     en: [
       "Tap a tube to lift it, then tap another one to pour. Tap the lifted tube again to put it down.",
       "Liquid only pours onto the same colour or into an empty tube; the whole matching top block flows over if there's room.",
       "Yellow buttons: restart the level, undo (limited), add one empty tube (once per level).",
       "Each cleared level gives +1 undo; the gift box opens every 5 levels.",
-      "Desktop: Z undo, R restart, T add a tube, number keys 1–9 and 0 to pick a tube.",
+      "Desktop: [Z] undo, [R] restart, [T] add a tube, [1]–[9] and [0] to pick a tube.",
     ],
   },
   category: "tri-tue",
@@ -38,6 +39,7 @@ const manifest: GameManifest = {
   },
   poster: { vi: posterVi, en: posterEn },
   banner,
+  share,
   width: W,
   height: H,
   releasedAt: "2026-10-23T17:00",

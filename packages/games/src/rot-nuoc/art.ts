@@ -120,7 +120,10 @@ export function drawBackdrop(
 
 // ---------------------------------------------------------------- buttons
 
-/** ad: glossy yellow rounded buttons with a dark outline. */
+/**
+ * ad: glossy yellow rounded buttons with a dark outline. A disabled button turns
+ * grey rather than see-through: over the dark floor a faded yellow reads as mud.
+ */
 export function yellowButton(
   ctx: Ctx,
   x: number,
@@ -130,86 +133,148 @@ export function yellowButton(
   enabled: boolean,
 ) {
   ctx.save();
-  ctx.globalAlpha = enabled ? 1 : 0.45;
-  ctx.fillStyle = "#3a2a06";
+  ctx.fillStyle = enabled ? "#3a2a06" : "#1c1a17";
   ctx.beginPath();
   ctx.roundRect(x, y + 3, w, h, 12);
   ctx.fill();
   const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, "#ffe25a");
-  g.addColorStop(1, "#f4b010");
+  g.addColorStop(0, enabled ? "#ffe25a" : "#8d877c");
+  g.addColorStop(1, enabled ? "#f4b010" : "#68625a");
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, 12);
   ctx.fill();
   ctx.lineWidth = 2.5;
-  ctx.strokeStyle = "#2a1e04";
+  ctx.strokeStyle = enabled ? "#2a1e04" : "#1c1a17";
   ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fillStyle = enabled ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.16)";
   ctx.beginPath();
   ctx.roundRect(x + 6, y + 4, w - 12, h * 0.28, 6);
   ctx.fill();
   ctx.restore();
 }
 
+/** The count on a button's corner, like a notification dot. */
+export function countBadge(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  n: number,
+  enabled: boolean,
+) {
+  ctx.save();
+  ctx.fillStyle = enabled ? "#e8433a" : "#4a4640";
+  ctx.strokeStyle = "#1c1a17";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(x, y, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = `800 15px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = enabled ? "#ffffff" : "#b5aea2";
+  ctx.fillText(String(n), x, y + 1);
+  ctx.restore();
+}
+
 export type Glyph = "undo" | "restart" | "tube";
 
-export function glyph(ctx: Ctx, kind: Glyph, x: number, y: number, s: number) {
+/** An arrowhead whose tip sits at (x, y), pointing along `angle`. */
+function arrowHead(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  angle: number,
+  size: number,
+) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.strokeStyle = "#2a1e04";
-  ctx.fillStyle = "#2a1e04";
-  ctx.lineWidth = s * 0.16;
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-size, -size * 0.75);
+  ctx.lineTo(-size, size * 0.75);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+export function glyph(
+  ctx: Ctx,
+  kind: Glyph,
+  x: number,
+  y: number,
+  s: number,
+  enabled = true,
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  const ink = enabled ? "#2a1e04" : "#2e2b27";
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = ink;
+  ctx.lineWidth = s * 0.14;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   if (kind === "undo") {
+    // A U-turn: the arrow heads left along the top, the tail curls back under
+    const r = s * 0.24;
     ctx.beginPath();
-    ctx.moveTo(-s * 0.35, -s * 0.15);
-    ctx.lineTo(s * 0.15, -s * 0.15);
-    ctx.quadraticCurveTo(s * 0.45, -s * 0.15, s * 0.45, s * 0.12);
-    ctx.quadraticCurveTo(s * 0.45, s * 0.38, s * 0.15, s * 0.38);
-    ctx.lineTo(-s * 0.05, s * 0.38);
+    ctx.moveTo(-s * 0.2, s * 0.34);
+    ctx.lineTo(s * 0.08, s * 0.34);
+    ctx.arc(s * 0.08, s * 0.1, r, Math.PI / 2, -Math.PI / 2, true);
+    ctx.lineTo(-s * 0.18, -s * 0.14);
+    ctx.stroke();
+    arrowHead(ctx, -s * 0.44, -s * 0.14, Math.PI, s * 0.24);
+  } else if (kind === "restart") {
+    // One circular arrow, clockwise, with its gap at the top
+    const r = s * 0.3;
+    const head = s * 0.22;
+    const a0 = -Math.PI * 0.3;
+    const a1 = Math.PI * 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, a0, a1);
+    ctx.stroke();
+    // the head continues along the tangent from the arc's end
+    const dir = a1 + Math.PI / 2;
+    const ex = Math.cos(a1) * r;
+    const ey = Math.sin(a1) * r;
+    arrowHead(
+      ctx,
+      ex + Math.cos(dir) * head,
+      ey + Math.sin(dir) * head,
+      dir,
+      head * 1.2,
+    );
+  } else {
+    // A tube with a "+" beside it
+    ctx.lineWidth = s * 0.11;
+    const w = s * 0.26;
+    const left = -s * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(left, -s * 0.38);
+    ctx.lineTo(left, s * 0.24);
+    ctx.arc(left + w / 2, s * 0.24, w / 2, Math.PI, 0, true);
+    ctx.lineTo(left + w, -s * 0.38);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(-s * 0.45, -s * 0.15);
-    ctx.lineTo(-s * 0.18, -s * 0.38);
-    ctx.lineTo(-s * 0.18, s * 0.08);
+    ctx.moveTo(left - s * 0.06, -s * 0.38);
+    ctx.lineTo(left + w + s * 0.06, -s * 0.38);
+    ctx.stroke();
+    // the liquid
+    ctx.beginPath();
+    ctx.moveTo(left, s * 0.04);
+    ctx.lineTo(left, s * 0.24);
+    ctx.arc(left + w / 2, s * 0.24, w / 2, Math.PI, 0, true);
+    ctx.lineTo(left + w, s * 0.04);
     ctx.closePath();
     ctx.fill();
-  } else if (kind === "restart") {
-    for (const dir of [1, -1]) {
-      ctx.beginPath();
-      ctx.arc(
-        0,
-        0,
-        s * 0.32,
-        dir > 0 ? Math.PI * 1.1 : Math.PI * 0.1,
-        dir > 0 ? Math.PI * 1.9 : Math.PI * 0.9,
-      );
-      ctx.stroke();
-      const ax = dir * s * 0.3;
-      const ay = dir * -s * 0.12;
-      ctx.beginPath();
-      ctx.moveTo(ax + dir * s * 0.12, ay);
-      ctx.lineTo(ax - dir * s * 0.06, ay - dir * s * 0.16);
-      ctx.lineTo(ax - dir * s * 0.1, ay + dir * s * 0.08);
-      ctx.closePath();
-      ctx.fill();
-    }
-  } else {
-    // "+" and a small tube
+    ctx.lineWidth = s * 0.14;
     ctx.beginPath();
-    ctx.moveTo(-s * 0.42, 0);
-    ctx.lineTo(-s * 0.12, 0);
-    ctx.moveTo(-s * 0.27, -s * 0.15);
-    ctx.lineTo(-s * 0.27, s * 0.15);
-    ctx.stroke();
-    ctx.lineWidth = s * 0.12;
-    ctx.beginPath();
-    ctx.moveTo(s * 0.04, -s * 0.38);
-    ctx.lineTo(s * 0.04, s * 0.22);
-    ctx.arc(s * 0.19, s * 0.22, s * 0.15, Math.PI, 0, true);
-    ctx.lineTo(s * 0.34, -s * 0.38);
+    ctx.moveTo(s * 0.12, -s * 0.02);
+    ctx.lineTo(s * 0.44, -s * 0.02);
+    ctx.moveTo(s * 0.28, -s * 0.18);
+    ctx.lineTo(s * 0.28, s * 0.14);
     ctx.stroke();
   }
   ctx.restore();

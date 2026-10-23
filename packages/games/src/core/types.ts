@@ -16,7 +16,7 @@ export interface GameManifest {
   title: Localized<string>;
   tagline: Localized<string>;
   description: Localized<string>;
-  /** One line per control hint, shown on the game page. */
+  /** One line per control hint, shown on the game page. Wrap a key in brackets to show it as a key cap: `[J]`, `[Space]`, `[↓→]` (an arrow motion is one key per arrow). */
   controls: Localized<string[]>;
   category: GameCategory;
   tags: Localized<string[]>;
@@ -24,6 +24,11 @@ export interface GameManifest {
   poster: Localized<string>;
   /** 2:1 key art without text, for hero banners; keep the left side calm for the title. */
   banner: string;
+  /**
+   * 1200x630 JPEG link preview (Facebook, X, Zalo, Messenger): the banner with
+   * the title, made by `bun run art`. Import `./share.jpg`.
+   */
+  share: string;
   /**
    * "landscape" games ask phones to rotate (and lock orientation where the
    * browser allows). Defaults to portrait.

@@ -94,6 +94,9 @@ before deploying code that needs the new columns.
      (2:1, no text, subject on the right, for the home hero).
      Easiest: write `cover.ts` with `renderPoster(canvas, locale)` / `renderBanner` using
      the game's own drawing code, then `bun run --cwd packages/games art` writes the `.webp` files.
+   - `share` — the 1200×630 JPEG link preview (Facebook, X, Zalo, Messenger): import
+     `./share.jpg`. `bun run art` builds it from the banner and the Vietnamese title,
+     and also refreshes the portal's own card, `apps/web/public/og-image.jpg`.
    - `title`, `tagline`, `description`, `controls`, `tags` and `inspiredBy` are `{ vi, en }`.
    - keep every drawn string in a `strings.ts` `Localized` catalog and resolve it at
      draw time with `rt.locale()`, so a language switch

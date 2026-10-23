@@ -8,6 +8,7 @@ import { GameCard } from "#/components/shared/games/game-card";
 import { LeaderboardList } from "#/components/shared/leaderboard/leaderboard-list";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { getLeaderboard } from "#/server/leaderboard";
+import { socialMeta } from "#/lib/seo";
 import { useLocaleStore } from "#/stores/locale";
 
 export const Route = createFileRoute("/games/$slug")({
@@ -26,9 +27,20 @@ export const Route = createFileRoute("/games/$slug")({
     ]);
     return { game, board, coop };
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: loaderData ? `${loaderData.game.title[useLocaleStore.getState().locale]} | Engames` : "Engames" }],
-  }),
+  head: ({ loaderData }) => {
+    if (!loaderData) return { meta: [{ title: "Engames" }] };
+    const { game } = loaderData;
+    const locale = useLocaleStore.getState().locale;
+    const title = `${game.title[locale]} | Engames`;
+    return {
+      meta: [
+        { title },
+        { name: "description", content: game.tagline[locale] },
+        // The game's own card: its banner with the title on it
+        ...socialMeta({ title, description: game.tagline[locale], image: game.share, imageAlt: game.title[locale], path: `/games/${game.slug}` }),
+      ],
+    };
+  },
   component: GamePage,
 });
 

@@ -3,6 +3,7 @@ import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
 import posterVi from "./poster.webp";
+import share from "./share.jpg";
 
 const manifest: GameManifest = {
   slug: "hanh-trinh",
@@ -36,6 +37,7 @@ const manifest: GameManifest = {
   },
   poster: { vi: posterVi, en: posterEn },
   banner,
+  share,
   width: W,
   height: H,
   releasedAt: "2026-10-23",

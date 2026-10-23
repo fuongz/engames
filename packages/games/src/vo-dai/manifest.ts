@@ -3,6 +3,7 @@ import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
 import posterVi from "./poster.webp";
+import share from "./share.jpg";
 
 const manifest: GameManifest = {
   slug: "vo-dai",
@@ -17,20 +18,20 @@ const manifest: GameManifest = {
   },
   controls: {
     vi: [
-      "Chơi ở màn hình ngang. Joystick (hoặc WASD / mũi tên) để đi, nhảy (↑), ngồi (↓).",
+      "Chơi ở màn hình ngang. Joystick (hoặc [WASD] / mũi tên) để đi, nhảy [↑], ngồi [↓].",
       "Giữ hướng ngược đối thủ để đỡ. Ngồi đỡ đòn thấp, đứng đỡ đòn nhảy từ trên xuống.",
-      "Đấm (J), Đá (K). Đấm trúng thì nối được đấm/đá, đòn trúng thì nối được chiêu.",
-      "Chiêu (L): đứng yên, kèm → hoặc kèm ←, ra 3 chiêu khác nhau. Trên bàn phím còn có ↓→ + Đấm, →↓→ + Đấm, ↓← + Đá.",
-      "Đầy thanh nộ, bấm Thú (I) để hoá thú. Khi đã hoá thú, bấm Thú lần nữa để Cuồng Nộ.",
-      "Hạ đối thủ ở hiệp quyết định: nhập ↓ ↓ + Thú trong 2 giây để kết liễu.",
+      "Đấm [J], Đá [K]. Đấm trúng thì nối được đấm/đá, đòn trúng thì nối được chiêu.",
+      "Chiêu [L]: đứng yên, kèm [→] hoặc kèm [←], ra 3 chiêu khác nhau. Trên bàn phím còn có [↓→] + Đấm, [→↓→] + Đấm, [↓←] + Đá.",
+      "Đầy thanh nộ, bấm Thú [I] để hoá thú. Khi đã hoá thú, bấm Thú lần nữa để Cuồng Nộ.",
+      "Hạ đối thủ ở hiệp quyết định: nhập [↓↓] + Thú trong 2 giây để kết liễu.",
     ],
     en: [
-      "Play in landscape. Joystick (or WASD / arrows) to walk, jump (↑) and crouch (↓).",
+      "Play in landscape. Joystick (or [WASD] / arrows) to walk, jump [↑] and crouch [↓].",
       "Hold away from your opponent to block. Crouch to block lows, stand to block jump-ins.",
-      "Punch (J), Kick (K). A landed punch chains into a punch or kick; a landed hit cancels into a special.",
-      "Special (L): alone, with →, or with ← for three different specials. On a keyboard ↓→ + Punch, →↓→ + Punch and ↓← + Kick work too.",
-      "With a full beast meter, press Beast (I) to transform. Transformed, press Beast again for a Frenzy.",
-      "Win the deciding round, then enter ↓ ↓ + Beast within 2 seconds for the finisher.",
+      "Punch [J], Kick [K]. A landed punch chains into a punch or kick; a landed hit cancels into a special.",
+      "Special [L]: alone, with [→], or with [←] for three different specials. On a keyboard [↓→] + Punch, [→↓→] + Punch and [↓←] + Kick work too.",
+      "With a full beast meter, press Beast [I] to transform. Transformed, press Beast again for a Frenzy.",
+      "Win the deciding round, then enter [↓↓] + Beast within 2 seconds for the finisher.",
     ],
   },
   category: "hanh-dong",
@@ -40,6 +41,7 @@ const manifest: GameManifest = {
   },
   poster: { vi: posterVi, en: posterEn },
   banner,
+  share,
   orientation: "landscape",
   width: W,
   height: H,

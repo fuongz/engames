@@ -273,7 +273,13 @@ function InfoCard({ game }: { game: GameManifest }) {
               <CoopBadge game={game} variant="long" className="bg-background/30 text-foreground" />
             </motion.div>
           )}
-          <motion.p variants={piece} className="line-clamp-3 text-sm leading-relaxed text-foreground/90 lg:line-clamp-9">{game.description[locale]}</motion.p>
+          <motion.p
+            variants={piece}
+            // The card is a fixed 400px on desktop: fewer lines when the co-op badge takes a row
+            className={cn("line-clamp-3 text-sm leading-relaxed text-foreground/90", game.online ? "lg:line-clamp-6" : "lg:line-clamp-7")}
+          >
+            {game.description[locale]}
+          </motion.p>
           <motion.div variants={piece} className="mt-auto grid gap-3 pt-2">
             <span className="text-sm font-semibold">{m.home.free}</span>
             {/* Dark glass on the orange card, as in the reference; an orange button would vanish here */}

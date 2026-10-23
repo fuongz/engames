@@ -7,11 +7,12 @@
 //  - /api/* (sign-in) and /_serverFn/* (leaderboard) are never touched: they are
 //    live data, and caching an OAuth callback would be actively harmful.
 //
-// Bump VERSION to drop old caches after a change to this file's strategy.
-const VERSION = "v2";
+// Bump VERSION to drop old caches after a change to this file's strategy (or to
+// push new precached files at once: v3 shipped the new logo and icons).
+const VERSION = "v3";
 const CACHE = `engames-${VERSION}`;
 const SHELL = "/";
-const PRECACHE = [SHELL, "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/icon-512.png"];
+const PRECACHE = [SHELL, "/manifest.webmanifest", "/icons/logo.svg", "/icons/logo-192.png", "/icons/logo-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));

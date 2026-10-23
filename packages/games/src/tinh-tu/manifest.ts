@@ -3,6 +3,7 @@ import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
 import posterVi from "./poster.webp";
+import share from "./share.jpg";
 
 const manifest: GameManifest = {
   slug: "tinh-tu",
@@ -17,17 +18,17 @@ const manifest: GameManifest = {
   },
   controls: {
     vi: [
-      "Chơi ở màn hình ngang. Kéo joystick bên trái (hoặc WASD / phím mũi tên) để bay.",
+      "Chơi ở màn hình ngang. Kéo joystick bên trái (hoặc [WASD] / phím mũi tên) để bay.",
       "Đạn bắn tự động. Bong bóng xanh nâng cấp đạn xuyên hoặc tăng số tia đạn.",
       "Hạ địch để nạp vòng năng lượng; đủ vòng là có một lần dùng chiêu.",
-      "Bấm nút cam bên phải (hoặc Space) để tung Tinh Tú Quang Pháo. Nên để dành cho boss!",
+      "Bấm nút cam bên phải (hoặc [Space]) để tung Tinh Tú Quang Pháo. Nên để dành cho boss!",
       "3 sao: sống tới hết giờ, hạ boss, và không mất tim nào.",
     ],
     en: [
-      "Play in landscape. Drag the joystick on the left (or WASD / arrow keys) to fly.",
+      "Play in landscape. Drag the joystick on the left (or [WASD] / arrow keys) to fly.",
       "You fire automatically. Blue bubbles give piercing shots or extra bullet streams.",
       "Defeat enemies to fill the energy ring; a full ring is one skill charge.",
-      "Tap the orange button on the right (or Space) to fire the Starlight Cannon. Save it for the boss!",
+      "Tap the orange button on the right (or [Space]) to fire the Starlight Cannon. Save it for the boss!",
       "3 stars: survive to the end, beat the boss, and lose no hearts.",
     ],
   },
@@ -38,6 +39,7 @@ const manifest: GameManifest = {
   },
   poster: { vi: posterVi, en: posterEn },
   banner,
+  share,
   orientation: "landscape",
   width: W,
   height: H,

@@ -3,6 +3,7 @@ import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
 import posterVi from "./poster.webp";
+import share from "./share.jpg";
 
 const manifest: GameManifest = {
   slug: "phi-doi",
@@ -17,17 +18,17 @@ const manifest: GameManifest = {
   },
   controls: {
     vi: [
-      "Kéo ngón tay ở bất kỳ đâu: máy bay đi theo hướng kéo, ngón tay không che máy bay. Máy tính: WASD hoặc phím mũi tên.",
+      "Kéo ngón tay ở bất kỳ đâu: máy bay đi theo hướng kéo, ngón tay không che máy bay. Máy tính: [WASD] hoặc phím mũi tên.",
       "Đạn bắn tự động. Hạ hết cả một tốp máy bay xanh để nhận thùng P (tăng hỏa lực, tối đa 5 cấp).",
-      "Nút xanh (hoặc J) đầy khi hạ đủ địch: 5 giây bắn dồn, nhiều tia hơn.",
-      "Nút bom (hoặc Space) xóa toàn bộ đạn địch và gây sát thương cả màn hình.",
+      "Nút xanh (hoặc [J]) đầy khi hạ đủ địch: 5 giây bắn dồn, nhiều tia hơn.",
+      "Nút bom (hoặc [Space]) xóa toàn bộ đạn địch và gây sát thương cả màn hình.",
       "Tên lửa của chiến hạm bắn hạ được. Hết máu là kết thúc; điểm xếp hạng là tổng điểm.",
     ],
     en: [
-      "Drag anywhere: the plane follows your finger's movement, so your finger never covers it. Desktop: WASD or arrow keys.",
+      "Drag anywhere: the plane follows your finger's movement, so your finger never covers it. Desktop: [WASD] or arrow keys.",
       "Firing is automatic. Shoot down an entire green formation for a P crate (more firepower, up to level 5).",
-      "The green button (or J) fills as you score kills: 5 seconds of rapid fire with extra streams.",
-      "The bomb button (or Space) clears every enemy bullet and damages the whole screen.",
+      "The green button (or [J]) fills as you score kills: 5 seconds of rapid fire with extra streams.",
+      "The bomb button (or [Space]) clears every enemy bullet and damages the whole screen.",
       "The battleship's missiles can be shot down. The run ends when your HP runs out; your leaderboard score is your total points.",
     ],
   },
@@ -38,6 +39,7 @@ const manifest: GameManifest = {
   },
   poster: { vi: posterVi, en: posterEn },
   banner,
+  share,
   width: W,
   height: H,
   releasedAt: "2026-10-23T12:00",

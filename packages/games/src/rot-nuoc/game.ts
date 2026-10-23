@@ -23,6 +23,7 @@ import {
   makeBackdrop,
   text,
   tubeLength,
+  countBadge,
   yellowButton,
 } from "./art";
 import {
@@ -144,15 +145,15 @@ export function setup(rt: Runtime): GameHooks {
     h: 50,
   });
   const undoBtn = (): Rect => ({
-    x: right() - 196,
+    x: right() - 172,
     y: top() + 22,
-    w: 84,
+    w: 64,
     h: 50,
   });
   const tubeBtn = (): Rect => ({
-    x: right() - 102,
+    x: right() - 92,
     y: top() + 22,
-    w: 84,
+    w: 64,
     h: 50,
   });
   const giftPos = () => ({ x: right() - 66, y: top() + 128 });
@@ -362,19 +363,19 @@ export function setup(rt: Runtime): GameHooks {
   // ---------------------------------------------------------- input
 
   function onPointerDown(p: PointerInfo) {
-      if (won) {
-        if (won.t > 0.6 && inRect(p, nextBtn())) nextLevel();
-        return;
-      }
-      if (inRect(p, restartBtn())) return doRestart();
-      if (inRect(p, undoBtn())) return doUndo();
-      if (inRect(p, tubeBtn())) return doAddTube();
-      if (progress.gift >= GIFT_EVERY && inRect(p, giftRect()))
-        return claimGift();
-      for (let i = 0; i < board.tubes.length; i++) {
-        if (inRect(p, tubeRect(i))) return tapTube(i);
-      }
-      selected = null;
+    if (won) {
+      if (won.t > 0.6 && inRect(p, nextBtn())) nextLevel();
+      return;
+    }
+    if (inRect(p, restartBtn())) return doRestart();
+    if (inRect(p, undoBtn())) return doUndo();
+    if (inRect(p, tubeBtn())) return doAddTube();
+    if (progress.gift >= GIFT_EVERY && inRect(p, giftRect()))
+      return claimGift();
+    for (let i = 0; i < board.tubes.length; i++) {
+      if (inRect(p, tubeRect(i))) return tapTube(i);
+    }
+    selected = null;
   }
 
   const onKey = (e: KeyboardEvent) => {
@@ -532,19 +533,8 @@ export function setup(rt: Runtime): GameHooks {
 
   function counted(r: Rect, kind: Glyph, n: number, enabled: boolean) {
     yellowButton(ctx, r.x, r.y, r.w, r.h, enabled);
-    glyph(ctx, kind, r.x + 28, r.y + r.h / 2, 30);
-    ctx.globalAlpha = enabled ? 1 : 0.5;
-    text(
-      ctx,
-      String(n),
-      r.x + 62,
-      r.y + r.h / 2 + 1,
-      24,
-      "#2a1e04",
-      "center",
-      800,
-    );
-    ctx.globalAlpha = 1;
+    glyph(ctx, kind, r.x + r.w / 2, r.y + r.h / 2, 30, enabled);
+    countBadge(ctx, r.x + r.w - 4, r.y + 2, n, enabled);
   }
 
   function drawHud() {

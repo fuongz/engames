@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // `bun run art` — renders each game's cover.ts in headless Chrome and writes
-// src/<slug>/poster.webp and banner.webp. Re-run after changing a game's art.
+// src/<slug>/poster.webp and banner.webp, plus the link-preview images: each
+// game's share.jpg and the portal's apps/web/public/og-image.jpg. Re-run after
+// changing a game's art or name.
 // Needs Google Chrome (override the path with CHROME_PATH).
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -41,7 +43,10 @@ try {
   if (!art) throw new Error("render-art.html never produced art (check the browser console)");
   for (const [slug, images] of Object.entries(art)) {
     for (const [name, dataUrl] of Object.entries(images)) {
-      const file = join(root, "src", slug, `${name}.webp`);
+      const ext = dataUrl.startsWith("data:image/jpeg") ? "jpg" : "webp";
+      // "__site" art belongs to the portal (its share image), not to a game
+      const dir = slug === "__site" ? join(root, "..", "..", "apps", "web", "public") : join(root, "src", slug);
+      const file = join(dir, `${name}.${ext}`);
       writeFileSync(file, Buffer.from(dataUrl.split(",")[1], "base64"));
       console.log("wrote", file.replace(root, ""));
     }

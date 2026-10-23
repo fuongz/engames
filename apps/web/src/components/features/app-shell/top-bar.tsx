@@ -16,7 +16,7 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
   return (
     <header className="flex items-center gap-3">
       <Link to="/" className="flex items-center gap-2.5 lg:hidden">
-        <img src="/icons/icon.svg" alt="" className="size-9 rounded-xl" />
+        <img src="/icons/logo.svg" alt="" className="size-9 rounded-xl" />
         <span className="text-lg font-bold tracking-wide uppercase">Engames</span>
       </Link>
 

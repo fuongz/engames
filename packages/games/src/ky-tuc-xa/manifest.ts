@@ -3,6 +3,7 @@ import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
 import posterVi from "./poster.webp";
+import share from "./share.jpg";
 
 const manifest: GameManifest = {
   slug: "ky-tuc-xa",
@@ -20,14 +21,14 @@ const manifest: GameManifest = {
       "Trong 30 giây đầu, chạm vào một phòng để chạy tới giường. Phòng có người thì phải chọn phòng khác.",
       "Đã lên giường: chạm ô trống để mở Kiến Trúc, chạm giường hoặc cửa để nâng cấp, chạm tháp để nâng cấp tháp.",
       "Tháp chỉ bắn khi Thợ Săn ở trong tầm, nên xây sát cửa. Máy Chơi Game tạo ⚡ để xây đồ ở Xưởng.",
-      "Cửa bị đánh thì bấm Sửa (hoặc phím R), có thời gian hồi.",
+      "Cửa bị đánh thì bấm Sửa (hoặc phím [R]), có thời gian hồi.",
       "Thắng khi hạ được Thợ Săn; thua khi cửa phòng bạn vỡ. Điểm là xu kiếm được, thời gian sống và thưởng hạ Thợ Săn.",
     ],
     en: [
       "In the first 30 seconds, tap a room to run to its bed. If it's taken, pick another.",
       "Once in bed: tap an empty tile to open Build, tap your bed or door to upgrade it, tap a turret to upgrade it.",
       "Turrets only fire when the Hunter is in range, so build them by the door. Arcade Machines make ⚡ for Workshop builds.",
-      "When your door is under attack, press Repair (or R); it has a cooldown.",
+      "When your door is under attack, press Repair (or [R]); it has a cooldown.",
       "You win by taking the Hunter down and lose when your door breaks. Score is gold earned, time survived and a bonus for the kill.",
     ],
   },
@@ -38,6 +39,7 @@ const manifest: GameManifest = {
   },
   poster: { vi: posterVi, en: posterEn },
   banner,
+  share,
   width: W,
   height: H,
   online: { modes: ["coop"], minPlayers: 1, maxPlayers: 6 },

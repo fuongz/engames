@@ -108,6 +108,8 @@ export const vi = {
     boardOffline: "Không tải được bảng xếp hạng (đang offline?).",
     moreGames: "Game khác",
     howToPlay: "Cách chơi",
+    showMore: "Xem thêm",
+    showLess: "Thu gọn",
     inspiredBy: "Lấy cảm hứng từ {source}",
   },
   online: {

@@ -109,6 +109,8 @@ export const en: Messages = {
     boardOffline: "Couldn't load the leaderboard (are you offline?).",
     moreGames: "More games",
     howToPlay: "How to play",
+    showMore: "Show more",
+    showLess: "Show less",
     inspiredBy: "Inspired by {source}",
   },
   online: {

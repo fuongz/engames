@@ -29,6 +29,118 @@
           out[slug][name] = canvas.toDataURL("image/webp", 0.86);
         }
       }
+
+      // Link previews (Facebook, X, Zalo, Messenger): 1200x630 JPEG, which every
+      // crawler accepts (some still skip WebP). Built from each game's banner and
+      // manifest, in Vietnamese: the people these links go to read it first.
+      const manifests = import.meta.glob("../src/*/manifest.ts", { eager: true, import: "default" });
+      const FONT = '"Baloo 2", system-ui, sans-serif';
+      const load = (src) => new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src; });
+      const outlined = (ctx, str, x, y, size, fill, weight = 800) => {
+        ctx.font = `${weight} ${size}px ${FONT}`;
+        ctx.lineJoin = "round";
+        ctx.lineWidth = Math.max(4, size * 0.14);
+        ctx.strokeStyle = "rgba(10,6,8,0.85)";
+        ctx.strokeText(str, x, y);
+        ctx.fillStyle = fill;
+        ctx.fillText(str, x, y);
+      };
+      const fitTitle = (ctx, str, size, max, weight = 800) => {
+        let s = size;
+        for (; s > 20; s -= 2) { ctx.font = `${weight} ${s}px ${FONT}`; if (ctx.measureText(str).width <= max) break; }
+        return s;
+      };
+      const wrap = (ctx, str, max) => {
+        const lines = [];
+        let line = "";
+        for (const word of str.split(" ")) {
+          const next = line ? `${line} ${word}` : word;
+          if (ctx.measureText(next).width > max && line) { lines.push(line); line = word; } else line = next;
+        }
+        if (line) lines.push(line);
+        return lines;
+      };
+      const brand = (ctx, y, sub = "Chơi miễn phí ngay trên trình duyệt") => {
+        ctx.fillStyle = "#ff7a1a";
+        ctx.beginPath();
+        ctx.roundRect(64, y, 168, 46, 23);
+        ctx.fill();
+        ctx.font = `800 26px ${FONT}`;
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#1a0f08";
+        ctx.fillText("ENGAMES", 84, y + 24);
+        ctx.font = `700 24px ${FONT}`;
+        ctx.fillStyle = "#f3e9dc";
+        ctx.fillText(sub, 250, y + 24);
+        ctx.textBaseline = "alphabetic";
+      };
+      for (const [path, m] of Object.entries(manifests)) {
+        const slug = path.split("/").at(-2);
+        const canvas = document.createElement("canvas");
+        canvas.width = 1200;
+        canvas.height = 630;
+        const ctx = canvas.getContext("2d");
+        const banner = await load(m.banner);
+        // Banners are 2:1 with a calm left: cover the card, keep the subject on the right
+        const k = 630 / banner.naturalHeight;
+        ctx.drawImage(banner, 1200 - banner.naturalWidth * k, 0, banner.naturalWidth * k, 630);
+        const shade = ctx.createLinearGradient(0, 0, 760, 0);
+        shade.addColorStop(0, "rgba(14,8,10,0.92)");
+        shade.addColorStop(0.7, "rgba(14,8,10,0.55)");
+        shade.addColorStop(1, "rgba(14,8,10,0)");
+        ctx.fillStyle = shade;
+        ctx.fillRect(0, 0, 1200, 630);
+        const title = m.title.vi;
+        outlined(ctx, title, 64, 250, fitTitle(ctx, title, 92, 660), "#ffffff");
+        ctx.font = `700 32px ${FONT}`;
+        wrap(ctx, m.tagline.vi, 600)
+          .slice(0, 3)
+          .forEach((line, i) => {
+            outlined(ctx, line, 64, 320 + i * 44, 32, "#ffe7c4", 700);
+          });
+        brand(ctx, 520);
+        out[slug] = { ...out[slug], share: canvas.toDataURL("image/jpeg", 0.86) };
+      }
+
+      // The portal's own card: the name and a fan of game posters
+      {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1200;
+        canvas.height = 630;
+        const ctx = canvas.getContext("2d");
+        const bg = ctx.createLinearGradient(0, 0, 1200, 630);
+        bg.addColorStop(0, "#1a0f0c");
+        bg.addColorStop(1, "#3a1a10");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, 1200, 630);
+        const glow = ctx.createRadialGradient(900, 300, 40, 900, 300, 520);
+        glow.addColorStop(0, "rgba(255,122,26,0.35)");
+        glow.addColorStop(1, "rgba(255,122,26,0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, 1200, 630);
+        const posters = Object.values(manifests)
+          .sort((a, b) => b.releasedAt.localeCompare(a.releasedAt))
+          .slice(0, 5);
+        const imgs = await Promise.all(posters.map((m) => load(m.poster.vi)));
+        imgs.forEach((img, i) => {
+          const n = imgs.length;
+          const a = (i - (n - 1) / 2) * 0.16;
+          ctx.save();
+          ctx.translate(860 + (i - (n - 1) / 2) * 92, 330 + Math.abs(i - (n - 1) / 2) * 18);
+          ctx.rotate(a);
+          ctx.shadowColor = "rgba(0,0,0,0.5)";
+          ctx.shadowBlur = 24;
+          ctx.drawImage(img, -105, -140, 210, 280);
+          ctx.restore();
+        });
+        outlined(ctx, "Engames", 64, 230, 104, "#ff8a2a");
+        ctx.font = `800 44px ${FONT}`;
+        outlined(ctx, "Chơi game ngay", 64, 312, 44, "#ffffff");
+        outlined(ctx, "trên trình duyệt", 64, 366, 44, "#ffffff");
+        outlined(ctx, "Miễn phí, không cần cài đặt", 64, 430, 30, "#ffe7c4", 700);
+        brand(ctx, 520, "engames.trinhvaphuong.com");
+        out.__site = { "og-image": canvas.toDataURL("image/jpeg", 0.86) };
+      }
       window.__art = out;
     </script>
   </body>
