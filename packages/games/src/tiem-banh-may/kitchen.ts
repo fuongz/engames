@@ -185,7 +185,7 @@ export function drawBake(app: App, b: BakeState) {
   const { ctx } = app;
   const v = viewRect(app);
   cover(ctx, app.sprites.get("bg-kitchen"), v, 0.45);
-  ctx.fillStyle = "rgba(255, 244, 240, 0.35)";
+  ctx.fillStyle = "rgba(255, 246, 230, 0.3)";
   ctx.fillRect(v.x, v.y, v.w, v.h);
   const cardBottom = drawRecipeCard(app, b);
   if (b.outcome) return drawOutcome(app, b);
@@ -228,7 +228,7 @@ function drawRecipeCard(app: App, b: BakeState) {
   const lineH = 25;
   const card = { x: 14, y: top, w: W - 28, h: 58 + perCol * lineH };
   panel(ctx, card, {
-    fill: "#fffdf8",
+    fill: "#fff6e3",
     stroke: C.cardBorder,
     radius: 20,
     line: 4,
@@ -250,7 +250,7 @@ function drawRecipeCard(app: App, b: BakeState) {
       panel(
         ctx,
         { x: x - 2, y: y - 11, w: colW - 6, h: 23 },
-        { fill: "#ffe0e6", radius: 11, line: 0 },
+        { fill: "#fbe1bf", radius: 11, line: 0 },
       );
     }
     const past = i < b.step || (b.outcome && i <= b.step);
@@ -408,7 +408,7 @@ function drawMeasure(
     });
     const hold = { x: 24, y: H - 170, w: 250, h: 92 };
     button(ctx, hold, "", {
-      fill: p.holding ? "#ffd6de" : C.cream,
+      fill: p.holding ? "#fbd9b4" : C.cream,
       pressed: p.holding,
     });
     sprite(
@@ -781,7 +781,12 @@ function drawOven(
   const running = p.kind === "ovenRun";
   sprite(ctx, app.sprites.get("tool-oven"), cx, oy, ov.w, ov.h, "bottom");
   // The window: dark, glowing while it bakes, with the cake rising and browning inside
-  const win = { x: cx - 105, y: oy - 186, w: 210, h: 100 };
+  const win = { x: cx - 91, y: oy - 194, w: 205, h: 118 };
+  if (!running) {
+    // An oven that is off has a dark window
+    ctx.fillStyle = "#4a2c20";
+    ctx.fillRect(win.x, win.y, win.w, win.h);
+  }
   if (running) {
     const k = p.minutes / step.minutes;
     ctx.save();
@@ -908,7 +913,7 @@ function drawPipe(
   });
   const hold = { x: 24, y: H - 170, w: 250, h: 92 };
   button(ctx, hold, tr.stepPipe.frost, {
-    fill: p.holding ? "#ffd6de" : C.cream,
+    fill: p.holding ? "#fbd9b4" : C.cream,
     pressed: p.holding,
     size: 22,
   });
@@ -995,8 +1000,8 @@ function drawOutcome(app: App, b: BakeState) {
   if (!out) return;
   const m = { x: 30, y: 300, w: W - 60, h: 520 };
   panel(ctx, m, {
-    fill: C.lavender,
-    stroke: C.lavenderDeep,
+    fill: C.board,
+    stroke: C.boardDeep,
     radius: 30,
     line: 5,
     lip: 6,
@@ -1012,8 +1017,8 @@ function drawOutcome(app: App, b: BakeState) {
   });
   const inner = { x: m.x + 20, y: m.y + 80, w: m.w - 40, h: 250 };
   panel(ctx, inner, {
-    fill: failed ? C.cardInner : C.blue,
-    stroke: failed ? C.cardBorder : C.blueBorder,
+    fill: failed ? C.cardInner : C.owned,
+    stroke: failed ? C.cardBorder : C.ownedBorder,
     radius: 22,
     line: 4,
   });
@@ -1036,7 +1041,7 @@ function drawOutcome(app: App, b: BakeState) {
       `• ${tr.note(n.note, ing)}`,
       W / 2,
       inner.y + inner.h + 26 + i * 26,
-      { size: 18, weight: 700, fill: GRADE_COLOR[n.grade] },
+      { size: 18, weight: 700, fill: GRADE_COLOR[n.grade], outline: C.white },
     );
   });
   const br = { x: m.x + 40, y: m.y + m.h - 92, w: m.w - 80, h: 74 };

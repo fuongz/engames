@@ -1,43 +1,43 @@
 import type { Rect } from "../core";
 import type { Weather } from "./config";
 
-// The interface is drawn in code in the style of the reference shop screen:
-// pink page, lavender panels, white cards with pink borders, cream buttons with
-// a chunky brown outline and a lip underneath, sunburst tiles for owned items.
-// The world (cakes, customers, rooms) is bitmap art from img/.
+// The interface is drawn in code, cosy bakery style: cream paper pages on a
+// terracotta clipboard, cards with caramel borders, cream buttons with a chunky
+// brown outline and a lip underneath, sunburst tiles for owned items, a round
+// orange close button. The world (cakes, customers, rooms) is bitmap art in img/.
 
 type Ctx = CanvasRenderingContext2D;
 
 export const FONT = '"Baloo 2", "Trebuchet MS", system-ui, sans-serif';
 
 export const C = {
-  ink: "#5b3233",
-  text: "#4a2829",
-  muted: "#8a6a64",
-  page: "#fad6df",
-  pageDeep: "#f3bccb",
-  lavender: "#bfc2f6",
-  lavenderDeep: "#8c87cd",
-  lavenderDim: "#9da1dc",
-  card: "#fffaf6",
-  cardBorder: "#f1a2ae",
-  cardInner: "#fde3df",
-  cream: "#fdecd5",
-  creamDeep: "#e8c9a6",
-  blue: "#d3f0ff",
-  blueRay: "#e9f8ff",
-  blueBorder: "#7fc9ec",
-  green: "#ddf6b6",
-  greenRay: "#eefbd8",
-  greenBorder: "#8fd46d",
-  red: "#ff6b6b",
+  ink: "#5a3424",
+  text: "#4b2a1c",
+  muted: "#8f6c58",
+  page: "#f6e7cd",
+  pageDeep: "#ecd3ad",
+  board: "#d98a5f",
+  boardDeep: "#9a5235",
+  boardDim: "#c99a7a",
+  card: "#fffaf0",
+  cardBorder: "#e4c493",
+  cardInner: "#f9ecd6",
+  cream: "#fdf1dc",
+  creamDeep: "#e3c79f",
+  owned: "#e4f0cf",
+  ownedRay: "#f1f8e4",
+  ownedBorder: "#9cc27f",
+  green: "#d6ecb0",
+  greenRay: "#ecf6d6",
+  greenBorder: "#93c06e",
+  red: "#ef6a4c",
   coin: "#ffcb3d",
   coinRim: "#f29b20",
-  good: "#58b65a",
-  warn: "#f08a2e",
-  bad: "#e04848",
+  good: "#5fa34f",
+  warn: "#e0872f",
+  bad: "#d9503c",
   white: "#ffffff",
-  shade: "rgba(74, 40, 41, 0.45)",
+  shade: "rgba(74, 40, 25, 0.45)",
 } as const;
 
 // ---------------------------------------------------------------- shapes
@@ -222,12 +222,12 @@ export function backButton(
 
 // ---------------------------------------------------------------- cards
 
-export type CardTone = "pink" | "blue" | "green";
+export type CardTone = "pink" | "owned" | "green";
 
 const TONES: Record<CardTone, { border: string; inner: string; ray?: string }> =
   {
     pink: { border: C.cardBorder, inner: C.cardInner },
-    blue: { border: C.blueBorder, inner: C.blue, ray: C.blueRay },
+    owned: { border: C.ownedBorder, inner: C.owned, ray: C.ownedRay },
     green: { border: C.greenBorder, inner: C.green, ray: C.greenRay },
   };
 
@@ -588,50 +588,162 @@ export function cover(
   ctx.drawImage(img, r.x + (r.w - dw) / 2, r.y + (r.h - dh) * focusY, dw, dh);
 }
 
-/** Lavender board with a tab row on top, as in the reference shop. */
-export function tabBoard(
-  ctx: Ctx,
-  r: Rect,
-  tabs: string[],
-  active: number,
-  tabH = 70,
-) {
-  const tw = (r.w - 40) / tabs.length;
-  tabs.forEach((label, i) => {
-    if (i === active) return;
-    const tr = { x: r.x + 20 + i * tw + 6, y: r.y + 8, w: tw - 12, h: tabH };
-    panel(ctx, tr, {
-      fill: C.lavenderDim,
-      stroke: C.lavenderDeep,
-      radius: 20,
-      line: 4,
-    });
-    text(ctx, label, tr.x + tr.w / 2, tr.y + tabH / 2 - 2, {
-      size: 28,
-      fill: "#eceaff",
-      outline: C.ink,
-      maxWidth: tr.w - 20,
-    });
+/**
+ * Terracotta clipboard holding a cream paper page, with a metal clip on top and
+ * the title in white over it. Returns the paper's rect (draw the page on it).
+ */
+export function clipboard(ctx: Ctx, r: Rect, title: string): Rect {
+  panel(ctx, r, {
+    fill: C.board,
+    stroke: C.boardDeep,
+    radius: 30,
+    line: 5,
+    lip: 7,
   });
+  const paper = { x: r.x + 16, y: r.y + 40, w: r.w - 32, h: r.h - 56 };
+  // A second sheet peeking out underneath, slightly askew
+  ctx.save();
+  ctx.translate(paper.x + paper.w / 2, paper.y + paper.h / 2);
+  ctx.rotate(-0.012);
+  rr(ctx, -paper.w / 2 + 3, -paper.h / 2 + 6, paper.w, paper.h, 16);
+  ctx.fillStyle = "#efdcbc";
+  ctx.fill();
+  ctx.restore();
+  panel(ctx, paper, {
+    fill: "#fff6e3",
+    stroke: C.cardBorder,
+    radius: 16,
+    line: 3,
+  });
+  // Folded corner, bottom left
+  ctx.beginPath();
+  ctx.moveTo(paper.x + 2, paper.y + paper.h - 34);
+  ctx.lineTo(paper.x + 34, paper.y + paper.h - 2);
+  ctx.lineTo(paper.x + 8, paper.y + paper.h - 8);
+  ctx.closePath();
+  ctx.fillStyle = "#ead5b0";
+  ctx.fill();
+  // The clip
+  const cw = Math.min(130, r.w * 0.3);
+  const clip = { x: r.x + r.w / 2 - cw / 2, y: r.y - 6, w: cw, h: 46 };
   panel(
     ctx,
-    { x: r.x, y: r.y + tabH - 6, w: r.w, h: r.h - tabH + 6 },
-    { fill: C.lavender, stroke: C.lavenderDeep, radius: 26, line: 4 },
+    { x: clip.x + cw * 0.3, y: clip.y - 14, w: cw * 0.4, h: 28 },
+    { fill: "#d9d2c6", stroke: C.ink, radius: 10, line: 3.5 },
   );
-  const ar = { x: r.x + 20 + active * tw, y: r.y, w: tw, h: tabH + 4 };
-  panel(ctx, ar, {
-    fill: C.lavender,
-    stroke: C.lavenderDeep,
-    radius: 22,
-    line: 4,
+  panel(ctx, clip, {
+    fill: "#e9e3d8",
+    stroke: C.ink,
+    radius: 12,
+    line: 3.5,
+    lip: 4,
   });
-  ctx.fillStyle = C.lavender;
-  ctx.fillRect(ar.x + 4, ar.y + ar.h - 8, ar.w - 8, 14);
-  text(ctx, tabs[active], ar.x + ar.w / 2, ar.y + tabH / 2, {
-    size: 30,
+  ctx.beginPath();
+  ctx.arc(r.x + r.w / 2, clip.y - 3, 6, 0, Math.PI * 2);
+  ctx.fillStyle = C.boardDeep;
+  ctx.fill();
+  text(ctx, title, r.x + r.w / 2, clip.y - 40, {
+    size: 34,
     fill: C.white,
     outline: C.ink,
-    maxWidth: ar.w - 20,
+    maxWidth: r.w - 60,
   });
-  return tabs.map((_, i) => ({ x: r.x + 20 + i * tw, y: r.y, w: tw, h: tabH }));
+  return paper;
+}
+
+/** Page heading on the paper ("Main" in the reference): brown text over a soft band and a rule. */
+export function paperHeading(
+  ctx: Ctx,
+  paper: Rect,
+  label: string,
+  right?: string,
+) {
+  const y = paper.y + 34;
+  ctx.fillStyle = "rgba(233, 205, 160, 0.45)";
+  rr(ctx, paper.x + paper.w / 2 - 90, y - 18, 180, 36, 18);
+  ctx.fill();
+  text(ctx, label, paper.x + paper.w / 2, y, {
+    size: 24,
+    fill: C.muted,
+    maxWidth: paper.w - 140,
+  });
+  if (right)
+    text(ctx, right, paper.x + paper.w - 22, y + 4, {
+      size: 18,
+      fill: "#c9a98a",
+      align: "right",
+    });
+  ctx.strokeStyle = "#e6cfa9";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(paper.x + 24, y + 28);
+  ctx.lineTo(paper.x + paper.w - 24, y + 28);
+  ctx.stroke();
+  return y + 40;
+}
+
+/** Round orange close button with a cream cross. */
+export function closeButton(
+  ctx: Ctx,
+  cx: number,
+  cy: number,
+  r: number,
+  pressed: boolean,
+) {
+  const sink = pressed ? 3 : 0;
+  ctx.beginPath();
+  ctx.arc(cx, cy + 4, r, 0, Math.PI * 2);
+  ctx.fillStyle = "#b5442c";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy + sink, r, 0, Math.PI * 2);
+  ctx.fillStyle = C.red;
+  ctx.fill();
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = C.white;
+  ctx.stroke();
+  ctx.lineCap = "round";
+  ctx.lineWidth = r * 0.28;
+  ctx.strokeStyle = C.cream;
+  const k = r * 0.38;
+  ctx.beginPath();
+  ctx.moveTo(cx - k, cy + sink - k);
+  ctx.lineTo(cx + k, cy + sink + k);
+  ctx.moveTo(cx + k, cy + sink - k);
+  ctx.lineTo(cx - k, cy + sink + k);
+  ctx.stroke();
+  ctx.lineCap = "butt";
+}
+
+/** Cream triangle page arrow pointing left (-1) or right (1), white-rimmed like the reference. */
+export function pageArrow(
+  ctx: Ctx,
+  cx: number,
+  cy: number,
+  dir: -1 | 1,
+  pressed: boolean,
+  disabled = false,
+) {
+  ctx.save();
+  if (disabled) ctx.globalAlpha = 0.35;
+  ctx.translate(cx + (pressed ? dir * 3 : 0), cy);
+  ctx.scale(dir, 1);
+  ctx.beginPath();
+  ctx.moveTo(-14, -30);
+  ctx.quadraticCurveTo(-20, -36, -12, -34);
+  ctx.lineTo(18, -6);
+  ctx.quadraticCurveTo(24, 0, 18, 6);
+  ctx.lineTo(-12, 34);
+  ctx.quadraticCurveTo(-20, 36, -14, 30);
+  ctx.closePath();
+  ctx.fillStyle = "#f6e1a8";
+  ctx.fill();
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = C.white;
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  ctx.restore();
 }
