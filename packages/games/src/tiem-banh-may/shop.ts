@@ -518,7 +518,7 @@ function drawCounter(app: App, s: ShopState) {
     { x: v.x - 10, y: COUNTER_Y, w: v.w + 20, h: 34 },
     { fill: "#f4d3a1", stroke: C.ink, radius: 10, line: 4 },
   );
-  ctx.fillStyle = "#f6b9c6";
+  ctx.fillStyle = "#e7b08a";
   ctx.fillRect(v.x, COUNTER_Y + 34, v.w, H - COUNTER_Y - 34 + 200);
   ctx.strokeStyle = C.ink;
   ctx.lineWidth = 4;

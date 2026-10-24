@@ -1,5 +1,5 @@
-import { type App, H, W, back, btn, hud } from "./app";
-import { C, card, coin, panel, sprite, tabBoard, text } from "./art";
+import { type App, H, W, btn, close, hud } from "./app";
+import { C, card, clipboard, coin, panel, sprite, text } from "./art";
 import { INGREDIENTS, MARKET_TRIP } from "./config";
 import {
   buyIngredients,
@@ -23,15 +23,16 @@ export function drawMarket(app: App, cart: Cart) {
   ctx.fillRect(v.x, v.y, v.w, v.h);
   const y0 = hud(app, formatClock(clockAt(save.prepUsed)));
 
-  const board = { x: 14, y: y0 - 4, w: W - 28, h: H - 120 - y0 };
-  tabBoard(ctx, board, [tr.market], 0, 62);
+  const board = { x: 14, y: y0 + 46, w: W - 28, h: H - 150 - y0 - 46 };
+  const paper = clipboard(ctx, board, tr.market);
+  close(app, board, () => app.go({ kind: "hub" }));
   const cols = 3;
   const rows = 4;
   const gap = 8;
-  const gx = board.x + 12;
-  const gy = board.y + 68;
-  const cw = (board.w - 24 - gap * (cols - 1)) / cols;
-  const ch = (board.h - 80 - gap * (rows - 1)) / rows;
+  const gx = paper.x + 10;
+  const gy = paper.y + 12;
+  const cw = (paper.w - 20 - gap * (cols - 1)) / cols;
+  const ch = (paper.h - 24 - gap * (rows - 1)) / rows;
   INGREDIENTS.forEach((ing, i) => {
     const r = {
       x: gx + (i % cols) * (cw + gap),
@@ -134,12 +135,18 @@ export function drawMarket(app: App, cart: Cart) {
     }
   });
 
-  back(app, () => app.go({ kind: "hub" }));
   const cost = cartCost(cart);
-  const r = { x: 128, y: H - 100, w: W - 142, h: 72 };
-  text(ctx, `${tr.total}: ${tr.coins(cost)}`, r.x + r.w / 2, r.y - 16, {
-    size: 20,
+  const r = { x: 200, y: H - 96, w: W - 214, h: 76 };
+  panel(
+    ctx,
+    { x: 14, y: r.y + 4, w: 174, h: 64 },
+    { fill: C.cream, radius: 20, line: 3.5 },
+  );
+  text(ctx, tr.total, 101, r.y + 22, { size: 15, fill: C.muted });
+  text(ctx, tr.coins(cost), 101, r.y + 46, {
+    size: 22,
     fill: cost > save.coins ? C.bad : C.text,
+    maxWidth: 160,
   });
   btn(
     app,

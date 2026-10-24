@@ -149,7 +149,7 @@ export function drawHub(app: App) {
   const dy = H - 330;
   const dp = { x: 18, y: dy, w: W - 36, h: 112 };
   panel(ctx, dp, {
-    fill: "rgba(255,250,246,0.94)",
+    fill: "rgba(255, 248, 235, 0.95)",
     stroke: C.cardBorder,
     radius: 22,
     line: 4,

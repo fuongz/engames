@@ -1,5 +1,5 @@
 import { type App, H, W, btn, viewRect } from "./app";
-import { C, cover, heart, panel, sprite, text } from "./art";
+import { C, clipboard, cover, heart, panel, sprite, text } from "./art";
 import type { RecipeId } from "./config";
 import { type DayReport, customer, formatClock, recipe } from "./logic";
 
@@ -12,31 +12,15 @@ export function drawReport(app: App, r: DayReport) {
   const locale = app.rt.locale();
   const v = viewRect(app);
   cover(ctx, app.sprites.get("bg-shop"), v, 0.3);
-  ctx.fillStyle = "rgba(250, 214, 223, 0.82)";
+  ctx.fillStyle = "rgba(246, 231, 205, 0.86)";
   ctx.fillRect(v.x, v.y, v.w, v.h);
 
-  const m = {
-    x: 16,
-    y: Math.max(v.y + 16, 20),
-    w: W - 32,
-    h: H - 140 - Math.max(v.y + 16, 20),
-  };
-  panel(ctx, m, {
-    fill: C.lavender,
-    stroke: C.lavenderDeep,
-    radius: 30,
-    line: 5,
-    lip: 6,
-  });
-  text(ctx, tr.reportTitle(r.day), W / 2, m.y + 40, {
-    size: 32,
-    fill: C.white,
-    outline: C.ink,
-    maxWidth: m.w - 40,
-  });
+  const y0 = Math.max(v.y + 16, 20) + 50;
+  const m = { x: 16, y: y0, w: W - 32, h: H - 132 - y0 };
+  clipboard(ctx, m, tr.reportTitle(r.day));
 
   // ---- money
-  const money = { x: m.x + 16, y: m.y + 76, w: m.w - 32, h: 0 };
+  const money = { x: m.x + 28, y: m.y + 56, w: m.w - 56, h: 0 };
   const rows: [string, number][] = [
     [tr.revenue, r.revenue],
     [tr.tips, r.tips],
@@ -119,10 +103,10 @@ export function drawReport(app: App, r: DayReport) {
   }
 
   const info = {
-    x: m.x + 16,
+    x: m.x + 28,
     y: money.y + money.h + 12,
-    w: m.w - 32,
-    h: m.y + m.h - money.y - money.h - 28,
+    w: m.w - 56,
+    h: m.y + m.h - money.y - money.h - 40,
   };
   panel(ctx, info, { fill: C.card, stroke: C.cardBorder, radius: 22, line: 4 });
   // Reputation

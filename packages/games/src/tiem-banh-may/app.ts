@@ -5,10 +5,11 @@ import {
   backButton,
   button,
   chip,
+  clipboard,
+  closeButton,
   coin,
   coinCounter,
   heart,
-  panel,
   text,
 } from "./art";
 import type { RecipeId, UpgradeId } from "./config";
@@ -160,21 +161,24 @@ export function shade(app: App, close?: () => void) {
   app.ui.block(v, close);
 }
 
-/** A lavender modal sheet with a white title. */
+/** A clipboard modal: blocks taps behind it; returns the paper to draw on. */
 export function sheet(app: App, r: Rect, title: string) {
-  panel(app.ctx, r, {
-    fill: C.lavender,
-    stroke: C.lavenderDeep,
-    radius: 30,
-    line: 5,
-    lip: 6,
-  });
   app.ui.block(r);
-  text(app.ctx, title, r.x + r.w / 2, r.y + 38, {
-    size: 32,
-    fill: C.white,
-    outline: C.ink,
-    maxWidth: r.w - 40,
+  return clipboard(app.ctx, r, title);
+}
+
+/** The round orange close button at a board's top-right corner, registered for taps. */
+export function close(app: App, board: Rect, onTap: () => void) {
+  const cx = board.x + board.w - 10;
+  const cy = board.y + 8;
+  closeButton(app.ctx, cx, cy, 26, app.ui.isPressed("close"));
+  app.ui.add({
+    rect: { x: cx - 34, y: cy - 34, w: 68, h: 68 },
+    key: "close",
+    tap: () => {
+      app.sfx.tap();
+      onTap();
+    },
   });
 }
 

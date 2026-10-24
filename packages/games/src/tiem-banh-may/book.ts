@@ -2,8 +2,8 @@ import {
   type App,
   H,
   W,
-  back,
   btn,
+  close,
   hud,
   priceLabel,
   shade,
@@ -17,7 +17,9 @@ import {
   panel,
   sprite,
   stars,
-  tabBoard,
+  clipboard,
+  pageArrow,
+  paperHeading,
   text,
   wrap,
 } from "./art";
@@ -46,8 +48,9 @@ import {
 import type { IngredientId } from "./config";
 import { startBake } from "./kitchen";
 
-// The recipe book (the reference's item shop: pink = for sale, blue = owned)
-// with its upgrades tab, a recipe's card, and the "what shall I bake" sheet.
+// The recipe book: a clipboard menu with pages (recipes, then upgrades) turned
+// with the side arrows; cream cards are for sale, mint sunburst ones are owned.
+// Also a recipe's card, and the "what shall I bake" sheet.
 
 export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
   const { ctx, save } = app;
@@ -57,29 +60,43 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
   ctx.fillStyle = C.page;
   ctx.fillRect(v.x, v.y, v.w, v.h);
   const y0 = hud(app, formatClock(clockAt(save.prepUsed)));
-  const board = { x: 14, y: y0 - 4, w: W - 28, h: H - 120 - y0 };
-  const tabs = tabBoard(ctx, board, [tr.recipesTab, tr.upgradesTab], tab);
-  tabs.forEach((r, i) => {
+  const board = { x: 14, y: y0 + 46, w: W - 28, h: H - 28 - y0 - 46 };
+  const paper = clipboard(ctx, board, tr.book);
+  const top = paperHeading(
+    ctx,
+    paper,
+    tab === 0 ? tr.recipesTab : tr.upgradesTab,
+    `${tab + 1}/2`,
+  );
+  close(app, board, () => app.go({ kind: "hub" }));
+  // Page arrows on the board's edges
+  ([-1, 1] as const).forEach((dir) => {
+    const to = tab + dir;
+    const cx = dir < 0 ? board.x + 4 : board.x + board.w - 4;
+    const cy = paper.y + paper.h / 2;
+    const key = `page${dir}`;
+    pageArrow(ctx, cx, cy, dir, app.ui.isPressed(key), to < 0 || to > 1);
+    if (to < 0 || to > 1) return;
     app.ui.add({
-      rect: r,
+      rect: { x: cx - 30, y: cy - 44, w: 60, h: 88 },
+      key,
       tap: () => {
         app.sfx.tap();
-        app.go({ kind: "book", tab: i as 0 | 1, detail: null });
+        app.go({ kind: "book", tab: to as 0 | 1, detail: null });
       },
     });
   });
-
   const inner = {
-    x: board.x + 14,
-    y: board.y + 84,
-    w: board.w - 28,
-    h: board.h - 98,
+    x: paper.x + 24,
+    y: top,
+    w: paper.w - 48,
+    h: paper.y + paper.h - 40 - top,
   };
   if (tab === 0) {
-    const cols = 3;
-    const gap = 10;
+    const cols = 2;
+    const gap = 12;
     const cw = (inner.w - gap * (cols - 1)) / cols;
-    const ch = Math.min(250, (inner.h - gap) / 2);
+    const ch = (inner.h - gap * 2) / 3;
     RECIPES.forEach((r, i) => {
       const rect = {
         x: inner.x + (i % cols) * (cw + gap),
@@ -90,7 +107,7 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
       const owned = save.recipes.includes(r.id);
       const key = `rc-${r.id}`;
       const pressed = app.ui.isPressed(key);
-      const tile = card(ctx, rect, owned ? "blue" : "pink", pressed, ch - 82);
+      const tile = card(ctx, rect, owned ? "owned" : "pink", pressed, ch - 76);
       sprite(
         ctx,
         app.sprites.get(r.sprite),
@@ -99,15 +116,15 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
         tile.w - 20,
         tile.h - 16,
       );
-      text(ctx, r.name[locale], rect.x + rect.w / 2, tile.y + tile.h + 16, {
+      text(ctx, r.name[locale], rect.x + rect.w / 2, tile.y + tile.h + 13, {
         size: 16,
         maxWidth: rect.w - 10,
       });
       const pill = {
-        x: rect.x + 10,
-        y: rect.y + rect.h - 44,
-        w: rect.w - 20,
-        h: 38,
+        x: rect.x + 30,
+        y: rect.y + rect.h - 40,
+        w: rect.w - 60,
+        h: 34,
       };
       panel(ctx, pill, { fill: C.cream, radius: 19, line: 3.5 });
       if (owned) {
@@ -152,7 +169,7 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
         h: ch,
       };
       const owned = has(save, u.id);
-      const tile = card(ctx, rect, owned ? "green" : "pink", false, ch - 150);
+      const tile = card(ctx, rect, owned ? "owned" : "pink", false, ch - 142);
       sprite(
         ctx,
         app.sprites.get(u.sprite),
@@ -215,7 +232,6 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
       }
     });
   }
-  back(app, () => app.go({ kind: "hub" }));
   if (detail) drawRecipeCard(app, detail, tab);
 }
 
@@ -331,7 +347,7 @@ export function drawPicker(app: App) {
   const h = 96 + owned.length * (rowH + 8) + 90;
   const m = {
     x: 16,
-    y: Math.max(app.rt.stage.view.y + 20, (H - h) / 2),
+    y: Math.max(app.rt.stage.view.y + 70, (H - h) / 2),
     w: W - 32,
     h,
   };
