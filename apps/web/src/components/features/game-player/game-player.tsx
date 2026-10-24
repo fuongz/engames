@@ -33,7 +33,7 @@ import { useSession } from "#/hooks/use-session";
 import { signInWithGoogle } from "#/lib/auth-client";
 import { EASE_OUT, FADE, RISE_BLUR, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
-import { loadGameSave, storeGameSave } from "#/server/saves";
+import { deleteGameSave, listGameSaves, loadGameSave, storeGameSave } from "#/server/saves";
 import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
 import { OnlineEntry } from "#/components/features/online/online-entry";
@@ -153,14 +153,23 @@ export function GamePlayer({
         ? {
             player: userName ?? "",
             playerId: userId,
-            load: async () => {
-              const slot = await loadGameSave({ data: { slug: game.slug } });
-              return slot && { data: JSON.parse(slot.json), version: slot.version };
+            list: async () =>
+              (await listGameSaves({ data: { slug: game.slug } })).map((s) => ({
+                slot: s.slot,
+                data: JSON.parse(s.json),
+                version: s.version,
+              })),
+            load: async (slot) => {
+              const saved = await loadGameSave({ data: { slug: game.slug, slot } });
+              return saved && { data: JSON.parse(saved.json), version: saved.version };
             },
             // The server scores the save itself; only the label travels with it
-            save: async (data, version, score) => {
-              const r = await storeGameSave({ data: { slug: game.slug, json: JSON.stringify(data), version, detail: score?.detail } });
+            save: async (slot, data, version, score) => {
+              const r = await storeGameSave({ data: { slug: game.slug, slot, json: JSON.stringify(data), version, detail: score?.detail } });
               return r.ok ? r : { ok: false, conflict: { data: JSON.parse(r.conflict.json), version: r.conflict.version } };
+            },
+            remove: async (slot) => {
+              await deleteGameSave({ data: { slug: game.slug, slot } });
             },
           }
         : undefined;

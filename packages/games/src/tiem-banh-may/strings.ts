@@ -2,6 +2,8 @@ import type { Localized } from "../core/i18n";
 import type { MixMode, PipeMode, StoveMode, WaitMode, Weather } from "./config";
 import type { Grade, Note } from "./logic";
 
+type Unit = "g" | "ml" | "egg" | "cup";
+
 // Every player-visible line. game.ts resolves these at draw time, so switching
 // language in the portal shows on the next frame. Names of cakes, ingredients
 // and customers live with their catalogs in config.ts.
@@ -12,7 +14,29 @@ export interface Strings {
   day: (n: number) => string;
   weekdays: string[];
   weather: Record<Weather, string>;
-  workLeft: (minutes: number) => string;
+  beforeBed: (minutes: number) => string;
+  lateNight: (minutes: number) => string;
+  beforeOpen: (minutes: number) => string;
+  bedtimeTitle: string;
+  bedtimeAsk: string;
+  sleep: string;
+  stayUp: string;
+  mustSleep: string;
+  slept: (minutes: number) => string;
+  tired: string;
+  napLabel: string;
+  coffeeLabel: string;
+  noCoffee: string;
+  hintTired: string;
+  leave: string;
+  openNow: string;
+  ovenBusy: string;
+  ready: (cake: string) => string;
+  minutesLeft: (m: number) => string;
+  openAt: string;
+  ovenWarn: string;
+  autoOpened: string;
+  startWait: string;
   minutes: (n: number) => string;
   loading: string;
   needSignIn: string;
@@ -39,8 +63,8 @@ export interface Strings {
   display: (n: number, cap: number) => string;
   emptyDisplay: string;
 
-  pack: (amount: number, unit: "g" | "ml" | "egg") => string;
-  amount: (amount: number, unit: "g" | "ml" | "egg", spoon: boolean) => string;
+  pack: (amount: number, unit: Unit) => string;
+  amount: (amount: number, unit: Unit, spoon: boolean) => string;
   inPantry: (q: string) => string;
   fresh: (days: number) => string;
   checkout: (minutes: number) => string;
@@ -54,6 +78,7 @@ export interface Strings {
   mastery: (n: number, of: number) => string;
   mastered: string;
   yieldLine: (n: number, price: number) => string;
+  makes: (n: number) => string;
   timeLine: (m: number) => string;
   upgradeInfo: Record<"mixer" | "oven2" | "display" | "fridge", string>;
   close: string;
@@ -149,6 +174,41 @@ export interface Strings {
   /** Card summary and leaderboard detail. */
   summary: (day: number, coins: number) => string;
   detail: (day: number) => string;
+  // Save slots and settings
+  slotsTitle: string;
+  slotName: (n: number) => string;
+  slotEmpty: string;
+  slotNew: string;
+  slotInfo: (day: number, coins: number) => string;
+  slotRep: (rep: number) => string;
+  settings: string;
+  sound: string;
+  music: string;
+  on: string;
+  off: string;
+  switchShop: string;
+  restart: string;
+  restartAsk: (n: number) => string;
+  restartSure: string;
+  restartYes: string;
+  goOn: string;
+  cancel: string;
+  restarted: string;
+  pauseTitle: string;
+  aisles: Record<"dry" | "cold" | "flavour", string>;
+  basket: (n: number) => string;
+  inStock: (q: string) => string;
+  packOf: (q: string) => string;
+  displayTitle: string;
+  stat: Record<"rep" | "energy" | "mood", { title: string; body: string }>;
+  gotIt: string;
+  ingredientsTitle: string;
+  stepsTitle: string;
+  learned: string;
+  tapContinue: string;
+  displayKeep: string;
+  displaySpaces: (n: number, cap: number) => string;
+  pausedNote: string;
 }
 
 const viNum = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -177,7 +237,30 @@ export const STRINGS: Localized<Strings> = {
       "Chủ Nhật",
     ],
     weather: { sunny: "Nắng đẹp", cloudy: "Nhiều mây", rainy: "Mưa" },
-    workLeft: (m) => `Còn ${hm(m, "h")} làm việc`,
+    beforeBed: (m) => `Còn ${hm(m, "h")} tới giờ ngủ`,
+    lateNight: (m) => `Thức khuya, còn ${hm(m, "h")} tới 1:00`,
+    beforeOpen: (m) => `Còn ${hm(m, "h")} tới giờ mở cửa`,
+    bedtimeTitle: "22:00 rồi!",
+    bedtimeAsk:
+      "Đi ngủ để mai đủ sức, hay thức khuya làm thêm? Ngủ ít thì sáng mai mệt và kém vui.",
+    sleep: "Đi ngủ",
+    stayUp: "Thức khuya",
+    mustSleep: "1:00 rồi, phải đi ngủ thôi!",
+    slept: (m) => `Chào buổi sáng! Ngủ được ${hm(m, "h")}`,
+    tired: "Mệt quá, nghỉ chút đã",
+    napLabel: "Chợp mắt",
+    coffeeLabel: "Cà phê",
+    noCoffee: "Hết cà phê, mua ở chợ nhé",
+    leave: "Ra ngoài",
+    openNow: "Tới giờ mở cửa rồi!",
+    ovenBusy: "Lò đang bận",
+    ready: (cake) => `${cake} xong rồi!`,
+    minutesLeft: (m) => `Còn ${Math.ceil(m)} phút`,
+    openAt: "Mở lúc 9:00",
+    ovenWarn: "Lò vẫn còn bánh, ngủ bây giờ là cháy đấy!",
+    autoOpened: "9:30 rồi, tiệm tự mở cửa",
+    startWait: "Bắt đầu",
+    hintTired: "Hết sức rồi. Chợp mắt, uống cà phê hoặc đi ngủ nhé.",
     minutes: (n) => `${n} phút`,
     loading: "Đang mở cửa tiệm...",
     needSignIn: "Đăng nhập để vào tiệm bánh của bạn",
@@ -189,7 +272,7 @@ export const STRINGS: Localized<Strings> = {
 
     forecast: (d) => `Dự báo ngày ${d}`,
     crowd: (n) =>
-      `${n < 16 ? "Vắng khách" : n < 26 ? "Khách vừa" : "Đông khách"} · ~${n} khách`,
+      `${n < 16 ? "Vắng khách" : n < 26 ? "Khách vừa" : "Đông khách"}, khoảng ${n} khách`,
     trend: (cake) => `Đang chuộng: ${cake}`,
     vipRumour: "Nghe đồn nhà phê bình ẩm thực sẽ ghé!",
     preorder: (who, qty, cake, time) =>
@@ -209,14 +292,20 @@ export const STRINGS: Localized<Strings> = {
     pack: (a, u) =>
       u === "egg"
         ? `${a} quả`
-        : a >= 1000
-          ? `${a / 1000} ${u === "g" ? "kg" : "lít"}`
-          : `${a} ${u}`,
+        : u === "cup"
+          ? `${a} ly`
+          : a >= 1000
+            ? `${a / 1000} ${u === "g" ? "kg" : "lít"}`
+            : `${a} ${u}`,
     amount: (a, u, spoon) =>
-      u === "egg" ? `${a} quả` : spoon ? `${a / 5} thìa` : `${a} ${u}`,
+      u === "egg" || u === "cup"
+        ? `${a} ${u === "egg" ? "quả" : "ly"}`
+        : spoon
+          ? `${a / 5} thìa`
+          : `${a} ${u}`,
     inPantry: (q) => `Kho: ${q}`,
-    fresh: (d) => `Tươi · ${d} ngày`,
-    checkout: (m) => `Thanh toán · ${m} phút`,
+    fresh: (d) => `${d} ngày`,
+    checkout: (m) => `Thanh toán (${m} phút)`,
     total: "Tổng",
     noCoins: "Không đủ xu",
     noTime: "Không đủ giờ làm việc",
@@ -226,13 +315,14 @@ export const STRINGS: Localized<Strings> = {
     owned: "Đã có",
     mastery: (n, of) => `Đã làm ${n}/${of} mẻ`,
     mastered: "Thuần thục",
-    yieldLine: (n, p) => `Ra ${n} cái · ${p} xu/cái`,
+    yieldLine: (n, p) => `Ra ${n} cái, ${p} xu mỗi cái`,
+    makes: (n) => `Ra ${n} cái`,
     timeLine: (m) => `${m} phút một mẻ`,
     upgradeInfo: {
       mixer: "Đánh bông tự động, bớt 10 phút",
       fridge: "Đồ tươi để được 5 ngày",
       display: "Tủ kính chứa 90 cái",
-      oven2: "Thời gian nướng giảm một nửa",
+      oven2: "Nướng 2 mẻ cùng lúc",
     },
     close: "Đóng",
     bought: "Đã mua!",
@@ -255,7 +345,7 @@ export const STRINGS: Localized<Strings> = {
     stepStove: { caramel: "Thắng caramel", fry: "Chiên vàng", cook: "Nấu bột" },
     stepWait: (mode, m) =>
       mode === "proof" ? `Ủ bột ${m} phút` : `Để nguội ${m} phút`,
-    stepOven: (t, m) => `Nướng ${t}°C · ${m} phút`,
+    stepOven: (t, m) => `Nướng ${t}°C trong ${m} phút`,
     stepPipe: {
       frost: "Bắt kem",
       glaze: "Phủ sốt dâu",
@@ -319,7 +409,7 @@ export const STRINGS: Localized<Strings> = {
     soldOut: "Hết mất rồi...",
     vipWants: "Chỉ nhận bánh 3★",
     preorderTag: "Đơn đặt trước",
-    totalPaid: (t, p) => `Tổng ${viNum(t)} · Khách đưa ${viNum(p)}`,
+    totalPaid: (t, p) => `Tổng ${viNum(t)}, khách đưa ${viNum(p)}`,
     counted: (n) => `Tiền thối: ${viNum(n)}`,
     giveChange: "Đưa tiền thối",
     recount: "Đếm lại",
@@ -364,8 +454,57 @@ export const STRINGS: Localized<Strings> = {
     bailout: (n) => `Bác hàng xóm cho mượn ${n} xu. Cố lên!`,
     nextDay: "Sang ngày mới",
 
-    summary: (d, c) => `Ngày ${d} · ${viNum(c)} xu`,
+    summary: (d, c) => `Ngày ${d}, ${viNum(c)} xu`,
     detail: (d) => `Ngày ${d}`,
+    slotsTitle: "Chọn tiệm",
+    slotName: (n) => `Tiệm ${n}`,
+    slotEmpty: "Tiệm trống",
+    slotNew: "Bấm để mở tiệm mới",
+    slotInfo: (day, coins) => `Ngày ${day}, ${viNum(coins)} xu`,
+    slotRep: (rep) => `Uy tín ${Math.round(rep)}`,
+    settings: "Cài đặt",
+    sound: "Âm thanh",
+    music: "Nhạc nền",
+    on: "Bật",
+    off: "Tắt",
+    switchShop: "Đổi tiệm",
+    restart: "Chơi lại từ đầu",
+    restartAsk: (n) =>
+      `Chơi lại Tiệm ${n} từ đầu? Tiền, công thức, nâng cấp và bánh của tiệm này sẽ mất. Bảng xếp hạng vẫn giữ thành tích tốt nhất của bạn.`,
+    restartSure: "Chắc chắn chưa? Không thể hoàn tác đâu nhé.",
+    restartYes: "Xoá và chơi lại",
+    goOn: "Tiếp tục",
+    cancel: "Huỷ",
+    restarted: "Tiệm mới đã sẵn sàng!",
+    pauseTitle: "Tạm dừng",
+    aisles: { dry: "Đồ khô", cold: "Tủ mát", flavour: "Hương liệu" },
+    basket: (n) => (n ? `Giỏ: ${n} món` : "Giỏ trống"),
+    inStock: (q) => `Trong kho: ${q}`,
+    packOf: (q) => `Gói ${q}`,
+    displayTitle: "Tủ kính",
+    stat: {
+      rep: {
+        title: "Uy tín",
+        body: "Uy tín càng cao, càng nhiều khách ghé tiệm mỗi ngày. Uy tín tăng khi khách nhận đúng bánh, đơn đặt trước giao đủ và khách VIP vui. Uy tín giảm khi thối tiền thiếu hay khách VIP không vừa ý. Tâm trạng tốt cũng cộng thêm một chút mỗi ngày.",
+      },
+      energy: {
+        title: "Thể lực",
+        body: "Mỗi phút thức đều tốn sức, một ngày đứng quầy còn tốn hơn. Ngủ đủ giấc sẽ hồi lại. Dưới 50 tay bắt đầu run: rót dễ lố, bấm bếp và lò hay trễ. Về 0 thì phải nghỉ mới làm tiếp được. Cà phê cho thêm sức ngay nhưng làm ngủ kém, chợp mắt 30 phút hồi được một ít.",
+      },
+      mood: {
+        title: "Tâm trạng",
+        body: "Tâm trạng tăng khi ngủ đủ, ra mẻ bánh 3 sao và ngày bán có lời. Tâm trạng giảm khi thức khuya, bánh hỏng, bán lỗ hay khách bỏ về. Vui vẻ thì khách kiên nhẫn hơn, tip nhiều hơn, ngủ hồi sức tốt hơn và uy tín tăng thêm mỗi ngày.",
+      },
+    },
+    gotIt: "Đã hiểu",
+    ingredientsTitle: "Nguyên liệu",
+    stepsTitle: "Các bước",
+    learned: "Học được công thức mới!",
+    tapContinue: "Chạm để tiếp tục",
+    displayKeep: "Bánh chỉ tươi trong một ngày, nhớ bán hết khi mở cửa nhé!",
+    displaySpaces: (n, cap) => `${n}/${cap} chỗ`,
+    pausedNote:
+      "Tiệm đang nghỉ một chút. Đồng hồ, lò nướng và khách đều đứng yên.",
   },
   en: {
     num: enNum,
@@ -381,7 +520,30 @@ export const STRINGS: Localized<Strings> = {
       "Sunday",
     ],
     weather: { sunny: "Sunny", cloudy: "Cloudy", rainy: "Rainy" },
-    workLeft: (m) => `${hm(m, "h")} of work left`,
+    beforeBed: (m) => `${hm(m, "h")} until bedtime`,
+    lateNight: (m) => `Up late: ${hm(m, "h")} until 1:00`,
+    beforeOpen: (m) => `${hm(m, "h")} until opening`,
+    bedtimeTitle: "It's 22:00!",
+    bedtimeAsk:
+      "Go to bed and be fresh tomorrow, or stay up and work? Less sleep means a tired, gloomier morning.",
+    sleep: "Go to bed",
+    stayUp: "Stay up",
+    mustSleep: "It's 1:00, time for bed!",
+    slept: (m) => `Good morning! Slept ${hm(m, "h")}`,
+    tired: "Too tired, rest first",
+    napLabel: "Nap",
+    coffeeLabel: "Coffee",
+    noCoffee: "No coffee left, buy some at the market",
+    leave: "Step out",
+    openNow: "Time to open the shop!",
+    ovenBusy: "The oven is busy",
+    ready: (cake) => `${cake} is ready!`,
+    minutesLeft: (m) => `${Math.ceil(m)} min left`,
+    openAt: "Opens at 9:00",
+    ovenWarn: "There is still something in the oven: it will burn overnight!",
+    autoOpened: "It's 9:30, the shop opens by itself",
+    startWait: "Start",
+    hintTired: "You're worn out. Take a nap, have a coffee or go to bed.",
     minutes: (n) => `${n} min`,
     loading: "Opening the bakery...",
     needSignIn: "Sign in to open your bakery",
@@ -394,7 +556,7 @@ export const STRINGS: Localized<Strings> = {
 
     forecast: (d) => `Forecast for day ${d}`,
     crowd: (n) =>
-      `${n < 16 ? "Quiet" : n < 26 ? "Steady" : "Busy"} · ~${n} customers`,
+      `${n < 16 ? "Quiet" : n < 26 ? "Steady" : "Busy"}, about ${n} customers`,
     trend: (cake) => `In demand: ${cake}`,
     vipRumour: "Word is a food critic is coming!",
     preorder: (who, qty, cake, time) =>
@@ -414,18 +576,22 @@ export const STRINGS: Localized<Strings> = {
     pack: (a, u) =>
       u === "egg"
         ? `${a} eggs`
-        : a >= 1000
-          ? `${a / 1000} ${u === "g" ? "kg" : "L"}`
-          : `${a} ${u}`,
+        : u === "cup"
+          ? `${a} ${a === 1 ? "cup" : "cups"}`
+          : a >= 1000
+            ? `${a / 1000} ${u === "g" ? "kg" : "L"}`
+            : `${a} ${u}`,
     amount: (a, u, spoon) =>
       u === "egg"
         ? `${a} ${a === 1 ? "egg" : "eggs"}`
-        : spoon
-          ? `${a / 5} tsp`
-          : `${a} ${u}`,
+        : u === "cup"
+          ? `${a} ${a === 1 ? "cup" : "cups"}`
+          : spoon
+            ? `${a / 5} tsp`
+            : `${a} ${u}`,
     inPantry: (q) => `Pantry: ${q}`,
-    fresh: (d) => `Fresh · ${d} days`,
-    checkout: (m) => `Pay · ${m} min`,
+    fresh: (d) => `${d} days`,
+    checkout: (m) => `Pay (${m} min)`,
     total: "Total",
     noCoins: "Not enough coins",
     noTime: "Not enough working time",
@@ -435,13 +601,14 @@ export const STRINGS: Localized<Strings> = {
     owned: "Owned",
     mastery: (n, of) => `Baked ${n}/${of} batches`,
     mastered: "Mastered",
-    yieldLine: (n, p) => `Makes ${n} · ${p} coins each`,
+    yieldLine: (n, p) => `Makes ${n}, ${p} coins each`,
+    makes: (n) => `Makes ${n}`,
     timeLine: (m) => `${m} min a batch`,
     upgradeInfo: {
       mixer: "Whisks for you, 10 min faster",
       fridge: "Fresh goods last 5 days",
       display: "Display holds 90",
-      oven2: "Oven time halved",
+      oven2: "Bake two batches at once",
     },
     close: "Close",
     bought: "Bought!",
@@ -468,7 +635,7 @@ export const STRINGS: Localized<Strings> = {
     },
     stepWait: (mode, m) =>
       mode === "proof" ? `Proof ${m} min` : `Cool ${m} min`,
-    stepOven: (t, m) => `Bake ${t}°C · ${m} min`,
+    stepOven: (t, m) => `Bake at ${t}°C for ${m} min`,
     stepPipe: {
       frost: "Pipe the frosting",
       glaze: "Dip in glaze",
@@ -532,7 +699,7 @@ export const STRINGS: Localized<Strings> = {
     soldOut: "All gone...",
     vipWants: "3★ cakes only",
     preorderTag: "Pre-order",
-    totalPaid: (t, p) => `Total ${enNum(t)} · Paid ${enNum(p)}`,
+    totalPaid: (t, p) => `Total ${enNum(t)}, paid ${enNum(p)}`,
     counted: (n) => `Change: ${enNum(n)}`,
     giveChange: "Give change",
     recount: "Recount",
@@ -577,7 +744,57 @@ export const STRINGS: Localized<Strings> = {
     bailout: (n) => `Your neighbour lent you ${n} coins. Hang in there!`,
     nextDay: "Next day",
 
-    summary: (d, c) => `Day ${d} · ${enNum(c)} coins`,
+    summary: (d, c) => `Day ${d}, ${enNum(c)} coins`,
     detail: (d) => `Day ${d}`,
+    slotsTitle: "Choose a bakery",
+    slotName: (n) => `Bakery ${n}`,
+    slotEmpty: "Empty",
+    slotNew: "Tap to open a new bakery",
+    slotInfo: (day, coins) => `Day ${day}, ${enNum(coins)} coins`,
+    slotRep: (rep) => `Reputation ${Math.round(rep)}`,
+    settings: "Settings",
+    sound: "Sound",
+    music: "Music",
+    on: "On",
+    off: "Off",
+    switchShop: "Switch bakery",
+    restart: "Start over",
+    restartAsk: (n) =>
+      `Start Bakery ${n} over? Its coins, recipes, upgrades and cakes will be gone. The leaderboard keeps your best result.`,
+    restartSure: "Are you sure? This cannot be undone.",
+    restartYes: "Delete and restart",
+    goOn: "Continue",
+    cancel: "Cancel",
+    restarted: "Your new bakery is ready!",
+    pauseTitle: "Paused",
+    aisles: { dry: "Dry goods", cold: "Chilled", flavour: "Flavours" },
+    basket: (n) =>
+      n ? `Basket: ${n} item${n > 1 ? "s" : ""}` : "Basket empty",
+    inStock: (q) => `In pantry: ${q}`,
+    packOf: (q) => `Pack of ${q}`,
+    displayTitle: "Display case",
+    stat: {
+      rep: {
+        title: "Reputation",
+        body: "The higher your reputation, the more customers visit each day. It rises when customers get the right cake, pre-orders are filled and VIPs are happy. It falls when change comes up short or a VIP leaves unhappy. A good mood adds a little every day too.",
+      },
+      energy: {
+        title: "Energy",
+        body: "Every waking minute costs a little, a day at the counter costs more, and a good sleep brings it back. Below 50 your hands shake: pours overshoot, taps on the stove and oven come late. At 0 you must rest before working again. Coffee gives energy now but costs sleep; a 30-minute nap gives a little back.",
+      },
+      mood: {
+        title: "Mood",
+        body: "Mood rises with a full night, 3-star batches and a profitable day, and falls with late nights, failed batches, losses and customers walking off. A happy baker has more patient customers, better tips, better sleep and a little more reputation each day.",
+      },
+    },
+    gotIt: "Got it",
+    ingredientsTitle: "Ingredients",
+    stepsTitle: "Steps",
+    learned: "New recipe learned!",
+    tapContinue: "Tap to continue",
+    displayKeep: "Cakes keep for one day, so sell them all when you open!",
+    displaySpaces: (n, cap) => `${n}/${cap} spaces`,
+    pausedNote:
+      "The bakery takes a break. The clock, the ovens and the customers all wait.",
   },
 };

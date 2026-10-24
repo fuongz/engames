@@ -6,7 +6,12 @@ import { z } from "zod";
 import { currentUser } from "#/server/auth";
 import { getDb } from "#/server/db";
 import { saveScore } from "#/server/db/leaderboard";
-import { readSave, writeSave } from "#/server/db/saves";
+import {
+  deleteSave,
+  listSaves,
+  readSave,
+  writeSave,
+} from "#/server/db/saves";
 
 // Boundary: client-callable server functions and types only (layout rule D).
 
@@ -21,6 +26,14 @@ const slug = z
       findGame(s)?.requiresAccount === true && findSaveRules(s) !== undefined,
     "Not an account game",
   );
+
+/** A slot number the game actually has (`saveSlots`, default 1). */
+const slotOf = (gameSlug: string, slot: number) => {
+  const slots = findGame(gameSlug)?.saveSlots ?? 1;
+  if (!Number.isInteger(slot) || slot < 0 || slot >= slots)
+    throw new Error("No such save slot");
+  return slot;
+};
 
 /** A real save is a few KB; anything far bigger is not one. */
 const MAX_BYTES = 64 * 1024;
@@ -39,11 +52,35 @@ async function signedInUser() {
   return user;
 }
 
+const slotNo = z.number().int().min(0).max(9);
+
 export const loadGameSave = createServerFn({ method: "GET" })
+  .validator(z.object({ slug, slot: slotNo }))
+  .handler(async ({ data }) => {
+    const user = await signedInUser();
+    return readSave(
+      getDb(),
+      user.id,
+      data.slug,
+      slotOf(data.slug, data.slot),
+    );
+  });
+
+/** The player's saves for a game, one entry per filled slot. */
+export const listGameSaves = createServerFn({ method: "GET" })
   .validator(z.object({ slug }))
   .handler(async ({ data }) => {
     const user = await signedInUser();
-    return readSave(getDb(), user.id, data.slug);
+    return listSaves(getDb(), user.id, data.slug);
+  });
+
+/** Start a slot over. The leaderboard keeps the player's best regardless. */
+export const deleteGameSave = createServerFn({ method: "POST" })
+  .validator(z.object({ slug, slot: slotNo }))
+  .handler(async ({ data }) => {
+    const user = await signedInUser();
+    await deleteSave(getDb(), user.id, data.slug, slotOf(data.slug, data.slot));
+    return { ok: true as const };
   });
 
 /**
@@ -55,6 +92,7 @@ export const storeGameSave = createServerFn({ method: "POST" })
   .validator(
     z.object({
       slug,
+      slot: slotNo,
       /** The game's save as JSON text. */
       json: z.string().max(MAX_BYTES),
       version: z.number().int().min(0),
@@ -67,8 +105,9 @@ export const storeGameSave = createServerFn({ method: "POST" })
     if (!rules) throw new Error("Not an account game");
     const next = rules.parse(parseJson(input.json));
     if (!next) throw new Error("Malformed save");
+    const slot = slotOf(input.slug, input.slot);
     const db = getDb();
-    const stored = await readSave(db, user.id, input.slug);
+    const stored = await readSave(db, user.id, input.slug, slot);
     if (
       !rules.plausible(
         stored ? rules.parse(parseJson(stored.json)) : null,
@@ -79,6 +118,7 @@ export const storeGameSave = createServerFn({ method: "POST" })
     const result = await writeSave(db, {
       userId: user.id,
       gameSlug: input.slug,
+      slot,
       json: JSON.stringify(next),
       expected: input.version,
     });

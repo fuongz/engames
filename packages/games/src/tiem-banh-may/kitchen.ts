@@ -1,6 +1,38 @@
 import type { PointerInfo, Rect } from "../core";
-import { type App, H, W, btn, viewRect } from "./app";
-import { C, button, clockIcon, cover, panel, sprite, stars, text } from "./art";
+import { type App, H, W, btn, icon, viewRect } from "./app";
+import {
+  C,
+  button,
+  clockIcon,
+  cover,
+  dialog,
+  framed,
+  panel,
+  sprite,
+  stars,
+  text,
+  coverY,
+  tableShadow,
+} from "./art";
+import {
+  type Fx,
+  addedSinceMix,
+  bowlBefore,
+  PILE,
+  bowlSprite,
+  crossfade,
+  drawFx,
+  easeOutBack,
+  emit,
+  mixResult,
+  ovenWindow,
+  pick,
+  baked,
+  plainSprite,
+  rawSprite,
+  reveal,
+  stepFx,
+} from "./bakeart";
 import {
   INGREDIENTS,
   type IngredientId,
@@ -24,9 +56,15 @@ import {
   ingredient,
   measureUnits,
   pantryQty,
+  type Job,
+  elapsed,
+  ovens,
+  ovensBusy,
   recipe,
+  shake,
   startBatch,
 } from "./logic";
+import { dialogButtons, K, pauseButton } from "./kit";
 
 // Baking by hand, one recipe step at a time. The card at the top is the recipe;
 // following it is the player's job, and every step is graded the moment it is
@@ -34,13 +72,22 @@ import {
 
 type Phase =
   | { kind: "pick" }
-  | { kind: "measure"; amount: number; holding: boolean; hold: number }
+  | {
+      kind: "measure";
+      amount: number;
+      holding: boolean;
+      hold: number;
+      /** Bag angle, eased towards pouring / upright. */
+      tilt: number;
+    }
   | { kind: "mix"; turns: number; angle: number | null; spin: number }
   | { kind: "stove"; on: boolean; t: number }
   | { kind: "ovenSet"; temp: number }
-  | { kind: "ovenRun"; temp: number; minutes: number }
+  /** In the oven since night minute `start` (the clock bakes it, here or in the background). */
+  | { kind: "ovenRun"; temp: number; start: number }
   | { kind: "pipe"; amount: number; holding: boolean }
-  | { kind: "wait"; t: number };
+  /** Proofing or cooling since `start` (null: not started yet). */
+  | { kind: "wait"; start: number | null };
 
 export interface BakeState {
   recipe: RecipeId;
@@ -50,10 +97,12 @@ export interface BakeState {
   phase: Phase;
   feedback: { grade: Grade; text: string; t: number } | null;
   outcome: BakeResult | null;
+  /** Seconds into the current step (entrance animation), and into the outcome. */
+  stepT: number;
+  outT: number;
+  fx: Fx[];
 }
 
-/** Real seconds an oven step takes at the right time, whatever its minutes. */
-const OVEN_SECONDS = 5;
 const OVEN_START = 150;
 const POUR_BASE = 0.3;
 const POUR_RAMP = 1.1;
@@ -72,7 +121,7 @@ function phaseFor(step: Step | undefined): Phase {
     case "pipe":
       return { kind: "pipe", amount: 0, holding: false };
     default:
-      return { kind: "wait", t: 0 };
+      return { kind: "wait", start: null };
   }
 }
 
@@ -92,6 +141,9 @@ export function startBake(app: App, id: RecipeId) {
       phase: phaseFor(r.steps[0]),
       feedback: null,
       outcome: null,
+      stepT: 0,
+      outT: 0,
+      fx: [],
     },
   });
 }
@@ -108,7 +160,7 @@ function stepLabel(app: App, s: Step) {
       );
     }
     case "mix":
-      return `${tr.stepMix[s.mode]} · ${tr.turns(s.turns)}`;
+      return `${tr.stepMix[s.mode]} (${tr.turns(s.turns)})`;
     case "stove":
       return tr.stepStove[s.mode];
     case "wait":
@@ -127,6 +179,13 @@ const GRADE_COLOR: Record<Grade, string> = {
   major: C.bad,
 };
 
+/** Tired reflexes: how late (in the step's own units) a tap lands. */
+const late = (app: App, target: number) =>
+  shake(app.save.energy) * Math.random() * 0.2 * target;
+/** Tired fingers sometimes turn the dial two notches. */
+const slip = (app: App) =>
+  Math.random() < shake(app.save.energy) * 0.5 ? 2 : 1;
+
 /** Record a graded step: feedback now, then the next step, or the end of the batch. */
 function grade(app: App, b: BakeState, res: StepResult, advance = true) {
   const tr = app.tr();
@@ -138,6 +197,7 @@ function grade(app: App, b: BakeState, res: StepResult, advance = true) {
       ? tr.grade.perfect
       : `${tr.grade[res.grade]} ${tr.note(res.note, ing)}`;
   b.feedback = { grade: res.grade, text: line, t: 0 };
+  if (res.grade === "perfect") emit(b.fx, "spark", W / 2, 300, 10, "#ffd257");
   if (res.grade === "major") {
     app.sfx.bad();
     b.outcome = bakeResult(b.results);
@@ -147,6 +207,7 @@ function grade(app: App, b: BakeState, res: StepResult, advance = true) {
   else app.sfx.bad();
   if (!advance) return;
   b.step++;
+  b.stepT = 0;
   const r = recipe(b.recipe);
   if (b.step >= r.steps.length) b.outcome = bakeResult(b.results);
   else b.phase = phaseFor(r.steps[b.step]);
@@ -157,28 +218,44 @@ export function updateBake(app: App, b: BakeState, dt: number) {
     b.feedback.t += dt;
     if (b.feedback.t > 1.6) b.feedback = null;
   }
-  if (b.outcome) return;
+  stepFx(b.fx, dt);
+  b.stepT += dt;
+  if (b.outcome) {
+    const before = b.outT;
+    b.outT += dt;
+    // The finished batch lands with a burst of sparkles
+    if (before < 0.35 && b.outT >= 0.35 && !("fail" in b.outcome))
+      emit(b.fx, "spark", W / 2, 470, 16, "#ffd257");
+    return;
+  }
   const step = recipe(b.recipe).steps[b.step];
   const p = b.phase;
   if (p.kind === "measure" && p.holding && step?.kind === "add") {
     p.hold += dt;
-    p.amount += step.amount * (POUR_BASE + POUR_RAMP * p.hold) * dt;
+    // Tired hands pour in surges
+    const tremor =
+      1 + shake(app.save.energy) * 0.9 * Math.sin(app.time * 11 + p.hold * 7);
+    p.amount += step.amount * (POUR_BASE + POUR_RAMP * p.hold) * dt * tremor;
     if (Math.random() < dt * 14) app.sfx.pour();
+    if (Math.random() < dt * 10)
+      emit(b.fx, "puff", W / 2 + 22, 520, 1, streamColor(step.ing));
   } else if (p.kind === "stove" && p.on && step?.kind === "stove") {
     p.t += dt;
     // Left on the heat far too long: it burns by itself
     if (p.t > step.seconds * 2) grade(app, b, gradeStove(step.seconds, p.t));
-  } else if (p.kind === "ovenRun" && step?.kind === "oven") {
-    p.minutes += (step.minutes / OVEN_SECONDS) * dt;
-    if (p.minutes > step.minutes * 2)
-      grade(app, b, gradeOven(step, p.temp, p.minutes));
   } else if (p.kind === "pipe" && p.holding) {
-    p.amount += PIPE_RATE * dt;
+    p.amount +=
+      PIPE_RATE *
+      dt *
+      (1 + shake(app.save.energy) * 0.8 * Math.sin(app.time * 13));
   } else if (p.kind === "mix") {
     p.spin = Math.max(0, p.spin - dt * 3);
-  } else if (p.kind === "wait") {
-    p.t += dt;
+  } else if (p.kind === "wait" && p.start !== null) {
+    if (step?.kind === "wait" && step.mode === "cool" && Math.random() < dt * 3)
+      emit(b.fx, "steam", W / 2, 420, 1);
   }
+  if (p.kind === "measure")
+    p.tilt += ((p.holding ? -0.95 : -0.25) - p.tilt) * Math.min(1, dt * 10);
 }
 
 export function drawBake(app: App, b: BakeState) {
@@ -188,7 +265,13 @@ export function drawBake(app: App, b: BakeState) {
   ctx.fillStyle = "rgba(255, 246, 230, 0.3)";
   ctx.fillRect(v.x, v.y, v.w, v.h);
   const cardBottom = drawRecipeCard(app, b);
-  if (b.outcome) return drawOutcome(app, b);
+  if (b.outcome) {
+    drawOutcome(app, b);
+    drawFx(ctx, b.fx);
+    return;
+  }
+
+  pauseButton(app, W - 14 - K.pill / 2, cardBottom + 14 + K.pill / 2);
 
   const step = recipe(b.recipe).steps[b.step];
   const station: Rect = {
@@ -198,6 +281,15 @@ export function drawBake(app: App, b: BakeState) {
     h: H - 230 - cardBottom,
   };
   const p = b.phase;
+  // Each step eases in
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, b.stepT / 0.25);
+  const jitter = shake(app.save.energy) * 2.5;
+  if (jitter > 0)
+    ctx.translate(
+      (Math.random() - 0.5) * jitter,
+      (Math.random() - 0.5) * jitter,
+    );
   if (step.kind === "add") {
     if (p.kind === "pick") drawPick(app, b);
     else if (p.kind === "measure") drawMeasure(app, b, step, p, station);
@@ -213,8 +305,10 @@ export function drawBake(app: App, b: BakeState) {
   else if (step.kind === "pipe" && p.kind === "pipe")
     drawPipe(app, b, p, station);
   else if (step.kind === "wait" && p.kind === "wait")
-    drawWait(app, b, step, station);
+    drawWait(app, b, step, p, station);
+  ctx.restore();
 
+  drawFx(ctx, b.fx);
   if (b.feedback) drawFeedback(app, b.feedback, station.y + 40);
 }
 
@@ -227,12 +321,7 @@ function drawRecipeCard(app: App, b: BakeState) {
   const perCol = Math.ceil(r.steps.length / 2);
   const lineH = 25;
   const card = { x: 14, y: top, w: W - 28, h: 58 + perCol * lineH };
-  panel(ctx, card, {
-    fill: "#fff6e3",
-    stroke: C.cardBorder,
-    radius: 20,
-    line: 4,
-  });
+  framed(ctx, card, "#fff6e3", 20);
   sprite(ctx, app.sprites.get(r.sprite), card.x + 34, card.y + 28, 40, 36);
   text(ctx, r.name[locale], card.x + 60, card.y + 28, {
     size: 22,
@@ -276,8 +365,107 @@ function shelf(app: App, b: BakeState): IngredientId[] {
     r.steps.flatMap((s) => (s.kind === "add" ? [s.ing] : [])),
   );
   return INGREDIENTS.filter(
-    (i) => inRecipe.has(i.id) || pantryQty(app.save, i.id) > 0,
+    (i) =>
+      i.id !== "coffee" &&
+      (inRecipe.has(i.id) || pantryQty(app.save, i.id) > 0),
   ).map((i) => i.id);
+}
+
+/** Where the counter painted in bg-kitchen is: things stand on it. */
+const worktop = (app: App) =>
+  coverY(app.sprites.get("bg-kitchen"), viewRect(app), 0.555, 0.45);
+
+/**
+ * The mixing bowl before step `b.step`: its base (empty, or what the last
+ * mixing made), with every ingredient added since lying in it, standing on the
+ * table with its shadow. `adding` shows the ingredient being measured now;
+ * `mix` fades the piles into what the mixing is making.
+ */
+function drawBowl(
+  app: App,
+  b: BakeState,
+  cx: number,
+  bottom: number,
+  w: number,
+  h: number,
+  opts: { adding?: IngredientId; mix?: { to: string; k: number } } = {},
+) {
+  const { ctx } = app;
+  const base = pick(
+    app.sprites,
+    bowlSprite(bowlBefore(b.recipe, b.step)),
+    "tool-bowl",
+  );
+  if (!base?.naturalWidth) return;
+  const k = Math.min(w / base.naturalWidth, h / base.naturalHeight);
+  const bw = base.naturalWidth * k;
+  const bh = base.naturalHeight * k;
+  tableShadow(ctx, cx, bottom - 4, bw * 1.04);
+  const mixK = opts.mix ? Math.min(1, Math.max(0, opts.mix.k)) : 0;
+  ctx.save();
+  ctx.globalAlpha *= 1 - mixK;
+  sprite(ctx, base, cx, bottom, w, h, "bottom");
+  // The piles, inside the bowl's mouth (measured on the bowl pictures, which
+  // all share one framing: centre at 25% of the height, 80% of the width wide)
+  const piles = addedSinceMix(b.recipe, b.step);
+  if (opts.adding && !piles.includes(opts.adding)) piles.push(opts.adding);
+  const mouthY = bottom - bh + bh * 0.25;
+  const mouthW = bw * 0.8;
+  const pools = piles.filter((i) => PILE[i].liquid);
+  const solids = piles.filter((i) => !PILE[i].liquid);
+  pools.forEach((ing, i) => {
+    pile(
+      app,
+      ing,
+      cx + (i - (pools.length - 1) / 2) * mouthW * 0.12,
+      mouthY + 4,
+      mouthW * 0.62,
+    );
+  });
+  solids.forEach((ing, i) => {
+    const n = solids.length;
+    const spread = n === 1 ? 0 : (i / (n - 1) - 0.5) * mouthW * 0.56;
+    const lift = n > 2 && i % 2 ? -bh * 0.05 : 0;
+    pile(app, ing, cx + spread, mouthY + lift, mouthW * (n > 2 ? 0.36 : 0.42));
+  });
+  ctx.restore();
+  if (opts.mix && mixK > 0) {
+    ctx.save();
+    ctx.globalAlpha *= mixK;
+    sprite(
+      ctx,
+      pick(app.sprites, opts.mix.to, "tool-bowl"),
+      cx,
+      bottom,
+      w,
+      h,
+      "bottom",
+    );
+    ctx.restore();
+  }
+}
+
+/** One ingredient lying in the bowl, `w` wide, centred at (cx, cy). */
+function pile(app: App, ing: IngredientId, cx: number, cy: number, w: number) {
+  const { ctx } = app;
+  const look = PILE[ing];
+  const img = app.sprites.get(look.sprite);
+  if (img?.naturalWidth) {
+    sprite(ctx, img, cx, cy, w, w * 0.6);
+    return;
+  }
+  // Until the picture is there: a soft blob in the ingredient's colour
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, look.liquid ? 0.32 : 0.5);
+  ctx.beginPath();
+  ctx.arc(0, 0, w * 0.32, 0, Math.PI * 2);
+  ctx.fillStyle = look.color;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(90, 52, 36, 0.6)";
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawPick(app: App, b: BakeState) {
@@ -296,7 +484,7 @@ function drawPick(app: App, b: BakeState) {
     { x: 8, y: sy - 14, w: W - 16, h: rows * (size + 8) + 22 },
     { fill: "#c99a6b", stroke: C.ink, radius: 16, line: 4 },
   );
-  sprite(ctx, app.sprites.get("tool-bowl"), W / 2, sy - 70, 250, 200, "bottom");
+  drawBowl(app, b, W / 2, Math.min(worktop(app) + 8, sy - 60), 250, 200);
   text(ctx, tr.pickIng, W / 2, sy - 40, {
     size: 21,
     fill: C.white,
@@ -336,7 +524,14 @@ function drawPick(app: App, b: BakeState) {
         app.sfx.tap();
         const wrong = gradePick(recipe(b.recipe), b.step, id);
         if (wrong) return grade(app, b, wrong, false);
-        b.phase = { kind: "measure", amount: 0, holding: false, hold: 0 };
+        b.phase = {
+          kind: "measure",
+          amount: 0,
+          holding: false,
+          hold: 0,
+          tilt: -0.25,
+        };
+        b.stepT = 0;
       },
     });
   });
@@ -353,7 +548,8 @@ function drawMeasure(
   const tr = app.tr();
   const def = ingredient(step.ing);
   const cx = W / 2;
-  const cy = st.y + st.h * 0.58;
+  // The bowl (and the scale) stand on the counter; everything else follows
+  const cy = worktop(app) - 102;
   const pour = def.measure === "pour";
   if (pour) {
     sprite(
@@ -368,7 +564,7 @@ function drawMeasure(
     // The bag tips over the scale while pouring
     ctx.save();
     ctx.translate(cx + 70, cy - 120);
-    ctx.rotate(p.holding ? -0.9 : -0.25);
+    ctx.rotate(p.tilt);
     sprite(ctx, app.sprites.get(def.sprite), 0, 0, 110, 110);
     ctx.restore();
     if (p.holding) {
@@ -430,10 +626,56 @@ function drawMeasure(
       },
     });
   } else {
-    sprite(ctx, app.sprites.get("tool-bowl"), cx, cy + 110, 250, 200, "bottom");
+    drawBowl(app, b, cx, cy + 110, 250, 200, {
+      adding: p.amount > 0 ? step.ing : undefined,
+    });
     const units = measureUnits(step.ing, p.amount);
-    const bob = p.hold > 0 ? Math.max(0, 1 - (app.time - p.hold) * 4) * 14 : 0;
-    sprite(ctx, app.sprites.get(def.sprite), cx, cy - 80 - bob, 120, 110);
+    const since = p.hold > 0 ? app.time - p.hold : 99;
+    if (def.measure === "count") {
+      // An egg drops, cracks over the bowl, and the next one waits on top
+      if (since < 0.22) {
+        sprite(
+          ctx,
+          pick(app.sprites, "egg-whole", def.sprite),
+          cx,
+          cy - 120 + (since / 0.22) * 90,
+          90,
+          90,
+        );
+      } else if (since < 0.7) {
+        ctx.save();
+        ctx.globalAlpha *= 1 - (since - 0.22) / 0.48;
+        sprite(
+          ctx,
+          pick(app.sprites, "egg-cracked", def.sprite),
+          cx,
+          cy - 30,
+          130,
+          130,
+        );
+        ctx.restore();
+      }
+      if (since > 0.45) {
+        const bob = Math.sin(app.time * 3) * 4;
+        sprite(
+          ctx,
+          pick(app.sprites, "egg-whole", def.sprite),
+          cx,
+          cy - 130 + bob,
+          80,
+          80,
+        );
+      }
+    } else {
+      // The spoon tips into the bowl on each tap
+      const tip = since < 0.35 ? Math.sin((since / 0.35) * Math.PI) : 0;
+      sprite(ctx, app.sprites.get(def.sprite), cx + 120, cy - 120, 90, 90);
+      ctx.save();
+      ctx.translate(cx + 20, cy - 70);
+      ctx.rotate(-0.4 - tip * 0.9);
+      sprite(ctx, pick(app.sprites, "tool-spoon", def.sprite), 0, 0, 120, 120);
+      ctx.restore();
+    }
     const unit = def.measure === "count" ? tr.eggUnit : tr.spoonUnit;
     text(ctx, `${units} ${unit}`, cx, st.y + 40, {
       size: 40,
@@ -450,6 +692,14 @@ function drawMeasure(
         p.amount += def.measure === "count" ? 1 : SPOON;
         p.hold = app.time;
         app.sfx.pour();
+        emit(
+          b.fx,
+          "drip",
+          cx,
+          cy - 40,
+          def.measure === "count" ? 3 : 4,
+          def.measure === "count" ? "#ffcf4a" : streamColor(step.ing),
+        );
       },
       { size: 28, silent: true },
     );
@@ -515,8 +765,9 @@ function drawMix(
   const { ctx } = app;
   const tr = app.tr();
   const cx = W / 2;
-  const cy = st.y + st.h * 0.55;
   const R = Math.min(170, st.h * 0.45);
+  // Centred so the bowl stands on the counter
+  const cy = worktop(app) + 8 - R * 1.05;
   // Progress ring: a full circle is 1.5× the turns asked for, the green arc is "just right"
   const max = step.turns * 1.5;
   const arc = (from: number, to: number, color: string, w: number) => {
@@ -535,34 +786,14 @@ function drawMix(
   arc(0, max, "rgba(255,255,255,0.7)", 16);
   arc(step.turns * 0.9, step.turns * 1.1, "#9fdc8f", 16);
   arc(0, Math.min(p.turns, max), C.cardBorder, 8);
-  sprite(ctx, app.sprites.get("tool-bowl"), cx, cy + R * 0.2, R * 2, R * 1.7);
-  // The batter swirls with the spoon
-  ctx.save();
-  ctx.translate(cx, cy - R * 0.05);
-  ctx.scale(1, 0.42);
-  ctx.beginPath();
-  ctx.arc(0, 0, R * 0.68, 0, Math.PI * 2);
-  ctx.fillStyle =
-    step.mode === "whisk"
-      ? "#fff6e4"
-      : step.mode === "knead"
-        ? "#f3dcb2"
-        : "#f8e2b4";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(160, 110, 70, 0.35)";
-  ctx.lineWidth = 6;
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath();
-    ctx.arc(
-      0,
-      0,
-      R * (0.2 + i * 0.16),
-      p.turns * Math.PI * 2 + i,
-      p.turns * Math.PI * 2 + i + 2.2,
-    );
-    ctx.stroke();
-  }
-  ctx.restore();
+  // The bowl goes from what was in it to what the mixing makes
+  const wobble = Math.sin(app.time * 30) * p.spin * 2;
+  drawBowl(app, b, cx + wobble, cy + R * 1.05, R * 2, R * 1.7, {
+    mix: {
+      to: bowlSprite(mixResult(b.recipe, b.step)),
+      k: p.turns / step.turns,
+    },
+  });
   const a = p.turns * Math.PI * 2;
   ctx.save();
   ctx.translate(
@@ -598,7 +829,9 @@ function drawMix(
         let d = now - p.angle;
         if (d > Math.PI) d -= Math.PI * 2;
         if (d < -Math.PI) d += Math.PI * 2;
-        p.turns += Math.abs(d) / (Math.PI * 2);
+        p.turns +=
+          (Math.abs(d) / (Math.PI * 2)) *
+          (1 + shake(app.save.energy) * 0.6 * (Math.random() * 2 - 1));
         p.spin = Math.min(1, p.spin + Math.abs(d));
         if (Math.random() < Math.abs(d)) app.sfx.pour();
       }
@@ -668,12 +901,15 @@ function drawStove(
   const tr = app.tr();
   const cx = W / 2;
   const cy = st.y + st.h * 0.55;
-  // Burner and flames
-  panel(
-    ctx,
-    { x: cx - 150, y: cy + 50, w: 300, h: 40 },
-    { fill: "#d9d3e8", radius: 14, line: 4 },
-  );
+  // The hob, and flames under the pan
+  const hob = app.sprites.get("stove-hob");
+  if (hob?.naturalWidth) sprite(ctx, hob, cx, cy + 150, 360, 200, "bottom");
+  else
+    panel(
+      ctx,
+      { x: cx - 150, y: cy + 50, w: 300, h: 40 },
+      { fill: "#d9d3e8", radius: 14, line: 4 },
+    );
   if (p.on) {
     for (let i = 0; i < 7; i++) {
       const fx = cx - 90 + i * 30;
@@ -696,17 +932,43 @@ function drawStove(
   );
   const k = p.t / step.seconds;
   ctx.save();
-  ctx.translate(cx - 17, cy - 72);
-  ctx.scale(1, 0.38);
+  // The pan's opening (calibrated to tool-saucepan as drawn above)
+  const mouth = { x: cx + 7, y: cy - 30 };
+  ctx.translate(mouth.x, mouth.y);
+  ctx.scale(1, 0.28);
   ctx.beginPath();
-  ctx.arc(0, 0, 80, 0, Math.PI * 2);
-  ctx.fillStyle = stoveColor(step.mode, k);
+  ctx.arc(0, 0, 54, 0, Math.PI * 2);
+  ctx.fillStyle = step.mode === "fry" ? "#f6d77a" : stoveColor(step.mode, k);
   ctx.fill();
   ctx.restore();
+  if (step.mode === "fry") {
+    // The donut goes golden in the oil, then too dark
+    const bob = p.on ? Math.sin(app.time * 8) * 2 : 0;
+    baked(
+      ctx,
+      app.sprites.get("raw-donut"),
+      k,
+      mouth.x,
+      mouth.y - 6 + bob,
+      84,
+      52,
+    );
+    if (k > 1) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.7, (k - 1) * 0.8);
+      ctx.translate(mouth.x, mouth.y - 6);
+      ctx.scale(1, 0.55);
+      ctx.beginPath();
+      ctx.arc(0, 0, 40, 0, Math.PI * 2);
+      ctx.fillStyle = "#3a1d0c";
+      ctx.fill();
+      ctx.restore();
+    }
+  }
   if (p.on) {
     for (let i = 0; i < 5; i++) {
-      const bx = cx - 77 + ((i * 37 + app.time * 40) % 120);
-      const by = cy - 80 + Math.sin(app.time * 9 + i) * 6;
+      const bx = mouth.x - 42 + ((i * 37 + app.time * 40) % 84);
+      const by = mouth.y - 4 + Math.sin(app.time * 9 + i) * 4;
       ctx.beginPath();
       ctx.arc(bx, by, 4 + (i % 2) * 2, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(255,255,255,0.7)";
@@ -716,7 +978,7 @@ function drawStove(
   }
   // The colour to aim for
   const sw = { x: cx - 120, y: st.y + 8, w: 240, h: 56 };
-  panel(ctx, sw, { fill: C.card, stroke: C.cardBorder, radius: 18, line: 4 });
+  framed(ctx, sw, C.card, 18);
   ctx.beginPath();
   ctx.arc(sw.x + 36, sw.y + 28, 17, 0, Math.PI * 2);
   ctx.fillStyle = stoveColor(step.mode, 1);
@@ -757,7 +1019,8 @@ function drawStove(
       "offheat",
       { x: W / 2 - 140, y: H - 160, w: 280, h: 92 },
       tr.offHeat,
-      () => grade(app, b, gradeStove(step.seconds, p.t)),
+      () =>
+        grade(app, b, gradeStove(step.seconds, p.t + late(app, step.seconds))),
       {
         fill: C.green,
         size: 28,
@@ -781,28 +1044,30 @@ function drawOven(
   const running = p.kind === "ovenRun";
   sprite(ctx, app.sprites.get("tool-oven"), cx, oy, ov.w, ov.h, "bottom");
   // The window: dark, glowing while it bakes, with the cake rising and browning inside
-  const win = { x: cx - 91, y: oy - 194, w: 205, h: 118 };
+  const win = ovenWindow(app.sprites.get("tool-oven"), cx, oy, ov.w, ov.h);
   if (!running) {
     // An oven that is off has a dark window
     ctx.fillStyle = "#4a2c20";
     ctx.fillRect(win.x, win.y, win.w, win.h);
   }
   if (running) {
-    const k = p.minutes / step.minutes;
+    const minutes = elapsed(app.save, p);
+    const k = minutes / step.minutes;
     ctx.save();
     ctx.beginPath();
     ctx.rect(win.x, win.y, win.w, win.h);
     ctx.clip();
     ctx.fillStyle = `rgba(255, ${150 + Math.sin(app.time * 6) * 20}, 60, 0.75)`;
     ctx.fillRect(win.x, win.y, win.w, win.h);
-    const rise = 0.7 + Math.min(1, k) * 0.3;
-    sprite(
+    const rise = 0.75 + Math.min(1, k) * 0.25;
+    baked(
       ctx,
-      app.sprites.get(recipe(b.recipe).sprite),
-      cx,
-      win.y + win.h - 4,
-      120 * rise,
-      90 * rise,
+      app.sprites.get(rawSprite(b.recipe)),
+      k,
+      cx + 10,
+      win.y + win.h - 6,
+      150 * rise,
+      100 * rise,
       "bottom",
     );
     if (k > 1) {
@@ -814,17 +1079,25 @@ function drawOven(
     panel(ctx, clock, { fill: "#2f3b36", stroke: C.ink, radius: 14, line: 4 });
     text(
       ctx,
-      `${Math.floor(p.minutes)} ${app.rt.locale() === "vi" ? "phút" : "min"}`,
+      `${Math.floor(minutes)} ${app.rt.locale() === "vi" ? "phút" : "min"}`,
       cx,
       clock.y + 31,
       { size: 30, fill: "#ffcf8a" },
     );
+    timerButtons(app, b);
     btn(
       app,
       "ovenout",
-      { x: W / 2 - 140, y: H - 160, w: 280, h: 92 },
+      { x: W - 250, y: H - 160, w: 226, h: 92 },
       tr.ovenOut,
-      () => grade(app, b, gradeOven(step, p.temp, p.minutes)),
+      () => {
+        emit(b.fx, "steam", cx + 10, win.y, 8);
+        grade(
+          app,
+          b,
+          gradeOven(step, p.temp, minutes + late(app, step.minutes)),
+        );
+      },
       {
         fill: C.green,
         size: 28,
@@ -832,18 +1105,43 @@ function drawOven(
     );
     return;
   }
+  // The raw batch waits in front of the oven
+  const bob = Math.sin(app.time * 2.5) * 3;
+  sprite(
+    ctx,
+    app.sprites.get(rawSprite(b.recipe)),
+    cx + 130,
+    oy + 10 + bob,
+    150,
+    110,
+    "bottom",
+  );
   // Set the dial
   const dial = { x: cx - 160, y: st.y + 4, w: 320, h: 70 };
-  panel(ctx, dial, { fill: C.card, stroke: C.cardBorder, radius: 22, line: 4 });
+  framed(ctx, dial, C.card, 22);
   text(ctx, `${p.temp}°C`, cx, dial.y + 36, { size: 34 });
   const minus = { x: dial.x + 8, y: dial.y + 8, w: 64, h: 58 };
   const plus = { x: dial.x + dial.w - 72, y: dial.y + 8, w: 64, h: 58 };
-  btn(app, "tminus", minus, "−", () => (p.temp = Math.max(100, p.temp - 10)), {
-    size: 30,
-  });
-  btn(app, "tplus", plus, "+", () => (p.temp = Math.min(250, p.temp + 10)), {
-    size: 30,
-  });
+  btn(
+    app,
+    "tminus",
+    minus,
+    "−",
+    () => (p.temp = Math.max(100, p.temp - 10 * slip(app))),
+    {
+      size: 30,
+    },
+  );
+  btn(
+    app,
+    "tplus",
+    plus,
+    "+",
+    () => (p.temp = Math.min(250, p.temp + 10 * slip(app))),
+    {
+      size: 30,
+    },
+  );
   text(ctx, tr.ovenSet, cx, H - 200, {
     size: 18,
     fill: C.white,
@@ -855,7 +1153,12 @@ function drawOven(
     { x: W / 2 - 140, y: H - 160, w: 280, h: 92 },
     tr.ovenIn,
     () => {
-      b.phase = { kind: "ovenRun", temp: p.temp, minutes: 0 };
+      if (ovensBusy(app.save) >= ovens(app.save)) {
+        app.sfx.bad();
+        app.toast(tr.ovenBusy, W / 2, H - 200, C.bad, 20);
+        return;
+      }
+      b.phase = { kind: "ovenRun", temp: p.temp, start: app.save.night };
     },
     { fill: "#ffd6a8", size: 28 },
   );
@@ -871,35 +1174,37 @@ function drawPipe(
   const tr = app.tr();
   const cx = W / 2;
   const cy = st.y + st.h * 0.6;
-  sprite(ctx, app.sprites.get(recipe(b.recipe).sprite), cx, cy + 60, 230, 200);
-  // The ideal swirl (dashed) and what has been squeezed so far
-  const target = 70;
-  ctx.setLineDash([10, 8]);
-  ctx.beginPath();
-  ctx.arc(cx, cy - 40, target, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255,255,255,0.9)";
-  ctx.lineWidth = 4;
-  ctx.stroke();
-  ctx.setLineDash([]);
-  const r = target * Math.min(2, p.amount);
-  if (r > 2) {
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath();
-      ctx.ellipse(
-        cx,
-        cy - 40 + r * 0.3 - i * r * 0.32,
-        r * (1 - i * 0.25),
-        r * (0.4 - i * 0.06),
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fillStyle = i % 2 ? "#ffe3ea" : "#ffd0dc";
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = C.ink;
-      ctx.stroke();
-    }
+  // The bare bake, a faint ghost of the finished look, and the decoration
+  // piped on from the bottom up as you squeeze. The bare bake fades as the
+  // finished one comes in, so the two pictures never show a doubled plate.
+  const done = app.sprites.get(recipe(b.recipe).sprite);
+  ctx.save();
+  ctx.globalAlpha *= 1 - Math.min(1, p.amount) * 0.85;
+  sprite(
+    ctx,
+    pick(app.sprites, plainSprite(b.recipe), recipe(b.recipe).sprite),
+    cx,
+    cy + 20,
+    260,
+    230,
+  );
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha *= 0.22;
+  sprite(ctx, done, cx, cy + 20, 260, 230);
+  ctx.restore();
+  reveal(ctx, done, p.amount, cx, cy + 20, 260, 230);
+  // Too much: a messy blob on top
+  const extra = p.amount - 1.12;
+  if (extra > 0) {
+    const r = 30 + extra * 90;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 70, r, r * 0.45, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffd6df";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = C.ink;
+    ctx.stroke();
   }
   ctx.save();
   ctx.translate(cx + 60, cy - 150 - (p.holding ? 0 : 10));
@@ -944,29 +1249,139 @@ function drawWait(
   app: App,
   b: BakeState,
   step: Extract<Step, { kind: "wait" }>,
+  p: Extract<Phase, { kind: "wait" }>,
   st: Rect,
 ) {
   const { ctx } = app;
   const tr = app.tr();
   const cx = W / 2;
   const cy = st.y + st.h * 0.5;
-  clockIcon(ctx, cx, cy - 20, 90, app.time * 600);
-  text(ctx, tr.stepWait(step.mode, step.minutes), cx, cy + 110, {
-    size: 28,
-    fill: C.white,
-    outline: C.ink,
-  });
+  const started = p.start !== null;
+  const done = started ? elapsed(app.save, { start: p.start ?? 0 }) : 0;
+  const k = Math.min(1, done / step.minutes);
+  if (step.mode === "proof") {
+    // The dough rises in its bowl as the minutes pass
+    // Both pictures share the bowl's scale, so they line up from the foot
+    const foot = worktop(app) + 8;
+    tableShadow(ctx, cx, foot - 4, 290);
+    crossfade(
+      ctx,
+      pick(app.sprites, "bowl-dough", "tool-bowl"),
+      app.sprites.get("dough-proofed"),
+      k,
+      cx,
+      foot,
+      280,
+      300,
+      "bottom",
+    );
+  } else {
+    sprite(ctx, app.sprites.get("sponge-cooling"), cx, cy, 300, 260);
+  }
+  clockIcon(ctx, cx + 120, cy - 120, 34, started ? done * 12 : 0);
+  text(
+    ctx,
+    started && k < 1
+      ? tr.minutesLeft(step.minutes - done)
+      : tr.stepWait(step.mode, step.minutes),
+    cx,
+    cy + 150,
+    { size: 28, fill: C.white, outline: C.ink },
+  );
+  if (!started) {
+    btn(
+      app,
+      "waitstart",
+      { x: W / 2 - 140, y: H - 160, w: 280, h: 92 },
+      tr.startWait,
+      () => {
+        p.start = app.save.night;
+      },
+      { fill: "#ffd6a8", size: 28 },
+    );
+    return;
+  }
+  timerButtons(app, b);
   btn(
     app,
     "waited",
-    { x: W / 2 - 140, y: H - 160, w: 280, h: 92 },
+    { x: W - 250, y: H - 160, w: 226, h: 92 },
     tr.next,
     () => grade(app, b, { grade: "perfect", note: "exact" }),
-    {
-      fill: C.green,
-      size: 28,
-    },
+    { fill: C.green, size: 26, disabled: k < 1 },
   );
+}
+
+/** Timed steps: step out (the batch keeps going in the background) or fast-forward. */
+function timerButtons(app: App, b: BakeState) {
+  const tr = app.tr();
+  btn(
+    app,
+    "leave",
+    { x: 24, y: H - 160, w: 160, h: 92 },
+    tr.leave,
+    () => leaveKitchen(app, b),
+    { size: 22 },
+  );
+  const ff = { x: 194, y: H - 150, w: 84, h: 72 };
+  btn(app, "fast", ff, "", () => (app.fast = !app.fast), {
+    fill: app.fast ? "#ffd6a8" : C.cream,
+  });
+  icon(
+    app,
+    "fastforward",
+    ff.x + ff.w / 2,
+    ff.y + 32 + (app.ui.isPressed("fast") ? 5 : 0),
+    40,
+    () => text(app.ctx, "▶▶", ff.x + ff.w / 2, ff.y + 33, { size: 22 }),
+  );
+}
+
+/** Leave a batch in the oven / proofing and go back to the kitchen. */
+function leaveKitchen(app: App, b: BakeState) {
+  const p = b.phase;
+  const start =
+    p.kind === "ovenRun" ? p.start : p.kind === "wait" ? p.start : null;
+  if (start === null) return;
+  const id = Math.max(0, ...app.save.jobs.map((j) => j.id)) + 1;
+  const job: Job = {
+    id,
+    recipe: b.recipe,
+    cost: b.cost,
+    step: b.step,
+    results: b.results,
+    kind: p.kind === "ovenRun" ? "oven" : "wait",
+    start,
+    temp: p.kind === "ovenRun" ? p.temp : 0,
+  };
+  app.commit({ ...app.save, jobs: [...app.save.jobs, job] }, { now: true });
+  app.go({ kind: "hub" });
+}
+
+/** Back to a batch left in the background, where it was. */
+export function resumeJob(app: App, job: Job) {
+  app.commit({
+    ...app.save,
+    jobs: app.save.jobs.filter((j) => j.id !== job.id),
+  });
+  app.go({
+    kind: "bake",
+    bake: {
+      recipe: job.recipe,
+      cost: job.cost,
+      step: job.step,
+      results: job.results,
+      phase:
+        job.kind === "oven"
+          ? { kind: "ovenRun", temp: job.temp, start: job.start }
+          : { kind: "wait", start: job.start },
+      feedback: null,
+      outcome: null,
+      stepT: 0,
+      outT: 0,
+      fx: [],
+    },
+  });
 }
 
 function drawFeedback(
@@ -999,22 +1414,17 @@ function drawOutcome(app: App, b: BakeState) {
   const out = b.outcome;
   if (!out) return;
   const m = { x: 30, y: 300, w: W - 60, h: 520 };
-  panel(ctx, m, {
-    fill: C.board,
-    stroke: C.boardDeep,
-    radius: 30,
-    line: 5,
-    lip: 6,
-  });
+  // The card pops in
+  const pop = easeOutBack(b.outT / 0.35);
+  ctx.save();
+  ctx.translate(W / 2, m.y + m.h / 2);
+  ctx.scale(0.6 + 0.4 * pop, 0.6 + 0.4 * pop);
+  ctx.translate(-W / 2, -(m.y + m.h / 2));
+  ctx.globalAlpha *= Math.min(1, b.outT / 0.15);
   app.ui.block(viewRect(app));
   const failed = "fail" in out;
   const title = failed ? tr.fail[out.fail] : tr.baked(r.yield, r.name[locale]);
-  text(ctx, title, W / 2, m.y + 44, {
-    size: 30,
-    fill: C.white,
-    outline: C.ink,
-    maxWidth: m.w - 40,
-  });
+  dialog(ctx, m, title);
   const inner = { x: m.x + 20, y: m.y + 80, w: m.w - 40, h: 250 };
   panel(ctx, inner, {
     fill: failed ? C.cardInner : C.owned,
@@ -1031,7 +1441,15 @@ function drawOutcome(app: App, b: BakeState) {
     200,
     180,
   );
-  if (!failed) stars(ctx, W / 2, inner.y + inner.h - 28, out.stars, 18);
+  // Stars land one by one
+  if (!failed)
+    stars(
+      ctx,
+      W / 2,
+      inner.y + inner.h - 28,
+      Math.max(0, Math.min(out.stars, Math.floor((b.outT - 0.35) / 0.18) + 1)),
+      18,
+    );
   // What went wrong, briefly
   const notes = b.results.filter((x) => x.grade !== "perfect").slice(-3);
   notes.forEach((n, i) => {
@@ -1044,21 +1462,22 @@ function drawOutcome(app: App, b: BakeState) {
       { size: 18, weight: 700, fill: GRADE_COLOR[n.grade], outline: C.white },
     );
   });
-  const br = { x: m.x + 40, y: m.y + m.h - 92, w: m.w - 80, h: 74 };
-  btn(
-    app,
-    "outcome",
-    br,
-    failed ? tr.bin : tr.store,
-    () => {
-      const before = app.save.mastery[b.recipe] ?? 0;
-      const next = finishBatch(app.save, b.recipe, out, b.cost, true);
-      app.commit(next);
-      if (!failed && before < 3 && (next.mastery[b.recipe] ?? 0) >= 3)
-        app.toast(tr.mastered, W / 2, 300, C.good, 34);
-      if (!failed) app.sfx.coin();
-      app.go({ kind: "hub" });
+  dialogButtons(app, m, [
+    {
+      key: "outcome",
+      label: failed ? tr.bin : tr.store,
+      fill: failed ? C.cream : C.green,
+      size: 26,
+      onTap: () => {
+        const before = app.save.mastery[b.recipe] ?? 0;
+        const next = finishBatch(app.save, b.recipe, out, b.cost, true);
+        app.commit(next);
+        if (!failed && before < 3 && (next.mastery[b.recipe] ?? 0) >= 3)
+          app.toast(tr.mastered, W / 2, 300, C.good, 34);
+        if (!failed) app.sfx.coin();
+        app.go({ kind: "hub" });
+      },
     },
-    { fill: failed ? C.cream : C.green, size: 26 },
-  );
+  ]);
+  ctx.restore();
 }

@@ -7,7 +7,7 @@ export default defineGame(
     width: W,
     height: H,
     bleed: true,
-    fonts: ['800 20px "Baloo 2"', '700 20px "Baloo 2"'],
+    fonts: ['700 20px "Mali"', '600 20px "Mali"'],
   },
   setup,
 );

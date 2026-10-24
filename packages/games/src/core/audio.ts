@@ -1,5 +1,13 @@
 import { createStorage } from "./storage";
 
+/** A looping music track; quiet while the game is held. */
+export interface MusicLoop {
+  /** Fade to silence (game paused, tab hidden) without losing the place. */
+  hold(): void;
+  release(): void;
+  stop(): void;
+}
+
 export interface ToneOptions {
   freq: number;
   /** Frequency at the end of the tone, for chirps and drops. */
@@ -18,6 +26,8 @@ export class AudioBus {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private listeners = new Set<(muted: boolean) => void>();
+  /** Loops asked for before the first gesture unlocked audio. */
+  private waiting: (() => void)[] = [];
   private prefs = createStorage("portal");
   muted = this.prefs.get("muted", false);
 
@@ -30,6 +40,65 @@ export class AudioBus {
       this.master.connect(this.ctx.destination);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
+    for (const start of this.waiting.splice(0)) start();
+  }
+
+  /**
+   * Loop a music file through the master volume (so the portal's mute applies).
+   * It starts once audio is unlocked; `volume` is relative to the sound effects.
+   */
+  loop(url: string, volume = 0.35): MusicLoop {
+    let source: AudioBufferSourceNode | null = null;
+    let gain: GainNode | null = null;
+    let stopped = false;
+    let held = false;
+    const start = () => {
+      const ctx = this.ctx;
+      const master = this.master;
+      if (!ctx || !master || stopped) return;
+      void fetch(url)
+        .then((r) => r.arrayBuffer())
+        .then((data) => ctx.decodeAudioData(data))
+        .then((buffer) => {
+          if (stopped) return;
+          gain = ctx.createGain();
+          gain.gain.value = held ? 0 : volume;
+          gain.connect(master);
+          source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.loop = true;
+          source.connect(gain);
+          source.start();
+        })
+        .catch(() => undefined);
+    };
+    if (this.ctx) start();
+    else this.waiting.push(start);
+    const fade = (to: number) => {
+      if (!gain || !this.ctx) return;
+      gain.gain.cancelScheduledValues(this.ctx.currentTime);
+      gain.gain.setTargetAtTime(to, this.ctx.currentTime, 0.25);
+    };
+    return {
+      hold: () => {
+        held = true;
+        fade(0);
+      },
+      release: () => {
+        held = false;
+        fade(volume);
+      },
+      stop: () => {
+        stopped = true;
+        this.waiting = this.waiting.filter((w) => w !== start);
+        try {
+          source?.stop();
+        } catch {
+          // never started
+        }
+        gain?.disconnect();
+      },
+    };
   }
 
   setMuted(muted: boolean) {
@@ -46,7 +115,14 @@ export class AudioBus {
     };
   }
 
-  tone({ freq, to, dur = 0.12, type = "square", vol = 0.2, delay = 0 }: ToneOptions) {
+  tone({
+    freq,
+    to,
+    dur = 0.12,
+    type = "square",
+    vol = 0.2,
+    delay = 0,
+  }: ToneOptions) {
     if (!this.ctx || !this.master || this.muted) return;
     const t0 = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
@@ -66,7 +142,8 @@ export class AudioBus {
     const len = Math.floor(this.ctx.sampleRate * dur);
     const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    for (let i = 0; i < len; i++)
+      data[i] = (Math.random() * 2 - 1) * (1 - i / len);
     const src = this.ctx.createBufferSource();
     const gain = this.ctx.createGain();
     gain.gain.value = vol;

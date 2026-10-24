@@ -7,16 +7,24 @@ export const W = 540;
 export const H = 960;
 
 // ---------------------------------------------------------------- the clock
-// Minutes since midnight. A business day is the prep night before it plus the
-// opening hours; the night's work is a budget of minutes, the shop is real time.
+// A business day is the night before it plus the opening hours. The night is
+// counted in minutes after closing time (16:30): work moves it on, and going to
+// bed jumps it to 5:30. The shop itself runs in real time.
 
 export const OPEN_AT = 9 * 60;
 export const CLOSE_AT = 16 * 60 + 30;
-/** The baker goes to bed at 22:00 and is back in the kitchen at 5:00. */
-export const BED_AT = 22 * 60;
-export const WAKE_AT = 5 * 60;
-export const EVENING = BED_AT - CLOSE_AT;
-export const PREP_BUDGET = EVENING + (OPEN_AT - WAKE_AT);
+/** Night minutes: the usual bedtime 22:00, the latest you can stay up (1:00), waking at 5:30, opening at 9:00. */
+export const BEDTIME = 22 * 60 - CLOSE_AT;
+export const LATEST_BED = 25 * 60 - CLOSE_AT;
+export const WAKE = 24 * 60 + 5 * 60 + 30 - CLOSE_AT;
+export const OPEN = 24 * 60 + OPEN_AT - CLOSE_AT;
+/** Game minutes per real second outside opening hours, and with fast-forward on. */
+export const NIGHT_SPEED = 1;
+export const FAST_SPEED = 8;
+/** The shop opens by itself this long after 9:00 if nobody opens it. */
+export const AUTO_OPEN = 30;
+/** Hours of a full night's sleep (22:00 → 5:30). */
+export const FULL_SLEEP = (WAKE - BEDTIME) / 60;
 /** Real seconds the opening hours take. */
 export const SELL_SECONDS = 240;
 export const DISCOUNT_FROM = 15 * 60 + 30;
@@ -24,6 +32,44 @@ export const DISCOUNT = 0.3;
 /** Customers come this much more often while the discount is on. */
 export const DISCOUNT_RUSH = 1.5;
 export const MARKET_TRIP = 30;
+
+// ---------------------------------------------------------------- energy and mood
+
+export const START_ENERGY = 90;
+export const START_MOOD = 60;
+/** Energy every minute of work costs, and what a day behind the counter costs. */
+export const ENERGY_PER_MINUTE = 0.12;
+export const SELL_ENERGY = 15;
+/** Energy an hour of sleep gives back, scaled by mood (0.6× when gloomy … 1× when cheerful). */
+export const SLEEP_ENERGY = 13;
+export const COFFEE_ENERGY = 30;
+/** Each coffee that night takes this much off what sleep gives back. */
+export const COFFEE_SLEEP_COST = 12;
+export const NAP_MINUTES = 30;
+export const NAP_ENERGY = 12;
+/** Below this, hands start to shake (stronger as energy falls). */
+export const TIRED_BELOW = 50;
+export const MOOD_CHANGE = {
+  fullSleep: 8,
+  perShortHour: -6,
+  profit: 4,
+  loss: -4,
+  perWalkOff: -1,
+  maxWalkOff: -8,
+  failedBatch: -4,
+  threeStars: 2,
+} as const;
+/** Reputation each day: (mood − 50) / MOOD_REP, rounded. */
+export const MOOD_REP = 25;
+
+// ---------------------------------------------------------------- dev switches
+
+/**
+ * Counting change by hand at the till. Off (the default): customers who pay
+ * with a note get their change automatically, so the shop is only picking and
+ * boxing. Turn on to bring back the coin-counting mini-game.
+ */
+export const CHANGE_MAKING = false;
 
 // ---------------------------------------------------------------- economy
 
@@ -56,7 +102,8 @@ export type IngredientId =
   | "cream"
   | "strawberry"
   | "oil"
-  | "chocolate";
+  | "chocolate"
+  | "coffee";
 
 /** How the kitchen measures it: on the scale, one by one, or by the teaspoon (5 g/ml). */
 export type Measure = "pour" | "count" | "spoon";
@@ -65,7 +112,7 @@ export const SPOON = 5;
 export interface Ingredient {
   id: IngredientId;
   name: Localized<string>;
-  unit: "g" | "ml" | "egg";
+  unit: "g" | "ml" | "egg" | "cup";
   measure: Measure;
   /** Units in one pack at the market, and what the pack costs. */
   pack: number;
@@ -195,6 +242,17 @@ export const INGREDIENTS: Ingredient[] = [
     price: 16,
     fresh: false,
     sprite: "ing-chocolate",
+  },
+  {
+    // Not for baking: drunk in the kitchen for energy (see COFFEE_ENERGY)
+    id: "coffee",
+    name: { vi: "Cà phê", en: "Coffee" },
+    unit: "cup",
+    measure: "count",
+    pack: 1,
+    price: 8,
+    fresh: false,
+    sprite: "ing-coffee",
   },
 ];
 
@@ -540,7 +598,7 @@ export const REGULARS: CustomerId[] = [
 
 // ---------------------------------------------------------------- demand
 
-/** Customers a day: (BASE + rep·PER_REP + recipes·PER_RECIPE) × weekday × weather. */
+/** Customers a day: (BASE + rep × PER_REP + recipes × PER_RECIPE) × weekday × weather. */
 export const DEMAND_BASE = 10;
 export const DEMAND_PER_REP = 0.12;
 export const DEMAND_PER_RECIPE = 1.5;

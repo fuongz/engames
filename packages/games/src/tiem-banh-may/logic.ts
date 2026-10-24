@@ -17,7 +17,6 @@ import {
   DISCOUNT_FROM,
   DISCOUNT_RUSH,
   DISPLAY_CAP,
-  EVENING,
   EXACT_PAY,
   FAST_STARS,
   FAVOURITE_WEIGHT,
@@ -28,7 +27,25 @@ import {
   INGREDIENTS,
   type Ingredient,
   type IngredientId,
+  BEDTIME,
+  COFFEE_ENERGY,
+  COFFEE_SLEEP_COST,
+  ENERGY_PER_MINUTE,
+  FULL_SLEEP,
+  LATEST_BED,
   MARKET_TRIP,
+  MOOD_CHANGE,
+  MOOD_REP,
+  NAP_ENERGY,
+  NAP_MINUTES,
+  OPEN,
+  SELL_ENERGY,
+  SLEEP_ENERGY,
+  START_ENERGY,
+  START_MOOD,
+  TIRED_BELOW,
+  WAKE,
+  AUTO_OPEN,
   MASTERY_BAKES,
   MAX_REP,
   MAX_STAR_TIP,
@@ -40,7 +57,6 @@ import {
   PREORDER_FROM,
   PREORDER_MIN_STARS,
   PREORDER_PREMIUM,
-  PREP_BUDGET,
   RECIPES,
   REGULARS,
   REP,
@@ -64,7 +80,6 @@ import {
   VIP_CHANCE,
   VIP_FROM,
   VIP_TIP,
-  WAKE_AT,
   WEATHER,
   WEEKDAY_DEMAND,
   type Weather,
@@ -100,16 +115,38 @@ export interface Preorder {
   at: number;
 }
 
+/** A batch left running in the background: in an oven, proofing or cooling. */
+export interface Job {
+  id: number;
+  recipe: RecipeId;
+  cost: number;
+  /** The timed step it is on, and the grades so far. */
+  step: number;
+  results: StepResult[];
+  kind: "oven" | "wait";
+  /** Night minute it started, and the oven dial (0 for waits). */
+  start: number;
+  temp: number;
+}
+
 export interface SaveData {
-  v: 1;
+  v: 3;
   /** The business day being prepared (the night before) or sold. */
   day: number;
   /** "open": saved at opening, so a reload replays the day from 9:00. */
   phase: "prep" | "open";
   coins: number;
   rep: number;
-  /** Minutes of tonight's work already spent. */
-  prepUsed: number;
+  /** Minutes after 16:30 on tonight's clock; sleeping jumps it to WAKE. */
+  night: number;
+  /** 0–100: work drains it, sleep restores it; low energy means shaky hands. */
+  energy: number;
+  /** 0–100: good days lift it; it colours customers, sleep and reputation. */
+  mood: number;
+  /** Coffees drunk tonight (they cost sleep). */
+  caffeine: number;
+  /** Batches in the oven, proofing or cooling while the baker does something else. */
+  jobs: Job[];
   recipes: RecipeId[];
   /** Successful hand-made batches per recipe. */
   mastery: Partial<Record<RecipeId, number>>;
@@ -173,12 +210,16 @@ const between = (r: number, lo: number, hi: number) =>
 
 export function newGame(seed: number): SaveData {
   return {
-    v: 1,
+    v: 3,
     day: 1,
     phase: "prep",
     coins: START_COINS,
     rep: START_REP,
-    prepUsed: 0,
+    night: 0,
+    energy: START_ENERGY,
+    mood: START_MOOD,
+    caffeine: 0,
+    jobs: [],
     recipes: RECIPES.filter((r) => r.cost === 0).map((r) => r.id),
     mastery: {},
     upgrades: [],
@@ -202,10 +243,8 @@ export function assets(save: SaveData) {
 
 // ---------------------------------------------------------------- the clock
 
-/** Wall clock (minutes since midnight) after `used` minutes of the night's work. */
-export function clockAt(used: number) {
-  return used < EVENING ? CLOSE_AT + used : WAKE_AT + (used - EVENING);
-}
+/** Wall clock (minutes since midnight) at a point of the night. */
+export const clockAt = (night: number) => (CLOSE_AT + night) % (24 * 60);
 
 export function formatClock(minutes: number) {
   const m = Math.round(minutes);
@@ -213,7 +252,127 @@ export function formatClock(minutes: number) {
   return `${String(h).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
-export const timeLeft = (save: SaveData) => PREP_BUDGET - save.prepUsed;
+export const slept = (save: SaveData) => save.night >= WAKE;
+/** Past 22:00 and still up. */
+export const pastBedtime = (save: SaveData) =>
+  !slept(save) && save.night >= BEDTIME;
+/** Minutes until the next wall: 1:00 (bed, at the latest) before sleeping, 9:00 after. */
+export const timeLeft = (save: SaveData) =>
+  slept(save) ? OPEN - save.night : LATEST_BED - save.night;
+
+/** 0 (rested) → 1 (exhausted): how much the hands shake. */
+export const shake = (energy: number) =>
+  clamp((TIRED_BELOW - energy) / TIRED_BELOW, 0, 1);
+
+/** Where the clock stops by itself: 1:00 (bed) before sleeping, 9:30 (the shop opens) after. */
+export const clockCap = (save: SaveData) =>
+  slept(save) ? OPEN + AUTO_OPEN : LATEST_BED;
+/** The shop may open from 9:00. */
+export const canOpen = (save: SaveData) => save.night >= OPEN;
+/** 9:30 and still closed: it opens by itself. */
+export const mustOpen = (save: SaveData) => save.night >= OPEN + AUTO_OPEN;
+
+/** Let `minutes` of the night pass while awake: energy drains with them. */
+export function advance(save: SaveData, minutes: number): SaveData {
+  const step = Math.max(0, Math.min(minutes, clockCap(save) - save.night));
+  if (step <= 0) return save;
+  return {
+    ...save,
+    night: save.night + step,
+    energy: clamp(save.energy - step * ENERGY_PER_MINUTE, 0, 100),
+  };
+}
+
+/** Minutes a background batch has been going. */
+export const elapsed = (save: SaveData, job: { start: number }) =>
+  Math.max(0, save.night - job.start);
+
+/** Ovens in the kitchen, and how many hold a batch right now. */
+export const ovens = (save: SaveData) => (has(save, "oven2") ? 2 : 1);
+export const ovensBusy = (save: SaveData) =>
+  save.jobs.filter((j) => j.kind === "oven").length;
+
+/** Can the baker spend `minutes` working right now? */
+function workable(save: SaveData, minutes: number): Refusal | null {
+  if (save.energy <= 0) return "tired";
+  if (timeLeft(save) < minutes) return "time";
+  return null;
+}
+
+const spend = (save: SaveData, minutes: number): SaveData => ({
+  ...save,
+  night: save.night + minutes,
+  energy: clamp(save.energy - minutes * ENERGY_PER_MINUTE, 0, 100),
+});
+
+const withMood = (save: SaveData, delta: number): SaveData => ({
+  ...save,
+  mood: clamp(save.mood + delta, 0, 100),
+});
+
+/** To bed until 5:30: sleep gives back energy (less when gloomy or after coffee) and sets the mood. */
+export function goToBed(save: SaveData): { save: SaveData; hours: number } {
+  if (slept(save)) return { save, hours: 0 };
+  const hours = (WAKE - save.night) / 60;
+  const restored = Math.max(
+    0,
+    hours * SLEEP_ENERGY * (0.6 + (0.4 * save.mood) / 100) -
+      save.caffeine * COFFEE_SLEEP_COST,
+  );
+  const moodDelta =
+    hours >= FULL_SLEEP
+      ? MOOD_CHANGE.fullSleep
+      : (FULL_SLEEP - hours) * MOOD_CHANGE.perShortHour;
+  return {
+    save: withMood(
+      {
+        ...save,
+        night: WAKE,
+        caffeine: 0,
+        energy: clamp(save.energy + restored, 0, 100),
+      },
+      moodDelta,
+    ),
+    hours,
+  };
+}
+
+/** Thirty minutes' rest: a little energy back (allowed even when exhausted). */
+export function nap(save: SaveData): Outcome {
+  if (timeLeft(save) < NAP_MINUTES) return { ok: false, why: "time" };
+  return {
+    ok: true,
+    save: {
+      ...save,
+      night: save.night + NAP_MINUTES,
+      energy: clamp(save.energy + NAP_ENERGY, 0, 100),
+    },
+  };
+}
+
+/** A coffee from the pantry: energy now, worse sleep tonight. */
+export function drinkCoffee(save: SaveData): Outcome {
+  const lots = save.pantry.coffee ?? [];
+  if (!lots.some((l) => l.qty >= 1)) return { ok: false, why: "ingredients" };
+  const i = lots.findIndex((l) => l.qty >= 1);
+  const coffee = lots
+    .map((l, k) => (k === i ? { ...l, qty: l.qty - 1 } : l))
+    .filter((l) => l.qty > 0);
+  return {
+    ok: true,
+    save: {
+      ...save,
+      pantry: { ...save.pantry, coffee },
+      energy: clamp(save.energy + COFFEE_ENERGY, 0, 100),
+      caffeine: save.caffeine + 1,
+    },
+  };
+}
+
+/** Customers' patience scales with the baker's mood (0.8× … 1.2×). */
+export const patienceFactor = (mood: number) => 0.8 + (0.4 * mood) / 100;
+/** A cheerful baker gets a coin more in tips; a glum one a coin less. */
+export const moodTip = (mood: number) => (mood >= 70 ? 1 : mood < 30 ? -1 : 0);
 
 // ---------------------------------------------------------------- pantry
 
@@ -236,6 +395,7 @@ export const cartCost = (cart: Cart) =>
   );
 
 export type Refusal =
+  | "tired"
   | "coins"
   | "time"
   | "empty"
@@ -251,7 +411,8 @@ export function buyIngredients(save: SaveData, cart: Cart): Outcome {
   const cost = cartCost(cart);
   if (cost <= 0) return { ok: false, why: "empty" };
   if (cost > save.coins) return { ok: false, why: "coins" };
-  if (timeLeft(save) < MARKET_TRIP) return { ok: false, why: "time" };
+  const why = workable(save, MARKET_TRIP);
+  if (why) return { ok: false, why };
   const pantry = { ...save.pantry };
   for (const [id, packs] of Object.entries(cart) as [IngredientId, number][]) {
     if (!packs) continue;
@@ -263,12 +424,7 @@ export function buyIngredients(save: SaveData, cart: Cart): Outcome {
   }
   return {
     ok: true,
-    save: {
-      ...save,
-      coins: save.coins - cost,
-      pantry,
-      prepUsed: save.prepUsed + MARKET_TRIP,
-    },
+    save: { ...spend(save, MARKET_TRIP), coins: save.coins - cost, pantry },
   };
 }
 
@@ -334,7 +490,7 @@ const usesMixer = (r: Recipe) =>
 export function batchMinutes(save: SaveData, r: Recipe) {
   let m = r.hands - (has(save, "mixer") && usesMixer(r) ? MIXER_SAVES : 0);
   for (const s of r.steps) {
-    if (s.kind === "oven") m += has(save, "oven2") ? s.minutes / 2 : s.minutes;
+    if (s.kind === "oven") m += s.minutes;
     else if (s.kind === "wait") m += s.minutes;
     else if (s.kind === "stove") m += STOVE_MINUTES;
   }
@@ -352,7 +508,7 @@ export function canBake(save: SaveData, id: RecipeId): Refusal | null {
   const r = recipe(id);
   if (!save.recipes.includes(id)) return "owned";
   if (missing(save, r).length) return "ingredients";
-  if (timeLeft(save) < batchMinutes(save, r)) return "time";
+  if (save.energy <= 0) return "tired";
   if (stockCount(save.stock) + r.yield > displayCap(save)) return "display";
   return null;
 }
@@ -387,12 +543,7 @@ export function startBatch(
   }
   return {
     ok: true,
-    save: {
-      ...save,
-      pantry,
-      prepUsed: save.prepUsed + batchMinutes(save, r),
-      dayCost: save.dayCost + cost,
-    },
+    save: { ...save, pantry, dayCost: save.dayCost + cost },
     cost,
   };
 }
@@ -408,7 +559,7 @@ export function finishBatch(
   cost: number,
   byHand: boolean,
 ): SaveData {
-  if ("fail" in result) return save;
+  if ("fail" in result) return withMood(save, MOOD_CHANGE.failedBatch);
   const r = recipe(id);
   const piece = cost / r.yield;
   const stock = [...save.stock];
@@ -431,7 +582,10 @@ export function finishBatch(
   const mastery = byHand
     ? { ...save.mastery, [id]: (save.mastery[id] ?? 0) + 1 }
     : save.mastery;
-  return { ...save, stock, mastery };
+  return withMood(
+    { ...save, stock, mastery },
+    result.stars === 3 ? MOOD_CHANGE.threeStars : 0,
+  );
 }
 
 /** "Làm nhanh": a mastered recipe without the steps, always FAST_STARS. */
@@ -858,6 +1012,7 @@ export function settle(
   total: number,
   change: number,
   box: number | null,
+  bakerMood = 50,
 ): Settlement {
   const due = paid - total;
   const over = Math.max(0, change - due);
@@ -879,6 +1034,7 @@ export function settle(
     if (vip === "happy") tip += VIP_TIP;
   }
   if (v.kind === "preorder" && !short) rep += REP.preorderDone - REP.served;
+  if (!short) tip = Math.max(0, tip + moodTip(bakerMood));
   const mood =
     short || vip === "sad" ? "angry" : tip > 0 || over > 0 ? "happy" : "ok";
   return { coins: paid - change, tip, boxCost, over, short, rep, mood, vip };
@@ -933,6 +1089,8 @@ export interface DayReport {
   preorders: Ledger["preorders"];
   bailout: number;
   tomorrow: Preorder[];
+  /** The day's weather, for the closing scene. */
+  weather: Weather;
 }
 
 /** Can't bake anything and can't afford a fresh start: the neighbour helps out. */
@@ -967,7 +1125,14 @@ export function closeDay(
     }
     if (kept.length) pantry[id] = kept;
   }
-  const rep = clamp(Math.round(save.rep + ledger.rep), 0, MAX_REP);
+  const rep = clamp(
+    Math.round(save.rep + ledger.rep + (save.mood - 50) / MOOD_REP),
+    0,
+    MAX_REP,
+  );
+  const moodDelta =
+    (profit >= 0 ? MOOD_CHANGE.profit : MOOD_CHANGE.loss) +
+    Math.max(MOOD_CHANGE.maxWalkOff, ledger.walked * MOOD_CHANGE.perWalkOff);
   const info = dayInfo(save);
   let next: SaveData = {
     ...save,
@@ -975,7 +1140,11 @@ export function closeDay(
     phase: "prep",
     coins: save.coins + ledger.revenue + ledger.tips - ledger.boxes,
     rep,
-    prepUsed: 0,
+    night: 0,
+    caffeine: 0,
+    jobs: [],
+    energy: clamp(save.energy - SELL_ENERGY, 0, 100),
+    mood: clamp(save.mood + moodDelta, 0, 100),
     pantry,
     stock: [],
     dayCost: 0,
@@ -1010,6 +1179,7 @@ export function closeDay(
       preorders: ledger.preorders,
       bailout,
       tomorrow: next.preorders,
+      weather: info.weather,
     },
     next,
   };

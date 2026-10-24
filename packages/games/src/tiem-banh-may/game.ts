@@ -1,5 +1,5 @@
-import "@fontsource/baloo-2/700.css";
-import "@fontsource/baloo-2/800.css";
+import "@fontsource/mali/600.css";
+import "@fontsource/mali/700.css";
 import { type GameHooks, type Runtime, SUMMARY_KEY } from "../core";
 import {
   type App,
@@ -8,29 +8,50 @@ import {
   type Toast,
   W,
   btn,
+  icon,
   makeSfx,
   shade,
   sheet,
   viewRect,
 } from "./app";
-import { C, bar, chip, sprite, text, wrap } from "./art";
+import { C, bar, bolt, chip, face, heart, sprite, text, wrap } from "./art";
 import { drawBook, drawPicker } from "./book";
-import { SaveSync } from "./cloud";
+import { SaveSync, listSlots } from "./cloud";
 import { drawHub } from "./hub";
 import { drawBake, updateBake } from "./kitchen";
-import { type SaveData, assets, newGame } from "./logic";
+import { BEDTIME, FAST_SPEED, NIGHT_SPEED, OPEN } from "./config";
+import {
+  type SaveData,
+  advance,
+  assets,
+  clockCap,
+  elapsed,
+  newGame,
+  recipe,
+} from "./logic";
+import { drawDisplay } from "./display";
+import { drawLearned } from "./learned";
 import { drawMarket } from "./market";
 import { drawReport } from "./report";
 import { drawShop, newDay, updateShop } from "./shop";
 import { loadSprites } from "./sprites";
 import { STRINGS } from "./strings";
+// Licensed music is kept out of git (see DESIGN.md → Music): bundled when the
+// file is present on the deploying machine, silently absent everywhere else.
+const MUSIC = Object.values(
+  import.meta.glob<string>("./audio/*.mp3", { eager: true, import: "default" }),
+)[0];
+import { drawSettings, drawSlots } from "./slots";
 import { Ui } from "./ui";
+import { dialogButtons, dialogHeight, dialogPage, pauseGlyph } from "./kit";
 
 // The shell: loads the bakery from the player's account, routes between the
 // screens, and floats toasts. Screens draw themselves and register their taps
 // with the Ui every frame; the rules live in logic.ts.
 
 const TOAST_LIFE = 1.5;
+/** Real seconds between background saves while the night clock runs. */
+const SAVE_EVERY = 15;
 
 export function setup(rt: Runtime): GameHooks {
   const { stage, ctx } = rt;
@@ -39,6 +60,14 @@ export function setup(rt: Runtime): GameHooks {
   const toasts: Toast[] = [];
   let sync: SaveSync | null = null;
   let failure: "signin" | "network" | null = null;
+  // Background music: "Sheep" from Cozy Tunes by Pizza Doggy (see DESIGN.md)
+  const tune = MUSIC
+    ? rt.game.audio.loop(MUSIC, 0.3)
+    : { hold() {}, release() {}, stop() {} };
+  let musicHeld = false;
+  // Music on/off is the player's choice on this device
+  let musicOn = rt.game.storage.get("music", true);
+  if (!musicOn) tune.hold();
 
   const writeSummary = (s: SaveData) =>
     rt.game.storage.set(SUMMARY_KEY, {
@@ -56,6 +85,33 @@ export function setup(rt: Runtime): GameHooks {
     save: newGame(0),
     screen: { kind: "loading" },
     time: 0,
+    fast: false,
+    held: false,
+    paused: false,
+    info: null,
+    setPaused(on) {
+      app.paused = on;
+      app.fast = false;
+      ui.cancel();
+      // The music rests with the bakery
+      if (on) tune.hold();
+      else if (musicOn) tune.release();
+    },
+    slot: rt.game.storage.get("lastSlot", 0),
+    shell: {
+      open: (slot) => void open(slot),
+      pick: () => void pickSlot(),
+      restart,
+      get music() {
+        return musicOn;
+      },
+      setMusic(on) {
+        musicOn = on;
+        rt.game.storage.set("music", on);
+        if (on) tune.release();
+        else tune.hold();
+      },
+    },
     go(screen: Screen) {
       app.screen = screen;
     },
@@ -77,9 +133,9 @@ export function setup(rt: Runtime): GameHooks {
     },
   };
 
+  /** Signed in: show the account's bakeries to choose from. */
   async function boot() {
     failure = null;
-    app.go({ kind: "loading" });
     sync?.dispose();
     sync = null;
     const cloud = rt.game.cloud;
@@ -88,11 +144,42 @@ export function setup(rt: Runtime): GameHooks {
       app.go({ kind: "error" });
       return;
     }
-    const mine = new SaveSync(cloud, rt.game.storage);
+    await pickSlot();
+  }
+
+  async function pickSlot() {
+    const cloud = rt.game.cloud;
+    if (!cloud) return;
+    // Whatever is unsent stays in the local backup; the picker reads it too
+    sync?.dispose();
+    sync = null;
+    const screen: Screen = { kind: "slots", list: null };
+    app.go(screen);
+    try {
+      const list = await listSlots(cloud, rt.game.storage);
+      if (app.screen === screen) app.go({ kind: "slots", list });
+    } catch {
+      failure = "network";
+      app.go({ kind: "error" });
+    }
+  }
+
+  /** Load the bakery in `slot` (a new one if it is empty). */
+  async function open(slot: number) {
+    const cloud = rt.game.cloud;
+    if (!cloud) return;
+    failure = null;
+    app.go({ kind: "loading" });
+    sync?.dispose();
+    sync = null;
+    app.slot = slot;
+    rt.game.storage.set("lastSlot", slot);
+    const mine = new SaveSync(cloud, rt.game.storage, slot);
     try {
       const save = await mine.load();
       sync = mine;
       app.save = save;
+      app.fast = false;
       writeSummary(save);
       // Closed mid-day: the day starts again from the morning's display
       app.go(
@@ -106,7 +193,79 @@ export function setup(rt: Runtime): GameHooks {
       app.go({ kind: "error" });
     }
   }
+
+  /** Start the current bakery over: erase its slot, then open it fresh. */
+  async function restart() {
+    if (!sync) return false;
+    try {
+      await sync.erase();
+    } catch {
+      return false;
+    }
+    sync = null;
+    await open(app.slot);
+    return true;
+  }
   void boot();
+
+  let sinceSave = 0;
+  let lastSaved: SaveData | null = null;
+
+  /** The night clock: minutes pass in the kitchen, ovens bake, alarms ring. */
+  function tickNight(dt: number) {
+    const before = app.save;
+    const after = advance(before, dt * (app.fast ? FAST_SPEED : NIGHT_SPEED));
+    if (after === before) {
+      app.fast = false;
+      return;
+    }
+    app.save = after;
+    // Fast-forward stops at bedtime, at 9:00 and when something is ready
+    const crossed = (t: number) => before.night < t && after.night >= t;
+    if (crossed(BEDTIME) || crossed(OPEN) || after.night >= clockCap(after))
+      app.fast = false;
+    const timers: {
+      recipe: Parameters<typeof recipe>[0];
+      step: number;
+      start: number;
+    }[] = [...after.jobs];
+    const s = app.screen;
+    if (s.kind === "bake") {
+      const p = s.bake.phase;
+      if ((p.kind === "ovenRun" || p.kind === "wait") && p.start !== null)
+        timers.push({
+          recipe: s.bake.recipe,
+          step: s.bake.step,
+          start: p.start,
+        });
+    }
+    for (const t of timers) {
+      const step = recipe(t.recipe).steps[t.step];
+      const target =
+        step?.kind === "oven" || step?.kind === "wait" ? step.minutes : 0;
+      if (
+        target &&
+        elapsed(before, t) < target &&
+        elapsed(after, t) >= target
+      ) {
+        app.fast = false;
+        app.sfx.bell();
+        app.toast(
+          app.tr().ready(recipe(t.recipe).name[rt.locale()]),
+          W / 2,
+          260,
+          C.good,
+          24,
+        );
+      }
+    }
+    sinceSave += dt;
+    if (sinceSave > SAVE_EVERY && lastSaved !== app.save) {
+      sinceSave = 0;
+      lastSaved = app.save;
+      app.commit(app.save);
+    }
+  }
 
   function drawLoading() {
     const v = viewRect(app);
@@ -164,15 +323,67 @@ export function setup(rt: Runtime): GameHooks {
       wrap(ctx, tr.conflict, m.w - 60, 20).forEach((l, i) => {
         text(ctx, l, W / 2, m.y + 110 + i * 28, { size: 20, fill: C.text });
       });
-      btn(
-        app,
-        "reload",
-        { x: m.x + 40, y: m.y + m.h - 100, w: m.w - 80, h: 76 },
-        tr.reload,
-        () => void boot(),
-        { fill: C.green, size: 24 },
-      );
+      dialogButtons(app, m, [
+        {
+          key: "reload",
+          label: tr.reload,
+          onTap: () => void open(app.slot),
+          fill: C.green,
+          size: 24,
+        },
+      ]);
     }
+  }
+
+  /** What a HUD stat means, with its value now. */
+  function drawInfo(stat: "rep" | "energy" | "mood") {
+    const tr = app.tr();
+    const save = app.save;
+    const info = tr.stat[stat];
+    const value = Math.round(stat === "rep" ? save.rep : save[stat]);
+    const lines = wrap(ctx, info.body, dialogPage(W - 80) - 40, 17);
+    const h = dialogHeight(44 + 120, lines.length, 25);
+    const m = { x: 40, y: Math.max(140, (H - h) / 2), w: W - 80, h };
+    const done = () => {
+      app.info = null;
+    };
+    shade(app, done);
+    const paper = sheet(app, m, info.title);
+    const iy = paper.y + 50;
+    icon(app, stat === "rep" ? "heart" : stat, W / 2 - 58, iy, 52, () =>
+      stat === "rep"
+        ? heart(ctx, W / 2 - 58, iy, 20)
+        : stat === "energy"
+          ? bolt(ctx, W / 2 - 58, iy, 22)
+          : face(ctx, W / 2 - 58, iy, 22, save.mood),
+    );
+    text(ctx, `${value}/100`, W / 2 + 30, iy + 2, { size: 30 });
+    lines.forEach((l, i) => {
+      text(ctx, l, W / 2, paper.y + 120 + i * 25, { size: 17 });
+    });
+    dialogButtons(app, m, [
+      { key: "got-it", label: tr.gotIt, onTap: done, fill: C.green },
+    ]);
+  }
+
+  function drawPause() {
+    const tr = app.tr();
+    shade(app);
+    const m = { x: 50, y: H / 2 - 170, w: W - 100, h: 330 };
+    const paper = sheet(app, m, tr.pauseTitle);
+    pauseGlyph(ctx, W / 2, paper.y + 50, 64);
+    wrap(ctx, tr.pausedNote, paper.w - 40, 19).forEach((l, i) => {
+      text(ctx, l, W / 2, paper.y + 108 + i * 27, { size: 19 });
+    });
+    dialogButtons(app, m, [
+      {
+        key: "resume",
+        label: tr.goOn,
+        fill: C.green,
+        size: 24,
+        onTap: () => app.setPaused(false),
+      },
+    ]);
   }
 
   function drawToasts() {
@@ -193,9 +404,18 @@ export function setup(rt: Runtime): GameHooks {
   return {
     update(dt) {
       app.time += dt;
+      // The loop only runs while the game is live: back from a hold, so is the music
+      if (musicHeld) {
+        musicHeld = false;
+        if (musicOn && !app.paused) tune.release();
+      }
       for (const t of toasts) t.t += dt;
       while (toasts.length && toasts[0].t > TOAST_LIFE) toasts.shift();
       const s = app.screen;
+      // Paused, or reading about a stat: nothing moves until the player is back
+      if (app.paused || app.info) return;
+      if ((s.kind === "hub" || s.kind === "bake") && sync && !app.held)
+        tickNight(dt);
       if (s.kind === "bake") updateBake(app, s.bake, dt);
       else if (s.kind === "shop" && sync?.status !== "conflict")
         updateShop(app, s.shop, dt);
@@ -203,12 +423,15 @@ export function setup(rt: Runtime): GameHooks {
     render() {
       stage.begin();
       ui.frame();
+      app.held = false;
       const s = app.screen;
       if (s.kind === "loading" || (!sprites.ready && s.kind !== "error"))
         drawLoading();
       else if (s.kind === "error") drawError();
       else if (s.kind === "hub") drawHub(app);
-      else if (s.kind === "market") drawMarket(app, s.cart);
+      else if (s.kind === "display") drawDisplay(app);
+      else if (s.kind === "learned") drawLearned(app, s);
+      else if (s.kind === "market") drawMarket(app, s.cart, s.aisle ?? 0);
       else if (s.kind === "book") drawBook(app, s.tab, s.detail);
       else if (s.kind === "pick") {
         drawHub(app);
@@ -216,7 +439,11 @@ export function setup(rt: Runtime): GameHooks {
       } else if (s.kind === "bake") drawBake(app, s.bake);
       else if (s.kind === "shop") drawShop(app, s.shop);
       else if (s.kind === "report") drawReport(app, s.report);
+      else if (s.kind === "slots") drawSlots(app, s);
+      else if (s.kind === "settings") drawSettings(app, s);
       drawToasts();
+      if (app.info) drawInfo(app.info);
+      if (app.paused) drawPause();
       drawSync();
       stage.end();
     },
@@ -227,9 +454,12 @@ export function setup(rt: Runtime): GameHooks {
     },
     suspend() {
       ui.cancel();
+      musicHeld = true;
+      tune.hold();
     },
     dispose() {
       sync?.dispose();
+      tune.stop();
     },
   };
 }

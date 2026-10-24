@@ -6,7 +6,14 @@ import {
   FRESH_DAYS,
   MARKET_TRIP,
   OPEN_AT,
-  PREP_BUDGET,
+  BEDTIME,
+  COFFEE_ENERGY,
+  LATEST_BED,
+  NAP_ENERGY,
+  OPEN,
+  SELL_ENERGY,
+  START_ENERGY,
+  WAKE,
   RECIPES,
   type RecipeId,
   START_COINS,
@@ -37,7 +44,17 @@ import {
   gradeAmount,
   gradeMix,
   gradeOven,
+  advance,
+  canOpen,
+  drinkCoffee,
+  elapsed,
+  goToBed,
+  mustOpen,
+  ovens,
   gradePick,
+  nap,
+  patienceFactor,
+  shake,
   ingredient,
   missing,
   needs,
@@ -75,7 +92,10 @@ describe("the night's work", () => {
     expect(s.coins).toBe(START_COINS);
     expect(s.recipes).toEqual(["cookie", "cupcake"]);
     expect(clockAt(0)).toBe(CLOSE_AT);
-    expect(clockAt(PREP_BUDGET)).toBe(OPEN_AT);
+    expect(clockAt(BEDTIME)).toBe(22 * 60);
+    expect(clockAt(LATEST_BED)).toBe(60);
+    expect(clockAt(WAKE)).toBe(5 * 60 + 30);
+    expect(clockAt(OPEN)).toBe(OPEN_AT);
   });
 
   it("shops in packs and spends a market trip", () => {
@@ -85,7 +105,7 @@ describe("the night's work", () => {
     expect(r.save.coins).toBe(START_COINS - 24 - 15);
     expect(pantryQty(r.save, "flour")).toBe(2000);
     expect(r.save.pantry.eggs?.[0]).toEqual({ qty: 10, days: FRESH_DAYS });
-    expect(r.save.prepUsed).toBe(MARKET_TRIP);
+    expect(r.save.night).toBe(MARKET_TRIP);
     expect(buyIngredients(newGame(1), { butter: 99 })).toEqual({
       ok: false,
       why: "coins",
@@ -108,9 +128,8 @@ describe("the night's work", () => {
     expect(started.ok).toBe(true);
     if (!started.ok) return;
     expect(started.save.pantry.eggs).toEqual([{ qty: 10, days: 3 }]);
-    expect(started.save.prepUsed).toBe(
-      s.prepUsed + batchMinutes(s, recipe("cookie")),
-    );
+    // The clock runs on its own now: starting a batch takes no time up front
+    expect(started.save.night).toBe(s.night);
     const done = finishBatch(
       started.save,
       "cookie",
@@ -134,9 +153,7 @@ describe("the night's work", () => {
     expect(missing(s, recipe("cookie")).map((m) => m.ing)).toEqual(
       Object.keys(needs(recipe("cookie"))),
     );
-    expect(
-      canBake({ ...stocked(s), prepUsed: PREP_BUDGET - 10 }, "cookie"),
-    ).toBe("time");
+    expect(canBake({ ...stocked(s), energy: 0 }, "cookie")).toBe("tired");
     expect(
       canBake(
         {
@@ -168,12 +185,126 @@ describe("the night's work", () => {
       const b = buyUpgrade(x, id as "mixer");
       return b.ok ? b.save : x;
     }, s);
-    expect(batchMinutes(kitted, r)).toBe(plain - 10 - 15);
+    expect(batchMinutes(kitted, r)).toBe(plain - 10);
+    expect(ovens(kitted)).toBe(2);
     expect(buyRecipe(s, "shortcake").ok).toBe(true);
     expect(buyRecipe(newGame(1), "shortcake")).toEqual({
       ok: false,
       why: "coins",
     });
+  });
+});
+
+describe("sleep, energy and mood", () => {
+  it("goes to bed at 22:00 and wakes at 5:30 with energy back", () => {
+    const tired = { ...newGame(1), night: BEDTIME, energy: 20, mood: 60 };
+    const { save, hours } = goToBed(tired);
+    expect(hours).toBe(7.5);
+    expect(save.night).toBe(WAKE);
+    expect(save.energy).toBeGreaterThan(80);
+    expect(save.mood).toBe(68);
+    expect(goToBed(save).hours).toBe(0);
+  });
+
+  it("staying up buys working time with a tired, gloomier morning", () => {
+    const base = { ...newGame(1), energy: 20, mood: 60 };
+    const late = goToBed({ ...base, night: LATEST_BED }).save;
+    const normal = goToBed({ ...base, night: BEDTIME }).save;
+    expect(late.energy).toBeLessThan(normal.energy - 30);
+    expect(late.mood).toBeLessThan(base.mood);
+    // A gloomy baker sleeps worse
+    const gloomy = goToBed({ ...base, night: BEDTIME, mood: 0 }).save;
+    expect(gloomy.energy).toBeLessThan(normal.energy);
+  });
+
+  it("work drains energy; exhausted, nothing but rest, coffee or bed", () => {
+    const s = stocked(newGame(1));
+    expect(s.energy).toBeCloseTo(START_ENERGY - 30 * 0.12);
+    const spent = { ...s, energy: 0 };
+    expect(canBake(spent, "cookie")).toBe("tired");
+    expect(buyIngredients(spent, { flour: 1 })).toEqual({
+      ok: false,
+      why: "tired",
+    });
+    const rested = nap(spent);
+    expect(rested.ok && rested.save.energy).toBe(NAP_ENERGY);
+    expect(rested.ok && rested.save.night).toBe(spent.night + 30);
+    expect(drinkCoffee(spent).ok).toBe(false);
+    const withCup = {
+      ...spent,
+      pantry: { ...spent.pantry, coffee: [{ qty: 2, days: -1 }] },
+    };
+    const cup = drinkCoffee(withCup);
+    expect(cup.ok && cup.save.energy).toBe(COFFEE_ENERGY);
+    expect(cup.ok && cup.save.caffeine).toBe(1);
+    expect(cup.ok && cup.save.pantry.coffee).toEqual([{ qty: 1, days: -1 }]);
+    // and coffee costs sleep
+    const after = cup.ok
+      ? goToBed({ ...cup.save, night: BEDTIME }).save
+      : spent;
+    const without = goToBed({
+      ...withCup,
+      night: BEDTIME,
+      energy: COFFEE_ENERGY,
+    }).save;
+    expect(after.energy).toBeLessThan(without.energy);
+  });
+
+  it("mood moves customers and the day; energy shakes the hands", () => {
+    expect(patienceFactor(100)).toBeCloseTo(1.2);
+    expect(patienceFactor(0)).toBeCloseTo(0.8);
+    expect(shake(80)).toBe(0);
+    expect(shake(0)).toBe(1);
+    const s = { ...newGame(1), mood: 100, energy: 50 };
+    const { next } = closeDay(s, { ...emptyLedger(), walked: 20 }, []);
+    expect(next.rep).toBe(s.rep + 2);
+    expect(next.energy).toBe(50 - SELL_ENERGY);
+    expect(next.mood).toBe(100 + 4 - 8);
+    expect(next.night).toBe(0);
+    expect(finishBatch(s, "cookie", { fail: "burnt" }, 10, true).mood).toBe(96);
+  });
+});
+
+describe("the running clock", () => {
+  it("runs while awake, draining energy, and stops at 1:00 or 9:30", () => {
+    const s = { ...newGame(1), energy: 50 };
+    const later = advance(s, 60);
+    expect(later.night).toBe(60);
+    expect(later.energy).toBeCloseTo(50 - 60 * 0.12);
+    expect(advance({ ...s, night: LATEST_BED - 5 }, 60).night).toBe(LATEST_BED);
+    const morning = { ...s, night: WAKE };
+    expect(advance(morning, 10_000).night).toBe(OPEN + 30);
+    expect(canOpen({ ...s, night: OPEN - 1 })).toBe(false);
+    expect(canOpen({ ...s, night: OPEN })).toBe(true);
+    expect(mustOpen({ ...s, night: OPEN + 30 })).toBe(true);
+  });
+
+  it("times background batches on the night clock, through sleep too", () => {
+    const job = { start: 300 };
+    expect(elapsed({ ...newGame(1), night: 320 }, job)).toBe(20);
+    // Left in the oven over night: hours have passed by morning
+    const slept = goToBed({ ...newGame(1), night: 330 }).save;
+    expect(elapsed(slept, job)).toBe(WAKE - 300);
+    const { next } = closeDay(
+      {
+        ...newGame(1),
+        jobs: [
+          {
+            id: 1,
+            recipe: "cookie",
+            cost: 1,
+            step: 6,
+            results: [],
+            kind: "oven",
+            start: 300,
+            temp: 180,
+          },
+        ],
+      },
+      emptyLedger(),
+      [],
+    );
+    expect(next.jobs).toEqual([]);
   });
 });
 
@@ -386,7 +517,7 @@ describe("closing", () => {
     expect(next).toMatchObject({
       day: 2,
       phase: "prep",
-      prepUsed: 0,
+      night: 0,
       stock: [],
       dayCost: 0,
       coins: s.coins + 103,
@@ -408,6 +539,29 @@ describe("saves", () => {
   it("round-trips a real save and rejects a doctored one", () => {
     const s = stocked(newGame(5));
     expect(parseSave(JSON.parse(JSON.stringify(s)))).toEqual(s);
+    // A version-1 save (no energy or mood, the old night count) is upgraded
+    const { night, energy, mood, caffeine, ...v1 } = {
+      ...s,
+      v: 1,
+      prepUsed: 400,
+    } as Record<string, unknown>;
+    void night;
+    void energy;
+    void mood;
+    void caffeine;
+    const up = parseSave(v1);
+    expect(up).toMatchObject({
+      v: 3,
+      night: WAKE + 40,
+      energy: 80,
+      mood: 60,
+      caffeine: 0,
+      jobs: [],
+    });
+    // and a version-2 save just gains an empty job list
+    const { jobs, ...v2 } = { ...s, v: 2 } as Record<string, unknown>;
+    void jobs;
+    expect(parseSave(v2)).toMatchObject({ v: 3, jobs: [] });
     expect(parseSave({ ...s, recipes: ["cookie", "macaron"] })).toBeNull();
     expect(parseSave({ ...s, coins: 1.5 })).toBeNull();
     expect(plausible(s, { ...s, day: 2, coins: s.coins + 500 })).toBe(true);
@@ -459,7 +613,7 @@ function playDay(save: SaveData) {
     s = finishBatch(st.save, id, { stars: 2 }, st.cost, true);
   }
   // Sell: everyone gets what is there, exact change, snug boxes
-  const opened = { ...s, phase: "open" as const };
+  const opened = { ...goToBed(s).save, phase: "open" as const };
   const { stock, held } = reserve(opened.stock, opened.preorders);
   let display = stock;
   const ledger = emptyLedger();
