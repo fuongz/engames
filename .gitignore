@@ -20,3 +20,6 @@ worker-configuration.d.ts
 
 # Original art from image generation; the game ships the compressed webp in src/
 packages/games/art-src/
+# Licensed music (Pizza Doggy): may not be shared in an open-source repo. Lives
+# only on the deploying machine; the game plays without it.
+packages/games/src/tiem-banh-may/audio/

@@ -22,6 +22,13 @@
       "when": 1792770435236,
       "tag": "0002_calm_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792832490541,
+      "tag": "0003_medical_vindicator",
+      "breakpoints": true
     }
   ]
 }

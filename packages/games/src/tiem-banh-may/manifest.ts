@@ -50,6 +50,7 @@ const manifest: GameManifest = {
     en: "Good Pizza, Great Pizza (running the shop) and Cooking Mama (cooking step by step)",
   },
   requiresAccount: true,
+  saveSlots: 3,
 };
 
 export default manifest;

@@ -1,11 +1,13 @@
 import type { Rect } from "../core";
-import { type App, H, W, btn, hud, shade, sheet, viewRect } from "./app";
+import { type App, H, W, btn, shade, sheet, viewRect } from "./app";
+import { hud } from "./hud";
 import {
   C,
   bar,
   bubble,
   coin,
   cover,
+  framed,
   heart,
   panel,
   sprite,
@@ -16,8 +18,10 @@ import {
   BOX_FROM,
   BOX_SIZES,
   CHANGE_COINS,
+  CHANGE_MAKING,
   CLOSE_AT,
   DISCOUNT_FROM,
+  OPEN,
   OPEN_AT,
   PATIENCE,
   PREORDER_PATIENCE,
@@ -28,6 +32,7 @@ import {
   SELL_SECONDS,
   VIP_PATIENCE,
 } from "./config";
+import { pick, shopBackdrop } from "./bakeart";
 import {
   type Ledger,
   type Line,
@@ -39,15 +44,21 @@ import {
   boxFit,
   closeDay,
   customer,
+  dayInfo,
   emptyLedger,
   formatClock,
+  goToBed,
   orderTotal,
+  patienceFactor,
   payment,
   planDay,
   recipe,
   reserve,
   settle,
+  shake,
+  slept,
 } from "./logic";
+import { dialogButtons } from "./kit";
 
 // Opening hours, in real time: customers walk in, queue, say what they want;
 // the player picks it from the display, boxes big orders and counts the change.
@@ -94,6 +105,8 @@ export interface ShopState {
   closing: number | null;
   /** The save as it was at opening: the day is settled against it. */
   opened: SaveData;
+  /** Seconds before tired hands can pick the next piece. */
+  busy: number;
 }
 
 const DOOR = { x: 96, y: 440, s: 0.55 };
@@ -104,24 +117,37 @@ const SLOTS = [
   { x: 250, y: 488, s: 0.68 },
 ];
 const COUNTER_Y = 566;
+/** The light turns golden between these minutes of the day. */
+const DUSK_FROM = 14 * 60 + 30;
+const DUSK_TO = 16 * 60;
 const MIN_PER_SECOND = (CLOSE_AT - OPEN_AT) / SELL_SECONDS;
 const WALK_SPEED = 420;
 
-/** 9:00: save the morning (a reload replays the day from here) and open the doors. */
+/** 9:00: save the morning (a reload replays the day from here) and open the doors. Still up? Sleep first. */
 export function openShop(app: App) {
-  const opened: SaveData = { ...app.save, phase: "open" };
+  let save = app.save;
+  if (!slept(save)) {
+    const { save: rested, hours } = goToBed(save);
+    save = rested;
+    app.toast(app.tr().slept(Math.round(hours * 60)), W / 2, 330, C.text, 22);
+  }
+  const opened: SaveData = { ...save, phase: "open" };
   app.commit(opened, { now: true });
   app.go({ kind: "shop", shop: newDay(opened) });
 }
 
 export function newDay(opened: SaveData): ShopState {
   const { stock, held } = reserve(opened.stock, opened.preorders);
+  // Opened late (up to 9:30): customers who came earlier found the door shut
+  const clock = Math.max(OPEN_AT, OPEN_AT + opened.night - OPEN);
+  const plan = planDay(opened);
+  const next = plan.findIndex((v) => v.at >= clock);
   return {
-    clock: OPEN_AT,
+    clock,
     stock,
     held: Object.fromEntries(held),
-    plan: planDay(opened),
-    next: 0,
+    plan,
+    next: next < 0 ? plan.length : next,
     walkers: [],
     tray: [],
     discount: false,
@@ -129,6 +155,7 @@ export function newDay(opened: SaveData): ShopState {
     checkout: null,
     closing: null,
     opened,
+    busy: 0,
   };
 }
 
@@ -172,6 +199,7 @@ export function updateShop(app: App, s: ShopState, dt: number) {
     return;
   }
   s.clock += dt * MIN_PER_SECOND;
+  s.busy = Math.max(0, s.busy - dt);
   // Arrivals
   while (s.next < s.plan.length && s.plan[s.next].at <= s.clock) {
     const v = s.plan[s.next++];
@@ -185,11 +213,12 @@ export function updateShop(app: App, s: ShopState, dt: number) {
       continue;
     }
     const max =
-      v.kind === "vip"
+      patienceFactor(s.opened.mood) *
+      (v.kind === "vip"
         ? VIP_PATIENCE
         : v.kind === "preorder"
           ? PREORDER_PATIENCE
-          : PATIENCE;
+          : PATIENCE);
     s.walkers.push({
       v,
       x: DOOR.x,
@@ -347,6 +376,8 @@ function pay(app: App, s: ShopState, w: Walker, box: number | null) {
     app.toast(app.tr().exactPaid, W / 2, 470, C.text, 18);
     return finish(app, s, w, box, total, paid, 0);
   }
+  // With hand-counted change switched off (CHANGE_MAKING), the till gives it exactly
+  if (!CHANGE_MAKING) return finish(app, s, w, box, total, paid, paid - total);
   s.checkout = { kind: "change", walker: w, box, total, paid, given: 0 };
 }
 
@@ -360,7 +391,7 @@ function finish(
   given: number,
 ) {
   const tr = app.tr();
-  const out = settle(w.v, s.tray, paid, total, given, box);
+  const out = settle(w.v, s.tray, paid, total, given, box, s.opened.mood);
   const L = s.ledger;
   L.revenue += out.coins;
   L.tips += out.tip;
@@ -404,20 +435,42 @@ export function drawShop(app: App, s: ShopState) {
   const { ctx } = app;
   const tr = app.tr();
   const v = viewRect(app);
-  cover(ctx, app.sprites.get("bg-shop"), v, 0.3);
+  // The day's weather outside, the light going golden towards closing time
+  const weather = dayInfo(s.opened).weather;
+  const dusk = Math.min(
+    1,
+    Math.max(0, (s.clock - DUSK_FROM) / (DUSK_TO - DUSK_FROM)),
+  );
+  cover(
+    ctx,
+    pick(app.sprites, shopBackdrop(weather, false), "bg-shop"),
+    v,
+    0.3,
+  );
+  if (dusk > 0) {
+    ctx.save();
+    ctx.globalAlpha = dusk;
+    cover(
+      ctx,
+      pick(app.sprites, shopBackdrop(weather, true), "bg-shop"),
+      v,
+      0.3,
+    );
+    ctx.restore();
+  }
+  if (weather === "rainy") drawRain(app, v);
   // The till counts up as the day goes
   const L = s.ledger;
-  hud(
-    app,
-    formatClock(Math.min(s.clock, CLOSE_AT)),
-    s.opened.coins + L.revenue + L.tips - L.boxes,
-  );
+  hud(app, formatClock(Math.min(s.clock, CLOSE_AT)), {
+    coins: s.opened.coins + L.revenue + L.tips - L.boxes,
+    pause: true,
+  });
 
   // Day progress under the clock, then the shop's two switches
   const top = app.rt.stage.view.y + 14;
   bar(
     ctx,
-    { x: W - 150, y: top + 96, w: 136, h: 14 },
+    { x: W - 150, y: top + 104, w: 136, h: 14 },
     (s.clock - OPEN_AT) / (CLOSE_AT - OPEN_AT),
     "#ffc46b",
   );
@@ -427,7 +480,7 @@ export function drawShop(app: App, s: ShopState) {
       btn(
         app,
         "discount",
-        { x: W - 176, y: top + 118, w: 162, h: 54 },
+        { x: W - 176, y: top + 126, w: 162, h: 54 },
         s.discount ? tr.discountOn : tr.discount,
         () => (s.discount = true),
         {
@@ -441,7 +494,7 @@ export function drawShop(app: App, s: ShopState) {
       btn(
         app,
         "close-early",
-        { x: W / 2 - 110, y: top + 118, w: 220, h: 56 },
+        { x: W / 2 - 110, y: top + 126, w: 220, h: 56 },
         tr.closeEarly,
         () => close(app, s),
         { fill: C.green, size: 19 },
@@ -647,6 +700,8 @@ function takePiece(app: App, s: ShopState, slot: Slot) {
   const tr = app.tr();
   const f = front(s);
   if (!f?.lines || f.leaving || s.checkout || s.closing !== null) return;
+  // Tired hands: a beat between pieces
+  if (s.busy > 0) return;
   const want = f.lines.find((l) => l.recipe === slot.recipe)?.qty ?? 0;
   const have = s.tray.filter((p) => p.recipe === slot.recipe).length;
   if (have >= want || f.v.kind === "preorder") {
@@ -661,6 +716,7 @@ function takePiece(app: App, s: ShopState, slot: Slot) {
   at.count--;
   s.tray.push({ recipe: at.recipe, stars: at.stars, cost: at.cost });
   s.stock = s.stock.filter((x) => x.count > 0);
+  s.busy = shake(s.opened.energy) * 0.4;
   app.sfx.tap();
 }
 
@@ -828,7 +884,7 @@ function drawChange(
   const m = { x: 20, y: 250, w: W - 40, h: 470 };
   sheet(app, m, tr.giveChange);
   const info = { x: m.x + 20, y: m.y + 74, w: m.w - 40, h: 110 };
-  panel(ctx, info, { fill: C.card, stroke: C.cardBorder, radius: 20, line: 4 });
+  framed(ctx, info, C.card, 20);
   text(ctx, tr.totalPaid(c.total, c.paid), info.x + info.w / 2, info.y + 32, {
     size: 22,
     maxWidth: info.w - 20,
@@ -860,23 +916,63 @@ function drawChange(
       },
     });
   });
-  btn(
-    app,
-    "recount",
-    { x: m.x + 20, y: m.y + m.h - 104, w: 170, h: 80 },
-    tr.recount,
-    () => (c.given = 0),
-    { size: 20 },
-  );
-  btn(
-    app,
-    "give-change",
-    { x: m.x + 204, y: m.y + m.h - 104, w: m.w - 224, h: 80 },
-    tr.giveChange,
-    () => finish(app, s, c.walker, c.box, c.total, c.paid, c.given),
+  dialogButtons(app, m, [
     {
+      key: "recount",
+      label: tr.recount,
+      size: 20,
+      onTap: () => {
+        c.given = 0;
+      },
+    },
+    {
+      key: "give-change",
+      label: tr.giveChange,
       fill: C.green,
       size: 22,
+      weight: 1.3,
+      onTap: () => finish(app, s, c.walker, c.box, c.total, c.paid, c.given),
     },
-  );
+  ]);
+}
+
+/** Glass in the shop backdrop (fractions of the image): the window and the door. */
+const GLASS = [
+  { x: 0.4, y: 0.12, w: 0.36, h: 0.27 },
+  { x: 0.08, y: 0.16, w: 0.21, h: 0.24 },
+];
+
+/** Rain falling past the window and the door, mapped onto the covered backdrop. */
+function drawRain(app: App, v: Rect) {
+  const img = app.sprites.get("bg-shop");
+  if (!img?.naturalWidth) return;
+  const { ctx } = app;
+  const k = Math.max(v.w / img.naturalWidth, v.h / img.naturalHeight);
+  const dw = img.naturalWidth * k;
+  const dh = img.naturalHeight * k;
+  const x0 = v.x + (v.w - dw) / 2;
+  const y0 = v.y + (v.h - dh) * 0.3;
+  ctx.save();
+  ctx.strokeStyle = "rgba(225, 235, 255, 0.55)";
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+  for (const g of GLASS) {
+    const r = { x: x0 + g.x * dw, y: y0 + g.y * dh, w: g.w * dw, h: g.h * dh };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x, r.y, r.w, r.h);
+    ctx.clip();
+    for (let i = 0; i < 26; i++) {
+      const fx = (i * 0.618 * 997) % 1;
+      const fall = (app.time * (0.9 + (i % 5) * 0.12) + i * 0.37) % 1;
+      const x = r.x + fx * (r.w + 20) - 10 - fall * 10;
+      const y = r.y - 20 + fall * (r.h + 40);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 4, y + 16);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
 }

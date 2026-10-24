@@ -1,5 +1,6 @@
 import { type App, H, W, btn, viewRect } from "./app";
-import { C, clipboard, cover, heart, panel, sprite, text } from "./art";
+import { pick, shopBackdrop } from "./bakeart";
+import { C, cover, dialog, framed, heart, sprite, text } from "./art";
 import type { RecipeId } from "./config";
 import { type DayReport, customer, formatClock, recipe } from "./logic";
 
@@ -11,13 +12,18 @@ export function drawReport(app: App, r: DayReport) {
   const tr = app.tr();
   const locale = app.rt.locale();
   const v = viewRect(app);
-  cover(ctx, app.sprites.get("bg-shop"), v, 0.3);
+  cover(
+    ctx,
+    pick(app.sprites, shopBackdrop(r.weather, true), "bg-shop"),
+    v,
+    0.3,
+  );
   ctx.fillStyle = "rgba(246, 231, 205, 0.86)";
   ctx.fillRect(v.x, v.y, v.w, v.h);
 
   const y0 = Math.max(v.y + 16, 20) + 50;
   const m = { x: 16, y: y0, w: W - 32, h: H - 132 - y0 };
-  clipboard(ctx, m, tr.reportTitle(r.day));
+  dialog(ctx, m, tr.reportTitle(r.day));
 
   // ---- money
   const money = { x: m.x + 28, y: m.y + 56, w: m.w - 56, h: 0 };
@@ -28,12 +34,7 @@ export function drawReport(app: App, r: DayReport) {
     [tr.ingredients, -r.ingredients],
   ];
   money.h = 30 + rows.length * 34 + 70;
-  panel(ctx, money, {
-    fill: C.card,
-    stroke: C.cardBorder,
-    radius: 22,
-    line: 4,
-  });
+  framed(ctx, money, C.card, 22);
   rows.forEach(([label, value], i) => {
     const y = money.y + 30 + i * 34;
     text(ctx, label, money.x + 20, y, { size: 19, weight: 700, align: "left" });
@@ -68,15 +69,16 @@ export function drawReport(app: App, r: DayReport) {
   // ---- what happened
   const notes: { text: string; color?: string; icon?: () => void }[] = [];
   notes.push({
-    text: `${tr.served(r.served)}${r.walked ? ` · ${tr.walkedOff(r.walked)}` : ""}`,
+    text: tr.served(r.served),
   });
+  if (r.walked) notes.push({ text: tr.walkedOff(r.walked), color: C.bad });
   if (r.wasted.pieces)
     notes.push({
-      text: `${tr.wasted(r.wasted.pieces)} · −${tr.num(r.wasted.cost)}`,
+      text: `${tr.wasted(r.wasted.pieces)}: −${tr.num(r.wasted.cost)}`,
       color: C.bad,
     });
   if (r.spoiled > 0.5)
-    notes.push({ text: `${tr.spoiled} · −${tr.num(r.spoiled)}`, color: C.bad });
+    notes.push({ text: `${tr.spoiled}: −${tr.num(r.spoiled)}`, color: C.bad });
   if (r.overChange)
     notes.push({ text: tr.overGiven(r.overChange), color: C.warn });
   if (r.vip !== "none")
@@ -108,7 +110,7 @@ export function drawReport(app: App, r: DayReport) {
     w: m.w - 56,
     h: m.y + m.h - money.y - money.h - 40,
   };
-  panel(ctx, info, { fill: C.card, stroke: C.cardBorder, radius: 22, line: 4 });
+  framed(ctx, info, C.card, 22);
   // Reputation
   heart(ctx, info.x + 30, info.y + 30, 11);
   text(ctx, tr.rep(r.rep.before, r.rep.after), info.x + 50, info.y + 30, {

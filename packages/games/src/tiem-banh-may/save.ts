@@ -3,8 +3,9 @@ import {
   CUSTOMERS,
   INGREDIENTS,
   MAX_REP,
-  PREP_BUDGET,
+  OPEN,
   RECIPES,
+  WAKE,
   START_COINS,
   UPGRADES,
 } from "./config";
@@ -35,16 +36,62 @@ const ids = (x: unknown, known: Set<string>) =>
   x.every((i) => typeof i === "string" && known.has(i)) &&
   new Set(x).size === x.length;
 
-/** The save, if it has the right shape; null otherwise. */
+/**
+ * Version 1 counted the night as minutes of work (bed 22:00, up at 5:00) and
+ * had no energy or mood: map it onto the version-2 night and give defaults.
+ */
+function migrate(raw: Record<string, unknown>): Record<string, unknown> {
+  // v2 → v3: batches can run in the background
+  if (raw.v === 2) return { ...raw, v: 3, jobs: [] };
+  if (raw.v !== 1) return raw;
+  const used = typeof raw.prepUsed === "number" ? raw.prepUsed : 0;
+  // v1: 330 minutes of evening, then the morning from 5:00
+  const night = used < 330 ? used : Math.max(WAKE, WAKE - 30 + (used - 330));
+  const { prepUsed: _, ...rest } = raw;
+  return { ...rest, v: 3, night, energy: 80, mood: 60, caffeine: 0, jobs: [] };
+}
+
+/** The save, if it has the right shape (older versions are upgraded); null otherwise. */
 export function parseSave(raw: unknown): SaveData | null {
-  if (!isObj(raw) || raw.v !== 1) return null;
-  const s = raw;
+  if (!isObj(raw)) return null;
+  const s = migrate(raw);
+  if (s.v !== 3) return null;
+  if (
+    !Array.isArray(s.jobs) ||
+    s.jobs.length > 6 ||
+    !s.jobs.every(
+      (j) =>
+        isObj(j) &&
+        isInt(j.id, 0, 1e9) &&
+        RECIPE_IDS.has(j.recipe as string) &&
+        isNum(j.cost, 0, 1e5) &&
+        isInt(j.step, 0, 30) &&
+        Array.isArray(j.results) &&
+        j.results.length <= 60 &&
+        j.results.every(
+          (r) =>
+            isObj(r) &&
+            typeof r.grade === "string" &&
+            typeof r.note === "string",
+        ) &&
+        (j.kind === "oven" || j.kind === "wait") &&
+        isNum(j.start, 0, OPEN) &&
+        isInt(j.temp, 0, 300),
+    )
+  )
+    return null;
+  if (
+    !isNum(s.energy, 0, 100) ||
+    !isNum(s.mood, 0, 100) ||
+    !isInt(s.caffeine, 0, 50)
+  )
+    return null;
   if (!isInt(s.day, 1, 100_000) || (s.phase !== "prep" && s.phase !== "open"))
     return null;
   if (
     !isInt(s.coins, -1_000_000, 1_000_000_000) ||
     !isNum(s.rep, 0, MAX_REP) ||
-    !isNum(s.prepUsed, 0, PREP_BUDGET)
+    !isNum(s.night, 0, OPEN)
   )
     return null;
   if (!ids(s.recipes, RECIPE_IDS) || !ids(s.upgrades, UPGRADE_IDS)) return null;

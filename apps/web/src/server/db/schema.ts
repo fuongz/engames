@@ -129,13 +129,15 @@ export const gameSave = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     gameSlug: text("game_slug").notNull(),
+    /** Which of the game's `saveSlots` this is (0 for single-save games). */
+    slot: integer("slot").notNull().default(0),
     data: text("data").notNull(),
     version: integer("version").notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.gameSlug] })],
+  (t) => [primaryKey({ columns: [t.userId, t.gameSlug, t.slot] })],
 );
 
 export type GameSaveRow = typeof gameSave.$inferSelect;

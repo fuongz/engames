@@ -1,7 +1,7 @@
 // The engine's public surface. Games import from "../core"; the files behind it
 // are free to move.
 
-export type { AudioBus, ToneOptions } from "./audio";
+export type { AudioBus, MusicLoop, ToneOptions } from "./audio";
 export {
   type GameHooks,
   type GameSpec,

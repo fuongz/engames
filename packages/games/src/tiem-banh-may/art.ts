@@ -2,13 +2,13 @@ import type { Rect } from "../core";
 import type { Weather } from "./config";
 
 // The interface is drawn in code, cosy bakery style: cream paper pages on a
-// terracotta clipboard, cards with caramel borders, cream buttons with a chunky
+// terracotta dialog, cards with caramel borders, cream buttons with a chunky
 // brown outline and a lip underneath, sunburst tiles for owned items, a round
 // orange close button. The world (cakes, customers, rooms) is bitmap art in img/.
 
 type Ctx = CanvasRenderingContext2D;
 
-export const FONT = '"Baloo 2", "Trebuchet MS", system-ui, sans-serif';
+export const FONT = '"Mali", "Trebuchet MS", system-ui, sans-serif';
 
 export const C = {
   ink: "#5a3424",
@@ -69,15 +69,31 @@ export interface PanelStyle {
   lip?: number;
 }
 
-/** A rounded slab with a thick outline and a lip, the reference's basic shape. */
+/** Outlines are drawn thin and hand-made: every `line` is scaled by this. */
+export const LINE = 0.6;
+
+/** A darker shade of a #rrggbb colour (for button bases and lips). */
+export function shadeOf(color: string, k = 0.2) {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return C.creamDeep;
+  const c = [1, 3, 5].map((i) => Number.parseInt(color.slice(i, i + 2), 16));
+  const ink = [90, 52, 36];
+  return `rgb(${c.map((v, i) => Math.round(v + (ink[i] - v) * k)).join(",")})`;
+}
+
+/** A rounded slab with a thin outline; `lip` adds a darker base under it. */
 export function panel(ctx: Ctx, r: Rect, s: PanelStyle) {
   const radius = s.radius ?? 22;
-  const line = s.line ?? 4;
+  const line = (s.line ?? 4) * LINE;
   const lip = s.lip ?? 0;
   if (lip) {
     rr(ctx, r.x, r.y + lip, r.w, r.h, radius);
-    ctx.fillStyle = s.stroke ?? C.ink;
+    ctx.fillStyle = shadeOf(s.fill, 0.22);
     ctx.fill();
+    if (line) {
+      ctx.lineWidth = line;
+      ctx.strokeStyle = s.stroke ?? C.ink;
+      ctx.stroke();
+    }
   }
   rr(ctx, r.x, r.y, r.w, r.h, radius);
   ctx.fillStyle = s.fill;
@@ -109,7 +125,7 @@ export function text(
   s: TextStyle = {},
 ) {
   let size = s.size ?? 22;
-  const weight = s.weight ?? 800;
+  const weight = s.weight ?? 700;
   ctx.font = `${weight} ${size}px ${FONT}`;
   if (s.maxWidth) {
     while (size > 11 && ctx.measureText(str).width > s.maxWidth) {
@@ -163,25 +179,51 @@ export interface ButtonStyle {
   radius?: number;
 }
 
-/** Cream pill with a brown outline; pressed sinks onto its lip. */
+/** A broken "stitched" line, the hand-made accent of every button and dialog. */
+export function stitch(ctx: Ctx, draw: () => void, alpha = 0.55) {
+  ctx.save();
+  ctx.setLineDash([18, 7, 5, 7]);
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = `rgba(90, 52, 36, ${alpha})`;
+  ctx.beginPath();
+  draw();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Pill on a darker base of its own colour, a stitched line along the bottom; pressed sinks onto the base. */
 export function button(ctx: Ctx, r: Rect, label: string, s: ButtonStyle = {}) {
-  const lip = 5;
+  const lip = 6;
   const sink = s.pressed ? lip - 1 : 0;
+  const fill = s.fill ?? C.cream;
+  const radius = s.radius ?? (r.h - lip) / 2;
   ctx.save();
   if (s.disabled) ctx.globalAlpha = 0.55;
-  rr(ctx, r.x, r.y + lip, r.w, r.h - lip, s.radius ?? (r.h - lip) / 2);
-  ctx.fillStyle = C.ink;
+  rr(ctx, r.x, r.y + lip, r.w, r.h - lip, radius);
+  ctx.fillStyle = shadeOf(fill, 0.25);
   ctx.fill();
-  panel(
-    ctx,
-    { x: r.x, y: r.y + sink, w: r.w, h: r.h - lip },
-    { fill: s.fill ?? C.cream, radius: s.radius ?? (r.h - lip) / 2 },
-  );
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  const face = { x: r.x, y: r.y + sink, w: r.w, h: r.h - lip };
+  rr(ctx, face.x, face.y, face.w, face.h, radius);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.stroke();
+  if (face.w > 70) {
+    const inset = Math.min(radius, face.h / 2) * 0.9;
+    stitch(ctx, () => {
+      ctx.moveTo(face.x + inset, face.y + face.h - 6);
+      ctx.lineTo(face.x + face.w - inset, face.y + face.h - 6);
+    });
+  }
   if (label)
-    text(ctx, label, r.x + r.w / 2, r.y + sink + (r.h - lip) / 2, {
+    text(ctx, label, r.x + r.w / 2, face.y + face.h / 2 - 1, {
       size: s.size ?? 22,
       fill: s.color ?? C.text,
       maxWidth: r.w - 24,
+      weight: 600,
     });
   ctx.restore();
 }
@@ -231,7 +273,32 @@ const TONES: Record<CardTone, { border: string; inner: string; ray?: string }> =
     green: { border: C.greenBorder, inner: C.green, ray: C.greenRay },
   };
 
-/** White card with a coloured border and an inner tile; owned tiles get a sunburst. Returns the tile rect. */
+/** A cream frame on a darker base with a stitched inner border: info panels, rows, tiles. */
+export function framed(
+  ctx: Ctx,
+  r: Rect,
+  fill: string = C.card,
+  radius = 24,
+  lip = 5,
+) {
+  panel(ctx, r, { fill, radius, line: 4, lip });
+  const k = Math.min(7, r.h / 6);
+  stitch(
+    ctx,
+    () =>
+      rr(
+        ctx,
+        r.x + k,
+        r.y + k,
+        r.w - k * 2,
+        r.h - k * 2,
+        Math.max(4, radius - k),
+      ),
+    0.38,
+  );
+}
+
+/** A framed card with an inner tile (owned tiles get a sunburst). Returns the tile rect. */
 export function card(
   ctx: Ctx,
   r: Rect,
@@ -240,13 +307,9 @@ export function card(
   tileH?: number,
 ): Rect {
   const t = TONES[tone];
-  const y = r.y + (pressed ? 2 : 0);
-  panel(
-    ctx,
-    { x: r.x, y, w: r.w, h: r.h },
-    { fill: C.card, stroke: t.border, radius: 22, line: 5 },
-  );
-  const pad = 9;
+  const y = r.y + (pressed ? 3 : 0);
+  framed(ctx, { x: r.x, y, w: r.w, h: r.h }, C.card, 22, pressed ? 2 : 5);
+  const pad = 10;
   const tile = {
     x: r.x + pad,
     y: y + pad,
@@ -261,6 +324,10 @@ export function card(
   if (t.ray)
     sunburst(ctx, tile.x + tile.w / 2, tile.y + tile.h / 2, tile.w, t.ray);
   ctx.restore();
+  rr(ctx, tile.x, tile.y, tile.w, tile.h, 16);
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = t.border;
+  ctx.stroke();
   return tile;
 }
 
@@ -313,7 +380,55 @@ export function coin(ctx: Ctx, x: number, y: number, r: number) {
   ctx.fill();
   ctx.lineWidth = Math.max(1.5, r * 0.08);
   ctx.stroke();
-  star(ctx, x, y + r * 0.03, r * 0.48, C.coin, Math.max(1.5, r * 0.08));
+  fish(ctx, x, y, r * 0.5, Math.max(1.2, r * 0.07));
+}
+
+/** The little fish embossed on a coin, `r` from its middle to its nose. */
+export function fish(ctx: Ctx, x: number, y: number, r: number, line: number) {
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineWidth = line;
+  ctx.strokeStyle = C.ink;
+  ctx.fillStyle = "#fff0b3";
+  // Body: a plump teardrop facing left, with a forked tail on the right
+  ctx.beginPath();
+  ctx.moveTo(x - r, y);
+  ctx.bezierCurveTo(
+    x - r * 0.7,
+    y - r * 0.72,
+    x + r * 0.25,
+    y - r * 0.7,
+    x + r * 0.42,
+    y,
+  );
+  ctx.lineTo(x + r * 0.95, y - r * 0.5);
+  ctx.quadraticCurveTo(x + r * 0.8, y, x + r * 0.95, y + r * 0.5);
+  ctx.lineTo(x + r * 0.42, y);
+  ctx.bezierCurveTo(
+    x + r * 0.25,
+    y + r * 0.7,
+    x - r * 0.7,
+    y + r * 0.72,
+    x - r,
+    y,
+  );
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // An eye, once there is room for one
+  if (r > 4) {
+    ctx.beginPath();
+    ctx.arc(
+      x - r * 0.55,
+      y - r * 0.12,
+      Math.max(0.8, r * 0.11),
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = C.ink;
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 export function star(
@@ -513,6 +628,33 @@ export function chip(
   return { x: left, y, w, h };
 }
 
+/** A small cog for the settings button. */
+export function gear(ctx: Ctx, cx: number, cy: number, r: number) {
+  const teeth = 8;
+  ctx.beginPath();
+  for (let i = 0; i < teeth * 2; i++) {
+    const a = (i * Math.PI) / teeth - Math.PI / 2;
+    const out = i % 2 === 0;
+    const d = out ? r : r * 0.74;
+    // Square-ish teeth: two points per edge
+    const half = (Math.PI / teeth) * 0.42;
+    ctx.lineTo(cx + Math.cos(a - half) * d, cy + Math.sin(a - half) * d);
+    ctx.lineTo(cx + Math.cos(a + half) * d, cy + Math.sin(a + half) * d);
+  }
+  ctx.closePath();
+  ctx.fillStyle = "#c9a27e";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.32, 0, Math.PI * 2);
+  ctx.fillStyle = C.cream;
+  ctx.fill();
+  ctx.stroke();
+}
+
 export function bar(
   ctx: Ctx,
   r: Rect,
@@ -529,7 +671,7 @@ export function bar(
   ctx.fillRect(r.x, r.y, r.w * Math.min(1, k), r.h);
   ctx.restore();
   rr(ctx, r.x, r.y, r.w, r.h, r.h / 2);
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.strokeStyle = C.ink;
   ctx.stroke();
 }
@@ -543,7 +685,7 @@ export function bubble(ctx: Ctx, r: Rect, tailX: number) {
   ctx.closePath();
   ctx.fillStyle = C.white;
   ctx.fill();
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = 2.2;
   ctx.strokeStyle = C.ink;
   ctx.stroke();
   panel(ctx, r, { fill: C.white, radius: 18, line: 3.5 });
@@ -575,6 +717,85 @@ export function sprite(
 }
 
 /** Cover a rect with an image (cropping its edges), for room backgrounds. */
+/**
+ * Draw `img` stretched over `r` as a 9-slice: its corners (`src` px of the
+ * image) keep their shape at `dst` px, the edges and middle stretch.
+ */
+export function nine(
+  ctx: Ctx,
+  img: HTMLImageElement | undefined,
+  r: Rect,
+  src: number,
+  dst: number,
+) {
+  if (!img?.naturalWidth) return false;
+  const sw = img.naturalWidth;
+  const sh = img.naturalHeight;
+  const xs = [0, src, sw - src, sw];
+  const ys = [0, src, sh - src, sh];
+  const xd = [r.x, r.x + dst, r.x + r.w - dst, r.x + r.w];
+  const yd = [r.y, r.y + dst, r.y + r.h - dst, r.y + r.h];
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+      ctx.drawImage(
+        img,
+        xs[i],
+        ys[j],
+        xs[i + 1] - xs[i],
+        ys[j + 1] - ys[j],
+        xd[i],
+        yd[j],
+        xd[i + 1] - xd[i],
+        yd[j + 1] - yd[j],
+      );
+  return true;
+}
+
+/** A soft contact shadow on the table under something `w` wide. */
+export function tableShadow(ctx: Ctx, cx: number, y: number, w: number) {
+  ctx.save();
+  const g = ctx.createRadialGradient(cx, y, 0, cx, y, w / 2);
+  g.addColorStop(0, "rgba(92, 52, 28, 0.32)");
+  g.addColorStop(0.6, "rgba(92, 52, 28, 0.16)");
+  g.addColorStop(1, "rgba(92, 52, 28, 0)");
+  ctx.translate(cx, y);
+  ctx.scale(1, 0.16);
+  ctx.translate(-cx, -y);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, y, w / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** A picture standing on the table at `bottom`, with its shadow under it. */
+export function onTable(
+  ctx: Ctx,
+  img: HTMLImageElement | undefined,
+  cx: number,
+  bottom: number,
+  w: number,
+  h: number,
+) {
+  if (!img?.naturalWidth) return;
+  const k = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+  tableShadow(ctx, cx, bottom - 4, img.naturalWidth * k * 1.08);
+  sprite(ctx, img, cx, bottom, w, h, "bottom");
+}
+
+/** Where a fraction `f` of an image's height lands once drawn by `cover`. */
+export function coverY(
+  img: HTMLImageElement | undefined,
+  r: Rect,
+  f: number,
+  focusY = 0.5,
+) {
+  if (!img?.naturalWidth) return r.y + r.h * f;
+  const k = Math.max(r.w / img.naturalWidth, r.h / img.naturalHeight);
+  const dh = img.naturalHeight * k;
+  return r.y + (r.h - dh) * focusY + dh * f;
+}
+
 export function cover(
   ctx: Ctx,
   img: HTMLImageElement | undefined,
@@ -589,66 +810,42 @@ export function cover(
 }
 
 /**
- * Terracotta clipboard holding a cream paper page, with a metal clip on top and
- * the title in white over it. Returns the paper's rect (draw the page on it).
+ * A big rounded cream dialog with a stitched inner border and its title on a
+ * pale-blue pill over the top edge. Returns the inner page to draw on.
  */
-export function clipboard(ctx: Ctx, r: Rect, title: string): Rect {
-  panel(ctx, r, {
-    fill: C.board,
-    stroke: C.boardDeep,
-    radius: 30,
-    line: 5,
-    lip: 7,
-  });
-  const paper = { x: r.x + 16, y: r.y + 40, w: r.w - 32, h: r.h - 56 };
-  // A second sheet peeking out underneath, slightly askew
-  ctx.save();
-  ctx.translate(paper.x + paper.w / 2, paper.y + paper.h / 2);
-  ctx.rotate(-0.012);
-  rr(ctx, -paper.w / 2 + 3, -paper.h / 2 + 6, paper.w, paper.h, 16);
-  ctx.fillStyle = "#efdcbc";
+export function dialog(ctx: Ctx, r: Rect, title: string): Rect {
+  panel(ctx, r, { fill: "#f4f0da", radius: 46, line: 4.4 });
+  const inner = { x: r.x + 16, y: r.y + 30, w: r.w - 32, h: r.h - 48 };
+  rr(ctx, inner.x, inner.y, inner.w, inner.h, 36);
+  ctx.fillStyle = "#f8f6e8";
   ctx.fill();
-  ctx.restore();
-  panel(ctx, paper, {
-    fill: "#fff6e3",
-    stroke: C.cardBorder,
-    radius: 16,
-    line: 3,
-  });
-  // Folded corner, bottom left
-  ctx.beginPath();
-  ctx.moveTo(paper.x + 2, paper.y + paper.h - 34);
-  ctx.lineTo(paper.x + 34, paper.y + paper.h - 2);
-  ctx.lineTo(paper.x + 8, paper.y + paper.h - 8);
-  ctx.closePath();
-  ctx.fillStyle = "#ead5b0";
-  ctx.fill();
-  // The clip
-  const cw = Math.min(130, r.w * 0.3);
-  const clip = { x: r.x + r.w / 2 - cw / 2, y: r.y - 6, w: cw, h: 46 };
-  panel(
+  stitch(
     ctx,
-    { x: clip.x + cw * 0.3, y: clip.y - 14, w: cw * 0.4, h: 28 },
-    { fill: "#d9d2c6", stroke: C.ink, radius: 10, line: 3.5 },
+    () => rr(ctx, inner.x + 6, inner.y + 6, inner.w - 12, inner.h - 12, 32),
+    0.6,
   );
-  panel(ctx, clip, {
-    fill: "#e9e3d8",
-    stroke: C.ink,
-    radius: 12,
-    line: 3.5,
-    lip: 4,
+  // Title pill
+  ctx.font = `600 26px ${FONT}`;
+  const tw = Math.min(
+    r.w - 90,
+    Math.max(170, ctx.measureText(title).width + 70),
+  );
+  const pill = { x: r.x + r.w / 2 - tw / 2, y: r.y - 26, w: tw, h: 54 };
+  panel(ctx, pill, { fill: "#d9f2f7", radius: 27, line: 4.4 });
+  stitch(
+    ctx,
+    () => {
+      ctx.moveTo(pill.x + 24, pill.y + pill.h - 8);
+      ctx.lineTo(pill.x + pill.w - 24, pill.y + pill.h - 8);
+    },
+    0.4,
+  );
+  text(ctx, title, r.x + r.w / 2, pill.y + pill.h / 2, {
+    size: 26,
+    weight: 600,
+    maxWidth: tw - 30,
   });
-  ctx.beginPath();
-  ctx.arc(r.x + r.w / 2, clip.y - 3, 6, 0, Math.PI * 2);
-  ctx.fillStyle = C.boardDeep;
-  ctx.fill();
-  text(ctx, title, r.x + r.w / 2, clip.y - 40, {
-    size: 34,
-    fill: C.white,
-    outline: C.ink,
-    maxWidth: r.w - 60,
-  });
-  return paper;
+  return { x: inner.x + 10, y: inner.y + 14, w: inner.w - 20, h: inner.h - 24 };
 }
 
 /** Page heading on the paper ("Main" in the reference): brown text over a soft band and a rule. */
@@ -690,28 +887,35 @@ export function closeButton(
   r: number,
   pressed: boolean,
 ) {
-  const sink = pressed ? 3 : 0;
+  const y = cy + (pressed ? 2 : 0);
   ctx.beginPath();
-  ctx.arc(cx, cy + 4, r, 0, Math.PI * 2);
-  ctx.fillStyle = "#b5442c";
+  ctx.arc(cx, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "#f2a796";
   ctx.fill();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
   ctx.beginPath();
-  ctx.arc(cx, cy + sink, r, 0, Math.PI * 2);
-  ctx.fillStyle = C.red;
-  ctx.fill();
-  ctx.lineWidth = 3.5;
-  ctx.strokeStyle = C.white;
+  ctx.arc(cx, y, r - 4, 0, Math.PI * 2);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.7)";
   ctx.stroke();
   ctx.lineCap = "round";
-  ctx.lineWidth = r * 0.28;
-  ctx.strokeStyle = C.cream;
-  const k = r * 0.38;
-  ctx.beginPath();
-  ctx.moveTo(cx - k, cy + sink - k);
-  ctx.lineTo(cx + k, cy + sink + k);
-  ctx.moveTo(cx + k, cy + sink - k);
-  ctx.lineTo(cx - k, cy + sink + k);
-  ctx.stroke();
+  const k = r * 0.36;
+  const cross = () => {
+    ctx.beginPath();
+    ctx.moveTo(cx - k, y - k);
+    ctx.lineTo(cx + k, y + k);
+    ctx.moveTo(cx + k, y - k);
+    ctx.lineTo(cx - k, y + k);
+    ctx.stroke();
+  };
+  ctx.lineWidth = r * 0.38;
+  ctx.strokeStyle = C.ink;
+  cross();
+  ctx.lineWidth = r * 0.26;
+  ctx.strokeStyle = C.white;
+  cross();
   ctx.lineCap = "butt";
 }
 
@@ -736,14 +940,58 @@ export function pageArrow(
   ctx.lineTo(-12, 34);
   ctx.quadraticCurveTo(-20, 36, -14, 30);
   ctx.closePath();
-  ctx.fillStyle = "#f6e1a8";
+  ctx.fillStyle = "#d8efab";
   ctx.fill();
   ctx.lineJoin = "round";
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = C.white;
-  ctx.stroke();
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.4;
   ctx.strokeStyle = C.ink;
   ctx.stroke();
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = "rgba(255,255,255,0.8)";
+  ctx.beginPath();
+  ctx.moveTo(-8, -22);
+  ctx.lineTo(10, -4);
+  ctx.stroke();
   ctx.restore();
+}
+
+/** Lightning bolt (energy). */
+export function bolt(ctx: Ctx, x: number, y: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r * 0.15, y - r);
+  ctx.lineTo(x - r * 0.55, y + r * 0.15);
+  ctx.lineTo(x - r * 0.02, y + r * 0.15);
+  ctx.lineTo(x - r * 0.2, y + r);
+  ctx.lineTo(x + r * 0.6, y - r * 0.2);
+  ctx.lineTo(x + r * 0.05, y - r * 0.2);
+  ctx.closePath();
+  ctx.fillStyle = "#ffcf3d";
+  ctx.fill();
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+}
+
+/** A little face whose mouth follows the mood (0 frown … 100 grin). */
+export function face(ctx: Ctx, x: number, y: number, r: number, mood: number) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = mood >= 60 ? "#ffd98a" : mood >= 30 ? "#f6e3b8" : "#cfd8e8";
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  ctx.fillStyle = C.ink;
+  for (const dx of [-0.35, 0.35]) {
+    ctx.beginPath();
+    ctx.arc(x + dx * r, y - r * 0.15, r * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const curve = ((mood - 50) / 50) * r * 0.35;
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.38, y + r * 0.3);
+  ctx.quadraticCurveTo(x, y + r * 0.3 + curve, x + r * 0.38, y + r * 0.3);
+  ctx.lineWidth = 2.2;
+  ctx.stroke();
 }

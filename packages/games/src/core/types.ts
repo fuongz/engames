@@ -51,6 +51,8 @@ export interface GameManifest {
    * the server checks every save against (see saves.ts).
    */
   requiresAccount?: boolean;
+  /** How many separate saves an account keeps for this game (default 1). */
+  saveSlots?: number;
 }
 
 /**
@@ -119,18 +121,31 @@ export type CloudSaveResult =
   /** Another device saved first: `current` is what the server holds now. */
   | { ok: false; conflict: CloudSlot };
 
-/** One save slot per player per game, kept by the portal's server. */
+/**
+ * The player's saves for this game, kept by the portal's server: `saveSlots`
+ * numbered slots (0, 1, ...), each with its own data and version.
+ */
 export interface CloudSave {
   /** The player's display name. */
   player: string;
   /** The player's account id, to key any local backup to the right person. */
   playerId: string;
-  load(): Promise<CloudSlot | null>;
+  /** Every slot that holds a save. */
+  list(): Promise<(CloudSlot & { slot: number })[]>;
+  load(slot: number): Promise<CloudSlot | null>;
   /**
-   * Store `data` if the server still holds `version` (optimistic concurrency).
-   * `score` also files the player's best on the game's leaderboard.
+   * Store `data` in `slot` if the server still holds `version` (optimistic
+   * concurrency). `score` also files the player's best on the leaderboard, which
+   * keeps the best of all slots.
    */
-  save(data: unknown, version: number, score?: ScoreReport): Promise<CloudSaveResult>;
+  save(
+    slot: number,
+    data: unknown,
+    version: number,
+    score?: ScoreReport,
+  ): Promise<CloudSaveResult>;
+  /** Empty `slot` for good (start over). */
+  remove(slot: number): Promise<void>;
 }
 
 /** The game's side of an online match; the portal owns the socket behind it. */

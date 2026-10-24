@@ -15,17 +15,52 @@ export type WriteResult =
   | { ok: true; version: number }
   | { ok: false; conflict: StoredSave };
 
+const where = (userId: string, gameSlug: string, slot: number) =>
+  and(
+    eq(gameSave.userId, userId),
+    eq(gameSave.gameSlug, gameSlug),
+    eq(gameSave.slot, slot),
+  );
+
 export async function readSave(
   db: Db,
   userId: string,
   gameSlug: string,
+  slot = 0,
 ): Promise<StoredSave | null> {
   const [row] = await db
     .select({ json: gameSave.data, version: gameSave.version })
     .from(gameSave)
-    .where(and(eq(gameSave.userId, userId), eq(gameSave.gameSlug, gameSlug)))
+    .where(where(userId, gameSlug, slot))
     .limit(1);
   return row ?? null;
+}
+
+/** Every slot of this game that holds a save, in slot order. */
+export async function listSaves(
+  db: Db,
+  userId: string,
+  gameSlug: string,
+): Promise<(StoredSave & { slot: number })[]> {
+  return db
+    .select({
+      slot: gameSave.slot,
+      json: gameSave.data,
+      version: gameSave.version,
+    })
+    .from(gameSave)
+    .where(and(eq(gameSave.userId, userId), eq(gameSave.gameSlug, gameSlug)))
+    .orderBy(gameSave.slot);
+}
+
+/** Empty a slot (start over). The leaderboard keeps the player's best. */
+export async function deleteSave(
+  db: Db,
+  userId: string,
+  gameSlug: string,
+  slot: number,
+) {
+  await db.delete(gameSave).where(where(userId, gameSlug, slot));
 }
 
 /**
@@ -35,19 +70,23 @@ export async function readSave(
  */
 export async function writeSave(
   db: Db,
-  input: { userId: string; gameSlug: string; json: string; expected: number },
+  input: {
+    userId: string;
+    gameSlug: string;
+    slot?: number;
+    json: string;
+    expected: number;
+  },
 ): Promise<WriteResult> {
   const { json } = input;
-  const where = and(
-    eq(gameSave.userId, input.userId),
-    eq(gameSave.gameSlug, input.gameSlug),
-  );
+  const slot = input.slot ?? 0;
   if (input.expected === 0) {
     const made = await db
       .insert(gameSave)
       .values({
         userId: input.userId,
         gameSlug: input.gameSlug,
+        slot,
         data: json,
         version: 1,
       })
@@ -59,13 +98,18 @@ export async function writeSave(
     const updated = await db
       .update(gameSave)
       .set({ data: json, version: next, updatedAt: sql`(unixepoch())` })
-      .where(and(where, eq(gameSave.version, input.expected)))
+      .where(
+        and(
+          where(input.userId, input.gameSlug, slot),
+          eq(gameSave.version, input.expected),
+        ),
+      )
       .returning({ version: gameSave.version });
     if (updated.length) return { ok: true, version: next };
   }
   return {
     ok: false,
-    conflict: (await readSave(db, input.userId, input.gameSlug)) ?? {
+    conflict: (await readSave(db, input.userId, input.gameSlug, slot)) ?? {
       json: "null",
       version: 0,
     },

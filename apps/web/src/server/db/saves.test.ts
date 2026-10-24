@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { Db } from "./leaderboard";
-import { readSave, writeSave } from "./saves";
+import { deleteSave, listSaves, readSave, writeSave } from "./saves";
 import * as schema from "./schema";
 
 // Runs the real generated migrations on an in-memory SQLite, like leaderboard.test.ts.
@@ -81,5 +81,22 @@ describe("game saves", () => {
     expect((await readSave(db, "u1", "tiem-banh-may"))?.json).toBe('"an"');
     await db.delete(schema.user).where(eq(schema.user.id, "u1"));
     expect(await readSave(db, "u1", "tiem-banh-may")).toBeNull();
+  });
+
+  it("keeps each slot apart, lists the filled ones and empties one", async () => {
+    await writeSave(db, { ...slot, json: day(4), expected: 0 });
+    await writeSave(db, { ...slot, slot: 2, json: day(9), expected: 0 });
+    expect(await readSave(db, "u1", "tiem-banh-may", 1)).toBeNull();
+    expect(await listSaves(db, "u1", "tiem-banh-may")).toEqual([
+      { slot: 0, json: day(4), version: 1 },
+      { slot: 2, json: day(9), version: 1 },
+    ]);
+    await deleteSave(db, "u1", "tiem-banh-may", 2);
+    expect(await readSave(db, "u1", "tiem-banh-may", 2)).toBeNull();
+    expect((await readSave(db, "u1", "tiem-banh-may"))?.json).toBe(day(4));
+    // A slot that was emptied starts again from version 0
+    expect(
+      await writeSave(db, { ...slot, slot: 2, json: day(1), expected: 0 }),
+    ).toEqual({ ok: true, version: 1 });
   });
 });

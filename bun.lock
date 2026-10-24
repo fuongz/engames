@@ -66,6 +66,7 @@
       "dependencies": {
         "@fontsource/baloo-2": "^5.3.0",
         "@fontsource/handjet": "^5.3.1",
+        "@fontsource/mali": "^5.3.0",
       },
       "devDependencies": {
         "vite": "^8.0.16",
@@ -245,6 +246,8 @@
     "@fontsource/baloo-2": ["@fontsource/baloo-2@5.3.0", "", {}, "sha512-CBuxZ27jvMmD5+KaaPkMWv/yjdRNppVAd5/002yAyvyQyLNL3aZCbkx6gbAT/bjxPd1A0VMdDQjfcELI8chccQ=="],
 
     "@fontsource/handjet": ["@fontsource/handjet@5.3.1", "", {}, "sha512-8n2ZgQ2ppR6vsNZxcDdU+owdZtLXkMWExglVvv6nqLI0dcz6B0lHV0YJYRn1sIwDKS+xqv4EIJrlcOdXumk6bA=="],
+
+    "@fontsource/mali": ["@fontsource/mali@5.3.0", "", {}, "sha512-/H7zdnFcBUdLh7mPUCLWfCoQVgtvnVKrlHjknq90kltPvUcu0nC9ybne4z2rzTghV9ez9N7nRDvRZesODB/YbQ=="],
 
     "@hugeicons/core-free-icons": ["@hugeicons/core-free-icons@4.3.5", "", {}, "sha512-Sv+NjHRPnQk+yZsGCMcGznCHdTfJR9PMMOEKcJYAQU4gy90dmlc9PwdtvYOImBZIjiheMsTLL5eMn2DmHxUiUg=="],
 

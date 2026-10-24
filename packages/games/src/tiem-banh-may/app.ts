@@ -4,18 +4,16 @@ import {
   FONT,
   backButton,
   button,
-  chip,
-  clipboard,
+  dialog,
   closeButton,
   coin,
-  coinCounter,
-  heart,
   text,
 } from "./art";
 import type { RecipeId, UpgradeId } from "./config";
 import { H, W } from "./config";
 import type { BakeState } from "./kitchen";
 import type { Cart, DayReport, SaveData } from "./logic";
+import type { SlotSummary } from "./cloud";
 import type { ShopState } from "./shop";
 import type { Sprites } from "./sprites";
 import type { Strings } from "./strings";
@@ -28,7 +26,8 @@ export type Screen =
   | { kind: "loading" }
   | { kind: "error" }
   | { kind: "hub" }
-  | { kind: "market"; cart: Cart }
+  /** `aisle`: which shelf page is open (0 dry goods, 1 chilled, 2 flavours). */
+  | { kind: "market"; cart: Cart; aisle?: number }
   | {
       kind: "book";
       tab: 0 | 1;
@@ -36,9 +35,17 @@ export type Screen =
       bought?: RecipeId | UpgradeId;
     }
   | { kind: "pick" }
+  /** A recipe just bought: a moment to enjoy it, then back to its page. */
+  | { kind: "learned"; recipe: RecipeId; tab: 0 | 1; at: number }
+  /** The display case, shelf by shelf. */
+  | { kind: "display" }
   | { kind: "bake"; bake: BakeState }
   | { kind: "shop"; shop: ShopState }
-  | { kind: "report"; report: DayReport };
+  | { kind: "report"; report: DayReport }
+  /** Choose one of the account's bakeries; `list` is null while it loads. */
+  | { kind: "slots"; list: SlotSummary[] | null }
+  /** Settings over the hub; `confirm` walks the two steps of starting over. */
+  | { kind: "settings"; confirm: 0 | 1 | 2; busy?: boolean };
 
 export interface Toast {
   text: string;
@@ -69,6 +76,28 @@ export interface App {
   screen: Screen;
   /** Seconds since mount, for idle animation. */
   time: number;
+  /** Fast-forward the night clock (waiting on the oven, or for morning). */
+  fast: boolean;
+  /** A prompt is up: the night clock holds for this frame. */
+  held: boolean;
+  /** The player paused: clock, ovens and customers stand still. */
+  paused: boolean;
+  setPaused(on: boolean): void;
+  /** A HUD stat's explanation is open (the clock holds while it is). */
+  info: "rep" | "energy" | "mood" | null;
+  /** The save slot being played (0-based). */
+  slot: number;
+  /** Account actions the slot picker and the settings call back into the shell. */
+  shell: {
+    /** Load (or start) the bakery in `slot`. */
+    open(slot: number): void;
+    /** Back to the slot picker. */
+    pick(): void;
+    /** Erase the current slot and start it fresh; false when offline. */
+    restart(): Promise<boolean>;
+    music: boolean;
+    setMusic(on: boolean): void;
+  };
   go(screen: Screen): void;
   /** Replace the save and send it to the account (debounced unless `now`). */
   commit(next: SaveData, opts?: { now?: boolean; score?: boolean }): void;
@@ -120,23 +149,6 @@ export function makeSfx(rt: Runtime): Sfx {
   };
 }
 
-/**
- * Coins and reputation on the left, day and clock on the right. Returns the y
- * just under the HUD.
- */
-export function hud(app: App, clock: string, coins = app.save.coins) {
-  const { ctx } = app;
-  const tr = app.tr();
-  const y = top(app) + 14;
-  coinCounter(ctx, 14, y, tr.num(coins), 50);
-  chip(ctx, 18, y + 58, `${Math.round(app.save.rep)}`, 34, "left", 26);
-  heart(ctx, 36, y + 75, 10);
-  const day = `${tr.day(app.save.day)} · ${tr.weekdays[(app.save.day - 1) % 7]}`;
-  chip(ctx, W - 14, y + 4, day, 38, "right");
-  chip(ctx, W - 14, y + 50, clock, 38, "right");
-  return y + 100;
-}
-
 /** Bottom-left round back button (the reference's), registered for taps. */
 export function back(app: App, onTap: () => void) {
   const cx = 62;
@@ -161,10 +173,10 @@ export function shade(app: App, close?: () => void) {
   app.ui.block(v, close);
 }
 
-/** A clipboard modal: blocks taps behind it; returns the paper to draw on. */
+/** A dialog modal: blocks taps behind it; returns the paper to draw on. */
 export function sheet(app: App, r: Rect, title: string) {
   app.ui.block(r);
-  return clipboard(app.ctx, r, title);
+  return dialog(app.ctx, r, title);
 }
 
 /** The round orange close button at a board's top-right corner, registered for taps. */
@@ -248,4 +260,28 @@ export function priceLabel(
     fill: opts.color,
   });
   ctx.restore();
+}
+
+/** A UI icon from img/icon-*.webp, or the code-drawn fallback while it is missing. */
+export function icon(
+  app: App,
+  name: string,
+  cx: number,
+  cy: number,
+  size: number,
+  fallback: () => void,
+) {
+  // Icons live in img/icon-*.webp; a full sprite name works too
+  const img =
+    app.sprites.get(name.startsWith("icon-") ? name : `icon-${name}`) ??
+    app.sprites.get(name);
+  if (!img?.naturalWidth) return fallback();
+  const k = Math.min(size / img.naturalWidth, size / img.naturalHeight);
+  app.ctx.drawImage(
+    img,
+    cx - (img.naturalWidth * k) / 2,
+    cy - (img.naturalHeight * k) / 2,
+    img.naturalWidth * k,
+    img.naturalHeight * k,
+  );
 }
