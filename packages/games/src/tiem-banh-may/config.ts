@@ -1073,18 +1073,18 @@ export const FURNITURE: Furniture[] = [
     "Round wooden table",
     "table",
     "basic",
-    1,
+    1.5,
     120,
   ),
   piece("basic-chair", "Ghế gỗ", "Wooden chair", "seat", "basic", 0.5, 60),
-  piece("basic-plant", "Chậu cây", "Potted plant", "decor", "basic", 1, 80),
+  piece("basic-plant", "Chậu cây", "Potted plant", "decor", "basic", 1.5, 80),
   piece(
     "basic-stand",
     "Quầy bánh gỗ",
     "Wooden cake stand",
     "stand",
     "basic",
-    1,
+    1.5,
     300,
     {
       w: 2,
@@ -1176,7 +1176,7 @@ export const SET_BONUS = [
 export const CHARM_MAX_BOOST = 0.5;
 export const CHARM_SCALE = 30;
 /** Giản dị → Ấm cúng → Dễ thương → Nổi tiếng: charm needed for each. */
-export const CHARM_TIERS = [0, 12, 30, 60];
+export const CHARM_TIERS = [0, 8, 25, 55];
 /** Each tier makes a VIP visit a little likelier. */
 export const VIP_PER_TIER = 0.03;
 /** Each placed seat makes queuers this much more patient, up to SEAT_MAX. */

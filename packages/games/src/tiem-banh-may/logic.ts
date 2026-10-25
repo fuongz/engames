@@ -10,6 +10,7 @@ import {
   CLOSE_AT,
   CUSTOMERS,
   type CustomerId,
+  type FurnitureId,
   DEMAND_BASE,
   DEMAND_PER_RECIPE,
   DEMAND_PER_REP,
@@ -91,6 +92,9 @@ import {
 import {
   type Decor,
   charm,
+  forSale,
+  furniture,
+  receive,
   charmBoost,
   charmTier,
   furnitureWorth,
@@ -409,7 +413,11 @@ const unitCost = (id: IngredientId) =>
 export type Cart = Partial<Record<IngredientId, number>>;
 
 /** What the basket costs: packs of ingredients, plus any records in it. */
-export const cartCost = (cart: Cart, records: RecordId[] = []) =>
+export const cartCost = (
+  cart: Cart,
+  records: RecordId[] = [],
+  pieces: FurnitureId[] = [],
+) =>
   Object.entries(cart).reduce(
     (s, [id, packs]) => s + ingredient(id as IngredientId).price * (packs ?? 0),
     0,
@@ -417,7 +425,8 @@ export const cartCost = (cart: Cart, records: RecordId[] = []) =>
   records.reduce(
     (s, id) => s + (RECORDS.find((r) => r.id === id)?.price ?? 0),
     0,
-  );
+  ) +
+  pieces.reduce((s, id) => s + furniture(id).price, 0);
 
 export type Refusal =
   | "tired"
@@ -442,10 +451,15 @@ export function buyIngredients(
   save: SaveData,
   cart: Cart,
   records: RecordId[] = [],
+  pieces: FurnitureId[] = [],
 ): Outcome {
   const fresh = records.filter((id) => !save.records.includes(id));
-  const cost = cartCost(cart, fresh);
+  const cost = cartCost(cart, fresh, pieces);
   if (cost <= 0) return { ok: false, why: "empty" };
+  // Furniture of a theme the storefront hasn't reached yet stays on the shelf
+  const tier = charmTier(charm(save.decor));
+  if (pieces.some((id) => !forSale(id) || furniture(id).tier > tier))
+    return { ok: false, why: "locked" };
   if (cost > save.coins) return { ok: false, why: "coins" };
   const why = workable(save, MARKET_TRIP);
   if (why) return { ok: false, why };
@@ -466,6 +480,7 @@ export function buyIngredients(
       pantry,
       records: [...save.records, ...fresh],
       playing: fresh.length ? fresh[fresh.length - 1] : save.playing,
+      decor: pieces.length ? receive(save.decor, pieces) : save.decor,
     },
   };
 }

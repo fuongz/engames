@@ -1,13 +1,28 @@
 import type { Rect } from "@web-games/core";
 import { type App, H, W, btn, close, shade, sheet, top, viewRect } from "./app";
-import { C, cover, nine, panel, rr, sprite, text, wrap } from "./art";
 import {
+  C,
+  FONT,
+  cover,
+  heart,
+  nine,
+  panel,
+  rr,
+  sprite,
+  text,
+  wrap,
+} from "./art";
+import {
+  CHARM_TIERS,
+  FURNITURE,
+  type FurnitureId,
   INGREDIENTS,
   type IngredientId,
   MARKET_TRIP,
   RECORDS,
   type RecordId,
 } from "./config";
+import { charm, charmTier, forSale, furniture } from "./furniture";
 import { playable } from "./musicbox";
 import { hud } from "./hud";
 import { K, dialogButtons, pillWidth, priceSticker, tabs } from "./kit";
@@ -29,7 +44,7 @@ import {
 // costs MARKET_TRIP minutes of the night however much is bought. Tap the
 // basket at the till to see everything in it, change amounts and pay there.
 
-type Aisle = "dry" | "cold" | "flavour" | "special" | "records";
+type Aisle = "dry" | "cold" | "flavour" | "special" | "records" | "furniture";
 
 const AISLES: { id: Aisle; items: IngredientId[] }[] = [
   {
@@ -63,6 +78,8 @@ const AISLES: { id: Aisle; items: IngredientId[] }[] = [
   { id: "special", items: ["saltedEgg", "porkFloss"] },
   // Records for the music box: bought at once, not through the basket
   { id: "records", items: [] },
+  // Tables, chairs, decor and cake stands for the storefront
+  { id: "furniture", items: [] },
 ];
 
 const ing = (id: IngredientId) => {
@@ -81,6 +98,7 @@ export function drawMarket(
   open: number,
   records: RecordId[] = [],
   basket?: number,
+  pieces: FurnitureId[] = [],
 ) {
   const { ctx, save } = app;
   const tr = app.tr();
@@ -110,9 +128,10 @@ export function drawMarket(
   );
   const area = { x: 10, y: y0 + 102, w: W - 20, h: H - 184 - (y0 + 102) };
   if (aisle.id === "records") drawRecords(app, area, records);
+  else if (aisle.id === "furniture") drawFurniture(app, area, pieces);
   else drawAisle(app, cart, aisle, area);
-  drawTill(app, cart, records);
-  if (basket !== undefined) drawBasket(app, cart, records, basket);
+  drawTill(app, cart, records, pieces);
+  if (basket !== undefined) drawBasket(app, cart, records, basket, pieces);
 }
 
 /** An aisle page: up to two shelves of three products. */
@@ -123,8 +142,9 @@ function drawAisle(
   r: Rect,
 ) {
   const { ctx } = app;
-  // Three to a shelf, two shelves to a page (a short aisle keeps the same size)
-  const perRow = Math.min(3, aisle.items.length);
+  // Three to a shelf (four on a long aisle), two shelves to a page; a short
+  // aisle keeps the same size
+  const perRow = Math.min(aisle.items.length > 6 ? 4 : 3, aisle.items.length);
   const rows = Math.ceil(aisle.items.length / perRow);
   const rowH = r.h / 2;
   if (aisle.id === "cold") {
@@ -373,7 +393,12 @@ function currentMarket(app: App) {
 }
 
 /** The till: coffee by the counter, the basket with its total, and pay. */
-function drawTill(app: App, cart: Cart, records: RecordId[]) {
+function drawTill(
+  app: App,
+  cart: Cart,
+  records: RecordId[],
+  pieces: FurnitureId[],
+) {
   const { ctx, save } = app;
   const tr = app.tr();
   const counter = { x: 10, y: H - 170, w: W - 20, h: 156 };
@@ -389,8 +414,8 @@ function drawTill(app: App, cart: Cart, records: RecordId[]) {
   });
 
   // The basket and what it all costs; tap it to see what is in it
-  const items = basketCount(cart, records);
-  const cost = cartCost(cart, records);
+  const items = basketCount(cart, records, pieces);
+  const cost = cartCost(cart, records, pieces);
   const bx = counter.x + 186;
   const by = counter.y + 48;
   const sink = app.ui.isPressed("basket") ? 3 : 0;
@@ -437,19 +462,26 @@ function drawTill(app: App, cart: Cart, records: RecordId[]) {
     "pay",
     { x: counter.x + 268, y: counter.y + 40, w: counter.w - 282, h: 76 },
     tr.checkout(MARKET_TRIP),
-    () => checkout(app, cart, records),
+    () => checkout(app, cart, records, pieces),
     { fill: C.green, size: 20, disabled: cost <= 0 },
   );
 }
 
-const basketCount = (cart: Cart, records: RecordId[]) =>
-  Object.values(cart).reduce((n, q) => n + (q ?? 0), 0) + records.length;
+const basketCount = (cart: Cart, records: RecordId[], pieces: FurnitureId[]) =>
+  Object.values(cart).reduce((n, q) => n + (q ?? 0), 0) +
+  records.length +
+  pieces.length;
 
 /** Pay for the basket and head home, or say why not. */
-function checkout(app: App, cart: Cart, records: RecordId[]) {
+function checkout(
+  app: App,
+  cart: Cart,
+  records: RecordId[],
+  pieces: FurnitureId[],
+) {
   const tr = app.tr();
-  const cost = cartCost(cart, records);
-  const res = buyIngredients(app.save, cart, records);
+  const cost = cartCost(cart, records, pieces);
+  const res = buyIngredients(app.save, cart, records, pieces);
   if (!res.ok) {
     app.sfx.bad();
     app.toast(
@@ -459,7 +491,9 @@ function checkout(app: App, cart: Cart, records: RecordId[]) {
           ? tr.noCoins
           : res.why === "time"
             ? tr.noTime
-            : "",
+            : res.why === "locked"
+              ? tr.decor.locked
+              : "",
       W / 2,
       H - 200,
       C.bad,
@@ -475,20 +509,30 @@ function checkout(app: App, cart: Cart, records: RecordId[]) {
 /** One line of the basket: a pack of something, or a record. */
 type Line =
   | { kind: "ing"; id: IngredientId; packs: number }
-  | { kind: "record"; id: RecordId };
+  | { kind: "record"; id: RecordId }
+  | { kind: "furniture"; id: FurnitureId; count: number };
 
 /** Lines on one page of the basket. */
 const PER_PAGE = 6;
 const ROW = 76;
 
 /** Everything in the basket, shelf by shelf, then the coffee, then records. */
-function basketLines(cart: Cart, records: RecordId[]): Line[] {
+function basketLines(
+  cart: Cart,
+  records: RecordId[],
+  pieces: FurnitureId[],
+): Line[] {
   const ids = [...AISLES.flatMap((a) => a.items), "coffee" as const];
   return [
     ...ids
       .filter((id) => (cart[id] ?? 0) > 0)
       .map((id) => ({ kind: "ing" as const, id, packs: cart[id] ?? 0 })),
     ...records.map((id) => ({ kind: "record" as const, id })),
+    ...FURNITURE.filter((f) => pieces.includes(f.id)).map((f) => ({
+      kind: "furniture" as const,
+      id: f.id,
+      count: pieces.filter((id) => id === f.id).length,
+    })),
   ];
 }
 
@@ -497,7 +541,13 @@ function basketLines(cart: Cart, records: RecordId[]): Line[] {
  * − and + (a record has ✕), the line's price, then the total, "put it all
  * back" and pay.
  */
-function drawBasket(app: App, cart: Cart, records: RecordId[], page: number) {
+function drawBasket(
+  app: App,
+  cart: Cart,
+  records: RecordId[],
+  page: number,
+  pieces: FurnitureId[],
+) {
   const { ctx, save } = app;
   const tr = app.tr();
   const locale = app.rt.locale();
@@ -505,11 +555,11 @@ function drawBasket(app: App, cart: Cart, records: RecordId[], page: number) {
     const s = currentMarket(app);
     app.go({ ...s, basket: undefined });
   };
-  const lines = basketLines(cart, records);
+  const lines = basketLines(cart, records, pieces);
   const pages = Math.max(1, Math.ceil(lines.length / PER_PAGE));
   const at = Math.min(page, pages - 1);
   const shown = lines.slice(at * PER_PAGE, at * PER_PAGE + PER_PAGE);
-  const cost = cartCost(cart, records);
+  const cost = cartCost(cart, records, pieces);
 
   shade(app, shut);
   const body = lines.length ? shown.length * ROW : 140;
@@ -539,7 +589,11 @@ function drawBasket(app: App, cart: Cart, records: RecordId[], page: number) {
     return;
   }
 
-  const set = (next: { cart?: Cart; records?: RecordId[] }) => {
+  const set = (next: {
+    cart?: Cart;
+    records?: RecordId[];
+    furniture?: FurnitureId[];
+  }) => {
     const s = currentMarket(app);
     app.go({ ...s, ...next, basket: at });
   };
@@ -586,6 +640,28 @@ function drawBasket(app: App, cart: Cart, records: RecordId[], page: number) {
         set({ cart: { ...cart, [line.id]: line.packs + 1 } }),
       );
       text(ctx, tr.coins(it.price * line.packs), right, cy, {
+        size: 17,
+        align: "right",
+        maxWidth: 84,
+      });
+    } else if (line.kind === "furniture") {
+      const f = furniture(line.id);
+      sprite(ctx, app.sprites.get(f.sprite), paper.x + 34, cy, 58, 58);
+      text(ctx, f.name[locale], paper.x + 72, cy - 10, {
+        size: 17,
+        align: "left",
+        maxWidth: 150,
+      });
+      charmChip(app, paper.x + 72, cy + 14, f.charm, "left");
+      const sx = paper.x + paper.w - 196;
+      stepper(app, `less-${line.id}`, sx, cy, "−", () =>
+        set({ furniture: dropOne(pieces, line.id) }),
+      );
+      text(ctx, `${line.count}`, sx + 38, cy, { size: 20 });
+      stepper(app, `more-${line.id}`, sx + 76, cy, "+", () =>
+        set({ furniture: [...pieces, line.id] }),
+      );
+      text(ctx, tr.coins(f.price * line.count), right, cy, {
         size: 17,
         align: "right",
         maxWidth: 84,
@@ -656,12 +732,12 @@ function drawBasket(app: App, cart: Cart, records: RecordId[], page: number) {
     {
       key: "basket-clear",
       label: tr.clearBasket,
-      onTap: () => set({ cart: {}, records: [] }),
+      onTap: () => set({ cart: {}, records: [], furniture: [] }),
     },
     {
       key: "pay",
       label: tr.checkout(MARKET_TRIP),
-      onTap: () => checkout(app, cart, records),
+      onTap: () => checkout(app, cart, records, pieces),
       fill: C.green,
       size: 19,
       weight: 1.7,
@@ -697,4 +773,140 @@ function stepper(
       onTap();
     },
   });
+}
+
+/** One copy of a piece back on the shelf. */
+function dropOne(pieces: FurnitureId[], id: FurnitureId) {
+  const i = pieces.lastIndexOf(id);
+  return i < 0 ? pieces : [...pieces.slice(0, i), ...pieces.slice(i + 1)];
+}
+
+/** A small heart with the charm a piece adds. */
+function charmChip(
+  app: App,
+  x: number,
+  y: number,
+  value: number,
+  align: "left" | "center",
+) {
+  const { ctx } = app;
+  const label = `+${value}`;
+  ctx.font = `700 13px ${FONT}`;
+  const w = 30 + ctx.measureText(label).width;
+  const left = align === "left" ? x : x - w / 2;
+  panel(
+    ctx,
+    { x: left, y: y - 11, w, h: 22 },
+    { fill: "#fde3ea", radius: 11, line: 1.8 },
+  );
+  heart(ctx, left + 13, y, 6);
+  text(ctx, label, left + 22, y, { size: 13, align: "left" });
+}
+
+/**
+ * The Furniture aisle: every piece on sale as a card with its picture, price,
+ * the charm it adds and how many are owned; a theme the storefront hasn't
+ * reached yet shows a lock and the tier that opens it. Tap to add one to the
+ * basket.
+ */
+function drawFurniture(app: App, r: Rect, pieces: FurnitureId[]) {
+  const { ctx, save } = app;
+  const tr = app.tr();
+  const locale = app.rt.locale();
+  const tier = charmTier(charm(save.decor));
+  const list = FURNITURE.filter((f) => forSale(f.id));
+  const cols = 3;
+  const rows = Math.ceil(list.length / cols);
+  const cw = r.w / cols;
+  const ch = Math.min(200, r.h / rows);
+  list.forEach((f, i) => {
+    const cx = r.x + cw * ((i % cols) + 0.5);
+    const top = r.y + Math.floor(i / cols) * ch;
+    const locked = f.tier > tier;
+    const inBasket = pieces.filter((id) => id === f.id).length;
+    const owned = save.decor.owned.filter((id) => id === f.id).length;
+    const key = `buy-${f.id}`;
+    const sink = app.ui.isPressed(key) && !locked ? 3 : 0;
+    const card = { x: cx - cw / 2 + 5, y: top + sink, w: cw - 10, h: ch - 10 };
+    panel(ctx, card, {
+      fill: locked ? "#f1ece4" : inBasket ? "#eaf7e1" : C.white,
+      radius: 16,
+      line: inBasket ? 3 : 2,
+    });
+    ctx.save();
+    if (locked) ctx.globalAlpha = 0.45;
+    sprite(
+      ctx,
+      app.sprites.get(f.sprite),
+      cx,
+      card.y + card.h - 62,
+      cw - 34,
+      card.h - 92,
+      "bottom",
+    );
+    ctx.restore();
+    text(ctx, f.name[locale], cx, card.y + card.h - 44, {
+      size: 14,
+      maxWidth: cw - 22,
+    });
+    if (locked) {
+      text(
+        ctx,
+        tr.decor.unlockAt(tr.decor.tiers[f.tier]),
+        cx,
+        card.y + card.h - 20,
+        {
+          size: 12,
+          fill: C.muted,
+          maxWidth: cw - 22,
+        },
+      );
+    } else {
+      charmChip(app, cx, card.y + card.h - 20, f.charm, "center");
+      priceSticker(app, card.x + 22, card.y + 22, f.price, 18);
+      if (owned)
+        text(ctx, tr.decor.owned(owned), card.x + card.w - 10, card.y + 18, {
+          size: 12,
+          align: "right",
+          fill: C.muted,
+        });
+    }
+    if (inBasket) {
+      const bx = card.x + card.w - 20;
+      const by = card.y + 44;
+      ctx.beginPath();
+      ctx.arc(bx, by, 15, 0, Math.PI * 2);
+      ctx.fillStyle = C.good;
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = C.ink;
+      ctx.stroke();
+      text(ctx, `×${inBasket}`, bx, by, { size: 14, fill: C.white });
+    }
+    app.ui.add({
+      rect: card,
+      key,
+      tap: () => {
+        if (locked) {
+          app.sfx.bad();
+          app.toast(tr.decor.locked, cx, card.y, C.bad, 16);
+          return;
+        }
+        app.sfx.tap();
+        app.go({ ...currentMarket(app), furniture: [...pieces, f.id] });
+      },
+    });
+  });
+  // Where the storefront stands, so the locks make sense
+  const c = charm(save.decor);
+  const next = CHARM_TIERS[tier + 1];
+  text(
+    ctx,
+    next === undefined
+      ? tr.decor.charmNow(c, tr.decor.tiers[tier])
+      : tr.decor.charmNext(c, tr.decor.tiers[tier], next),
+    W / 2,
+    r.y + rows * ch + 6,
+    { size: 13, fill: C.muted, maxWidth: r.w - 20 },
+  );
 }

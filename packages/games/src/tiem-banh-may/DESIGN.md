@@ -115,9 +115,14 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
   (capped), so seating matters beyond charm.
 - **Tiers** Giản dị → Ấm cúng → Dễ thương → Nổi tiếng: each new tier puts a
   new theme on sale and raises the VIP chance a little.
-- **The Furniture aisle** (_Nội thất_) in the market: tables and chairs, decor,
-  walls and floors, each with a +charm chip; same basket and till. The basic
-  set and unlocked themes are always on sale; 2–3 rarer pieces rotate daily.
+- **The Furniture aisle** (_Nội thất_) in the market: one card per piece with
+  its picture, price sticker, a ♥+charm chip and how many are owned; a theme
+  above the storefront's tier is greyed out with the tier that opens it, and
+  the page ends with the current charm and the next tier. Same basket and
+  till. A bought piece stands in the first free spot that keeps the layout
+  valid (storage only when the floor is full), so it counts at once. Daily
+  rotation of rarer pieces waits until there are more themes; walls and floors
+  go on sale with their art.
 - **Starting set** (free, placed in a default layout; old saves get it too):
   two round tables, four wooden chairs, a potted plant, plain wall and floor.
 - **Themes**: Cơ bản (basic), Hồng ngọt (sweet pink), Vườn hoa (flower
@@ -128,8 +133,9 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
 - **Numbers** (`config.ts`, logic in `furniture.ts`): a 6×5 grid, the tile
   inside the door and the two queue tiles at the till kept clear, a walkable
   way from the door to the till and a free tile in front of every stand. Tiers
-  at charm 0 / 12 / 30 / 60, `CHARM_SCALE` 30, +3% VIP chance per tier, +4%
-  patience per seat up to +20%. Basic pieces give ~0–1 charm, Hồng ngọt 3–5,
+  at charm 0 / 8 / 25 / 55 (the starting set is 6.9; a plant and a table more
+  reach Ấm cúng), `CHARM_SCALE` 30, +3% VIP chance per tier, +4%
+  patience per seat up to +20%. Basic pieces give 0.5–1.5 charm, Hồng ngọt 3–5,
   the classic glass case and fridge 6–7. Save v5 adds `decor` (owned, placed,
   wall, floor); v4 saves get the starting layout.
 

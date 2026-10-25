@@ -8,6 +8,7 @@ import {
   charmTier,
   type Decor,
   layoutOk,
+  receive,
   seatPatience,
   startDecor,
   stored,
@@ -56,7 +57,7 @@ describe("charm", () => {
       at("basic-plant", 0, 3),
       at("basic-chair", 5, 2),
     ]);
-    expect(charm(basic3)).toBe(1 + 1 + 0.5);
+    expect(charm(basic3)).toBe(1.5 + 1.5 + 0.5);
   });
 
   it("counts nothing for pieces in storage", () => {
@@ -73,8 +74,8 @@ describe("charm", () => {
     );
     expect(charmBoost(10_000)).toBeLessThanOrEqual(1 + CHARM_MAX_BOOST);
     expect(charmTier(0)).toBe(0);
-    expect(charmTier(12)).toBe(1);
-    expect(charmTier(60)).toBe(3);
+    expect(charmTier(8)).toBe(1);
+    expect(charmTier(55)).toBe(3);
   });
 
   it("brings more customers and shows them on the day report", () => {
@@ -111,8 +112,17 @@ describe("charm", () => {
 });
 
 describe("the storefront grid", () => {
-  it("starts with a layout the shop can open with", () => {
+  it("starts with a layout the shop can open with, one step from Ấm cúng", () => {
     expect(layoutOk(startDecor().placed)).toBe(true);
+    // A plant and a table more reach the first tier with basic pieces alone
+    const s = newGame(1);
+    let d = receive(s.decor, ["basic-plant", "basic-table"]);
+    expect(charmTier(charm(s.decor))).toBe(0);
+    expect(charmTier(charm(d))).toBe(1);
+    // and a full floor sends the rest to storage
+    for (let i = 0; i < 30; i++) d = receive(d, ["basic-chair"]);
+    expect(layoutOk(d.placed)).toBe(true);
+    expect(stored(d).length).toBeGreaterThan(0);
   });
 
   it("refuses overlaps, the door, the till, and blocked paths", () => {
@@ -143,7 +153,10 @@ describe("buying and arranging", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.save.coins).toBe(920);
-    expect(stored(r.save.decor)).toEqual(["basic-plant"]);
+    // It stands in the first free spot, and the storefront gains its charm
+    expect(stored(r.save.decor)).toEqual([]);
+    expect(layoutOk(r.save.decor.placed)).toBe(true);
+    expect(charm(r.save.decor)).toBeGreaterThan(charm(s.decor));
     expect(buyFurniture(s, "glass-case")).toEqual({ ok: false, why: "locked" });
     expect(buyFurniture({ ...s, coins: 10 }, "basic-plant")).toEqual({
       ok: false,

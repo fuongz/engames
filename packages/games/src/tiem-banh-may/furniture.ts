@@ -195,9 +195,40 @@ export function furnitureWorth(decor: Decor) {
   return worth;
 }
 
+/** Pieces the Furniture aisle sells (the plain wall and floor come with the shop). */
+export const forSale = (id: FurnitureId) => {
+  const f = furniture(id);
+  return f.price > 0 && f.kind !== "wall" && f.kind !== "floor";
+};
+
 // ---------------------------------------------------------------- actions
 
-/** Buy a piece: it goes to storage (walls and floors are kept once). */
+/** The first free spot (row by row) where a piece can stand, or null. */
+export function freeSpot(placed: Placed[], id: FurnitureId): Placed | null {
+  for (let y = 0; y < GRID_ROWS; y++)
+    for (let x = 0; x < GRID_COLS; x++) {
+      const p = { id, x, y, flip: false };
+      if (layoutOk([...placed, p])) return p;
+    }
+  return null;
+}
+
+/**
+ * New pieces into the storefront: each stands in the first free spot that keeps
+ * the layout valid, or waits in storage when the floor is full.
+ */
+export function receive(decor: Decor, ids: FurnitureId[]): Decor {
+  let placed = decor.placed;
+  for (const id of ids) {
+    const k = furniture(id).kind;
+    if (k === "wall" || k === "floor") continue;
+    const spot = freeSpot(placed, id);
+    if (spot) placed = [...placed, spot];
+  }
+  return { ...decor, owned: [...decor.owned, ...ids], placed };
+}
+
+/** Buy a piece: it stands in a free spot, or goes to storage (walls and floors once). */
 export function buyFurniture(save: SaveData, id: FurnitureId): Outcome {
   const f = furniture(id);
   const once = f.kind === "wall" || f.kind === "floor";
@@ -210,7 +241,7 @@ export function buyFurniture(save: SaveData, id: FurnitureId): Outcome {
     save: {
       ...save,
       coins: save.coins - f.price,
-      decor: { ...save.decor, owned: [...save.decor.owned, id] },
+      decor: receive(save.decor, [id]),
     },
   };
 }

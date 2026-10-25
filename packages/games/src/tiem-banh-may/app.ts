@@ -9,7 +9,7 @@ import {
   coin,
   text,
 } from "./art";
-import type { RecipeId, RecordId, UpgradeId } from "./config";
+import type { FurnitureId, RecipeId, RecordId, UpgradeId } from "./config";
 import { H, W } from "./config";
 import type { BakeState } from "./kitchen";
 import type { Motion } from "./motion";
@@ -36,6 +36,8 @@ export type Screen =
       aisle?: number;
       records?: RecordId[];
       basket?: number;
+      /** Furniture in the basket (a piece twice is listed twice). */
+      furniture?: FurnitureId[];
     }
   | {
       kind: "book";

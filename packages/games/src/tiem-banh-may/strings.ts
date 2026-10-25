@@ -196,7 +196,19 @@ export interface Strings {
   cancel: string;
   restarted: string;
   pauseTitle: string;
-  aisles: Record<"dry" | "cold" | "flavour" | "special" | "records", string>;
+  aisles: Record<
+    "dry" | "cold" | "flavour" | "special" | "records" | "furniture",
+    string
+  >;
+  decor: {
+    /** Giản dị, Ấm cúng, Dễ thương, Nổi tiếng. */
+    tiers: string[];
+    locked: string;
+    unlockAt: (tier: string) => string;
+    owned: (n: number) => string;
+    charmNow: (charm: number, tier: string) => string;
+    charmNext: (charm: number, tier: string, next: number) => string;
+  };
   basket: (n: number) => string;
   basketTitle: string;
   basketEmpty: string;
@@ -558,6 +570,16 @@ export const STRINGS: Localized<Strings> = {
       flavour: "Hương liệu",
       special: "Đặc sản",
       records: "Đĩa nhạc",
+      furniture: "Nội thất",
+    },
+    decor: {
+      tiers: ["Giản dị", "Ấm cúng", "Dễ thương", "Nổi tiếng"],
+      locked: "Tiệm cần cuốn hút hơn để mở món này",
+      unlockAt: (tier) => `Mở ở hạng ${tier}`,
+      owned: (n) => `Có ${n}`,
+      charmNow: (c, tier) => `Cuốn hút ${c} · ${tier}`,
+      charmNext: (c, tier, next) =>
+        `Cuốn hút ${c} · ${tier} (hạng sau: ${next})`,
     },
     basket: (n) => (n ? `Giỏ: ${n} món` : "Giỏ trống"),
     basketTitle: "Giỏ hàng",
@@ -945,6 +967,15 @@ export const STRINGS: Localized<Strings> = {
       flavour: "Flavours",
       special: "Specials",
       records: "Records",
+      furniture: "Furniture",
+    },
+    decor: {
+      tiers: ["Plain", "Cosy", "Cute", "Famous"],
+      locked: "The shop needs more charm for this one",
+      unlockAt: (tier) => `Opens at ${tier}`,
+      owned: (n) => `Own ${n}`,
+      charmNow: (c, tier) => `Charm ${c} · ${tier}`,
+      charmNext: (c, tier, next) => `Charm ${c} · ${tier} (next tier: ${next})`,
     },
     basket: (n) =>
       n ? `Basket: ${n} item${n > 1 ? "s" : ""}` : "Basket empty",

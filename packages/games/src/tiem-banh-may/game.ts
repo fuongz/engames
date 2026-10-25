@@ -575,7 +575,14 @@ export function setup(rt: Runtime): GameHooks {
       else if (s.kind === "music") drawMusicBox(app);
       else if (s.kind === "learned") drawLearned(app, s);
       else if (s.kind === "market")
-        drawMarket(app, s.cart, s.aisle ?? 0, s.records ?? [], s.basket);
+        drawMarket(
+          app,
+          s.cart,
+          s.aisle ?? 0,
+          s.records ?? [],
+          s.basket,
+          s.furniture ?? [],
+        );
       else if (s.kind === "book") drawBook(app, s.tab, s.detail, s.page ?? 0);
       else if (s.kind === "pick") {
         drawHub(app);
