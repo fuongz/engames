@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
-import { boardKey, findOnlineGame, verifyHmac } from "@web-games/games/online";
+import { boardKey, verifyHmac } from "@web-games/core/online";
+import { findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
 import type { Db } from "#/server/db/leaderboard";
 import { saveScore } from "#/server/db/leaderboard";

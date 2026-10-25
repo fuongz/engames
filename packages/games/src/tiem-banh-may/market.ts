@@ -1,4 +1,4 @@
-import type { Rect } from "../core";
+import type { Rect } from "@web-games/core";
 import { type App, H, W, btn, close, viewRect } from "./app";
 import { C, cover, nine, panel, rr, sprite, text } from "./art";
 import { INGREDIENTS, type IngredientId, MARKET_TRIP } from "./config";

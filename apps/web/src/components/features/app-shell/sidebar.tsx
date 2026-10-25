@@ -1,7 +1,7 @@
 import { Download04Icon, LibraryIcon, Store01Icon, UserGroupIcon, VolumeHighIcon, VolumeOffIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { audioBus } from "@web-games/games";
+import { audioBus } from "@web-games/core";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { AccountButton } from "#/components/shared/auth/account-button";

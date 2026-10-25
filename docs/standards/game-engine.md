@@ -2,14 +2,15 @@
 
 How every game in `packages/games` is built, and why it is built this way rather
 than on Phaser, Pixi, Godot or Rust/WASM. Read it before starting a new game or
-touching `packages/games/src/core/`.
+touching `packages/core/`.
 
 ---
 
 ## TL;DR
 
-- **The engine is `packages/games/src/core/`**: a ~650-line, zero-dependency TypeScript
-  layer over Canvas 2D. A game is `defineGame(spec, setup)`; the runtime owns the
+- **The engine is `packages/core/` (`@web-games/core`)**: a ~650-line, zero-dependency
+  TypeScript layer over Canvas 2D, in its own package so it can never import a game.
+  `packages/games/` holds only the games and the registry that lists them. A game is `defineGame(spec, setup)`; the runtime owns the
   stage, loop, pause/visibility, keyboard, audio unlock and teardown.
 - **Keep TypeScript + Canvas 2D** as the default. Reach for PixiJS **per game** only
   when one game needs thousands of sprites, shaders or WebGPU. Do not adopt a full
@@ -37,16 +38,16 @@ packages/games/src/<slug>/
 
 | File | May import | Must not |
 | --- | --- | --- |
-| `logic.ts` | `../core/math`, `./config` | DOM, `window`, `document`, `localStorage`, the `../core` barrel |
-| `game.ts` | `../core`, every sibling | write global listeners (the runtime owns them) |
-| `art.ts` / `cover.ts` | `../core`, `./config`, `./logic` (types, geometry) | game state mutation |
-| `index.ts` | `../core`, `./config`, `./game` | anything but the `defineGame` call |
+| `logic.ts` | `@web-games/core/math`, `./config` | DOM, `window`, `document`, `localStorage`, the `@web-games/core` root |
+| `game.ts` | `@web-games/core`, every sibling | write global listeners (the runtime owns them) |
+| `art.ts` / `cover.ts` | `@web-games/core`, `./config`, `./logic` (types, geometry) | game state mutation |
+| `index.ts` | `@web-games/core`, `./config`, `./game` | anything but the `defineGame` call |
 
-`src/core/conventions.test.ts` checks the `logic.ts` and `index.ts` rows on every
+`packages/games/src/conventions.test.ts` checks the `logic.ts` and `index.ts` rows on every
 game, so `bun run gate` fails if a new game drifts.
 
 **Why this split.** `logic.ts` is deterministic given a seed (`mulberry32` from
-`core/math`), so balance can be simulated thousands of runs in a unit test and a
+`@web-games/core/math`), so balance can be simulated thousands of runs in a unit test and a
 reported score could later be replayed server-side. `game.ts` turns pointer/keys
 into `Input`, feeds `update`, and turns the returned events into sound, particles
 and HUD — the same "functional core, imperative shell" shape Elm and Redux use.
@@ -91,7 +92,7 @@ What the runtime guarantees, so no game re-implements it:
   The result is the same on a 60 Hz and a 120 Hz phone. Without it, `update(dt)`
   gets a variable dt clamped to 1/20 s — what the six launch games use.
 
-`core/math.ts` holds the helpers games kept re-writing: `Rect`, `Point`, `inRect`,
+`packages/core/src/math.ts` holds the helpers games kept re-writing: `Rect`, `Point`, `inRect`,
 `clamp`, `lerp`, `smoothstep`, `easeOutCubic`, `mulberry32`.
 
 ## 3. Research: how other engines are organised

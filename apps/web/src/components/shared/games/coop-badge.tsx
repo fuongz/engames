@@ -1,6 +1,6 @@
 import { UserGroupIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { GameManifest } from "@web-games/games";
+import type { GameManifest } from "@web-games/core";
 import { useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
 import { cn } from "#/lib/utils";

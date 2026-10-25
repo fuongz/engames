@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { LOCALES } from "@web-games/games/i18n";
+import { LOCALES } from "@web-games/core/i18n";
 import { z } from "zod";
 import { getDb, schema } from "#/server/db";
 

@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "@web-games/core/i18n";
 
 // Every line the game draws, per locale. Weapon, shield and foe names live with
 // their stats in config.ts. "MISS" and "MAX" read the same in both languages.

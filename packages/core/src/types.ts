@@ -1,4 +1,4 @@
-import type { OnlineMode, ServerMessage, Vec } from "../online/protocol";
+import type { OnlineMode, ServerMessage, Vec } from "./online/protocol";
 import type { AudioBus } from "./audio";
 import type { Locale, Localized } from "./i18n";
 import type { GameStorage } from "./storage";

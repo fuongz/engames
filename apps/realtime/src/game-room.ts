@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
-import { type TicketClaims, boardKey, findOnlineGame, hmac, parseClientMessage } from "@web-games/games/online";
+import { type TicketClaims, boardKey, hmac, parseClientMessage } from "@web-games/core/online";
+import { findOnlineGame } from "@web-games/games/online";
 import { type Conn, type MatchResult, RoomCore } from "./room-core";
 
 /** What each socket carries through hibernation (≤ 16 KB). */

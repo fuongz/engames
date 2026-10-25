@@ -1,10 +1,10 @@
-import { DEFAULT_LOCALE, type Locale } from "@web-games/games/i18n";
+import { DEFAULT_LOCALE, type Locale } from "@web-games/core/i18n";
 
 // Pure helpers for the portal's two languages. The catalogs live in
 // content/messages, the current choice in stores/locale, React access in
 // hooks/use-messages.
 
-export type { Locale } from "@web-games/games/i18n";
+export type { Locale } from "@web-games/core/i18n";
 
 /** BCP 47 tag for Intl formatters and <html lang>. */
 export function intlTag(locale: Locale) {

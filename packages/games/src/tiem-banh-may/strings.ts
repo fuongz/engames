@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "@web-games/core/i18n";
 import type { MixMode, PipeMode, StoveMode, WaitMode, Weather } from "./config";
 import type { Grade, Note } from "./logic";
 

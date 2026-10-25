@@ -110,21 +110,25 @@ node scripts/audit-layout.mjs   # 0 = layout is correct
 
 ## This repo: Engames
 
-- **Three workspaces.** `apps/web` is the portal (React, shadcn, SPA mode).
-  `packages/games` holds the games as framework-free canvas TypeScript.
+- **Four workspaces.** `apps/web` is the portal (React, shadcn, SPA mode).
+  `packages/core` (`@web-games/core`) is the engine and the online protocol — it
+  never imports a game. `packages/games` (`@web-games/games`) holds the games as
+  framework-free canvas TypeScript, plus the registry that lists them.
   `apps/realtime` is the online-room Worker (Durable Objects). The layout gate
   audits `apps/web/src` only.
 - **Online play is server-authoritative.** A client sends inputs only; the room
   runs the game's own `logic.ts`. Never trust a client for score or state, never
   call `reportScore` in an online match. Follow `online-multiplayer.md`.
 - **Games never import React or portal code.** The portal talks to a game only
-  through `GameModule.mount(root, ctx)` from `@web-games/games`.
+  through `GameModule.mount(root, ctx)`: types and engine services (`audioBus`,
+  `createStorage`, i18n) from `@web-games/core`, the catalogue (`games`,
+  `findGame`, `loadGame`, `categories`) from `@web-games/games`.
 - **A new game is a new folder** under `packages/games/src/<slug>/` (see README).
   The registry discovers it, so the portal needs no edits.
-- **Games are built on the engine in `packages/games/src/core/`** — read
+- **Games are built on the engine in `packages/core/`** — read
   [`docs/standards/game-engine.md`](docs/standards/game-engine.md) first.
   `index.ts` is one `defineGame(...)` call; never add `window`/`document` listeners
-  or a `Loop` in a game; `logic.ts` stays pure (imports only `../core/math`).
+  or a `Loop` in a game; `logic.ts` stays pure (imports only `@web-games/core/math`).
 - **Add shadcn components with `bun run ui:add <name>`**, not a bare `shadcn add`:
   the CLI writes `import { cn } from "cn"` under our `#/` alias and the script repairs it.
 - **Server code** lives in `apps/web/src/server/`: `leaderboard.ts` is the

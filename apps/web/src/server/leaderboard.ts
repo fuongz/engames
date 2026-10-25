@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { findGame } from "@web-games/games";
-import { boardKey, findOnlineGame } from "@web-games/games/online";
+import { boardKey } from "@web-games/core/online";
+import { findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
 import { currentUser } from "#/server/auth";
 import { getDb } from "#/server/db";

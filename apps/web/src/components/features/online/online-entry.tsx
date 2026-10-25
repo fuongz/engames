@@ -1,8 +1,8 @@
 import { Add01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useNavigate } from "@tanstack/react-router";
-import type { GameManifest } from "@web-games/games";
-import { isRoomCode } from "@web-games/games/online";
+import type { GameManifest } from "@web-games/core";
+import { isRoomCode } from "@web-games/core/online";
 import { type FormEvent, useId, useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "#/components/ui/dialog";

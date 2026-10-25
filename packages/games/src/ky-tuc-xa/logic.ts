@@ -1,4 +1,4 @@
-import { nextRandom } from "../core/math";
+import { nextRandom } from "@web-games/core/math";
 import {
   ACCELERATOR_SPEED,
   ARCADE_ENERGY_EVERY,

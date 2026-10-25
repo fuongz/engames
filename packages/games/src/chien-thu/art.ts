@@ -12,7 +12,7 @@ import {
   type EnemyKind,
   type Species,
 } from "./config";
-import { mulberry32 } from "../core";
+import { mulberry32 } from "@web-games/core";
 import { SLOTS } from "./logic";
 
 // Everything is drawn procedurally in the thick-outline cartoon style of the

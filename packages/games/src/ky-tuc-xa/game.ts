@@ -8,7 +8,7 @@ import {
   type StageHandlers,
   SUMMARY_KEY,
   inRect,
-} from "../core";
+} from "@web-games/core";
 import {
   PALETTES,
   bolt,

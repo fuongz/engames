@@ -1,7 +1,8 @@
 import { StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
-import { SUMMARY_KEY, categories, createStorage, type GameManifest, summaryText } from "@web-games/games";
+import { SUMMARY_KEY, createStorage, type GameManifest, summaryText } from "@web-games/core";
+import { categories } from "@web-games/games";
 import { motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
 import { type PointerEvent, useEffect, useState } from "react";
 import { useLocale } from "#/hooks/use-messages";

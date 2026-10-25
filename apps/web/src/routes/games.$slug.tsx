@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { findGame, games } from "@web-games/games";
-import { isRoomCode } from "@web-games/games/online";
+import { isRoomCode } from "@web-games/core/online";
 import { BoardTabs } from "#/components/features/game-player/board-tabs";
 import { GameDetails } from "#/components/features/game-player/game-details";
 import { GamePlayer } from "#/components/features/game-player/game-player";

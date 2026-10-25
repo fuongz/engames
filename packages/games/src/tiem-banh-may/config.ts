@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "@web-games/core/i18n";
 
 // Tuning numbers and catalogs, nothing else. Balance is checked by logic.test.ts
 // (a scripted baker plays a few weeks and has to stay solvent and progress).

@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, isLocale, type Locale } from "@web-games/games/i18n";
+import { DEFAULT_LOCALE, isLocale, type Locale } from "@web-games/core/i18n";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { authClient } from "#/lib/auth-client";

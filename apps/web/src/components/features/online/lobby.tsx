@@ -1,6 +1,6 @@
 import { Copy01Icon, Crown02Icon, Logout01Icon, Robot01Icon, Tick02Icon, WifiDisconnected01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { GameManifest } from "@web-games/games";
+import type { GameManifest } from "@web-games/core";
 import { type FormEvent, useId, useState } from "react";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
@@ -9,7 +9,7 @@ import { Input } from "#/components/ui/input";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
 import { cn } from "#/lib/utils";
-import type { ServerMessage } from "@web-games/games/online";
+import type { ServerMessage } from "@web-games/core/online";
 
 export type RoomPhase = "connecting" | "reconnecting" | "open" | "full" | "failed" | "needs-name";
 export type LobbyState = Extract<ServerMessage, { t: "lobby" }>;

@@ -1,7 +1,8 @@
 import { ArrowRight01Icon, GameController03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, createLink } from "@tanstack/react-router";
-import { categories, type GameManifest, games } from "@web-games/games";
+import type { GameManifest } from "@web-games/core";
+import { categories, games } from "@web-games/games";
 import { motion, useReducedMotion } from "motion/react";
 import { CoopBadge } from "#/components/shared/games/coop-badge";
 import { useLocale, useMessages } from "#/hooks/use-messages";

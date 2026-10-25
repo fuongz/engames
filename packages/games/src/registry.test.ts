@@ -1,8 +1,9 @@
+import { summaryText } from "@web-games/core";
 import { describe, expect, it } from "vitest";
 
 describe("i18n", () => {
   it("every game manifest has both languages, and summaries read old and new saves", async () => {
-    const { games, summaryText } = await import("./registry");
+    const { games } = await import("./registry");
     for (const g of games) {
       for (const l of ["vi", "en"] as const) {
         expect(g.title[l].length, `${g.slug} title ${l}`).toBeGreaterThan(0);

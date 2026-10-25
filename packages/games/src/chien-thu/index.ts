@@ -1,4 +1,4 @@
-import { defineGame } from "../core";
+import { defineGame } from "@web-games/core";
 import { H, W } from "./config";
 import { setup } from "./game";
 

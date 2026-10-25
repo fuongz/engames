@@ -8,7 +8,7 @@ import {
   type SeatResult,
   type ServerMessage,
   type TicketClaims,
-} from "@web-games/games/online";
+} from "@web-games/core/online";
 
 // A room's rules, free of Durable Object APIs so vitest can drive it with fake
 // sockets. GameRoom (game-room.ts) owns the sockets, the timer and storage and

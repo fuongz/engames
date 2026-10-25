@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "@web-games/core/i18n";
 import type { PickupKind } from "./config";
 
 // Every player-visible string the game draws. Vietnamese marked "ad" is copied

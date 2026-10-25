@@ -1,7 +1,7 @@
 // Key art for the portal: the painted shopfront (poster-art / banner-art, made
 // with the game's sprites' style) with the title on top. Not imported by the
 // game: `bun run art` renders it to poster.webp / banner.webp.
-import { type Locale, type Localized, fitFontSize } from "../core";
+import { type Locale, type Localized, fitFontSize } from "@web-games/core";
 import { C, FONT } from "./art";
 import bannerArt from "./banner-art.webp";
 import posterArt from "./poster-art.webp";

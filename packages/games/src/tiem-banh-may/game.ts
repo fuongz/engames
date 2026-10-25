@@ -1,6 +1,6 @@
 import "@fontsource/mali/600.css";
 import "@fontsource/mali/700.css";
-import { type GameHooks, type Runtime, SUMMARY_KEY } from "../core";
+import { type GameHooks, type Runtime, SUMMARY_KEY } from "@web-games/core";
 import {
   type App,
   H,

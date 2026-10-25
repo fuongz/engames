@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { findOnlineGame, isRoomCode } from "@web-games/games/online";
+import { isRoomCode } from "@web-games/core/online";
+import { findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
 import { currentUser } from "#/server/auth";
 import { issueTicket, newRoomCode } from "#/server/online/tickets";

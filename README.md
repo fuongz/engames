@@ -16,9 +16,12 @@ apps/web/          portal — TanStack Start (SPA mode on Workers) + Tailwind v4
   public/          manifest.webmanifest, sw.js, icons/, _headers
   wrangler.jsonc   Worker, D1 binding `DB` (prod-engames), custom domain
 apps/realtime/     online rooms — one Durable Object per room (see docs/standards/online-multiplayer.md)
-packages/games/    the games — framework-free TypeScript on <canvas>
-  src/core/        the engine: defineGame runtime, Stage, Loop, math/rng, AudioBus, storage
+packages/core/     @web-games/core — the engine; knows no game by name
+  src/             defineGame runtime, Stage, Loop, math/rng, AudioBus, storage, i18n
+  src/online/      protocol, tickets, the RoomGame contract, the browser RoomClient
+packages/games/    @web-games/games — the games, framework-free TypeScript on <canvas>
   src/registry.ts  discovers every src/<slug>/manifest.ts
+  src/online.ts    which games are playable online
   src/chien-thu/   Chiến Thú Hỗn Chiến (portrait merge-defense), see RE_NOTES.md
   src/tinh-tu/     Tinh Tú Phi Hành (landscape shoot 'em up), see RE_NOTES.md
   src/tiem-banh-may/  Tiệm Bánh Mây (bakery sim, saved to the account), see DESIGN.md
@@ -118,11 +121,11 @@ before deploying code that needs the new columns.
      save through `ctx.cloud` instead of `ctx.storage`.
 2. Draw on `rt.stage` (anchor the HUD to `stage.view` so wide or tall screens have
    no black bars) and use `rt.game.audio` / `rt.game.storage` so the portal's mute
-   button and per-game saves work. Import everything from `../core`.
+   button and per-game saves work. Import everything from `@web-games/core`.
 3. That's it: the registry finds the folder, the home grid lists it, and
    `/games/<slug>` lazy-loads its chunk. No portal code changes.
 
-Keep game rules in a pure `logic.ts` (only `../core/math` and `./config` imports)
+Keep game rules in a pure `logic.ts` (only `@web-games/core/math` and `./config` imports)
 so they can be unit-tested and balance-simulated without a browser; a test fails
 the gate if one reaches for the DOM.
 

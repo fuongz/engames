@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "@web-games/core/i18n";
 
 // Numbers marked "ad" were read off the reference recording (RE_NOTES.md); the
 // rest is our tuning, checked by the balance simulation in logic.test.ts.

@@ -1,4 +1,4 @@
-import type { Rect } from "../core";
+import type { Rect } from "@web-games/core";
 import { type App, H, W, btn, shade, sheet, viewRect } from "./app";
 import { hud } from "./hud";
 import {

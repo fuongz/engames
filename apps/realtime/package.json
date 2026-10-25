@@ -12,6 +12,7 @@
     "deploy": "wrangler types && wrangler deploy"
   },
   "dependencies": {
+    "@web-games/core": "workspace:*",
     "@web-games/games": "workspace:*"
   },
   "devDependencies": {

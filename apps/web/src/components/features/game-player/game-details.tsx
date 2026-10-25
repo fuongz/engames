@@ -1,4 +1,5 @@
-import { categories, type GameManifest } from "@web-games/games";
+import type { GameManifest } from "@web-games/core";
+import { categories } from "@web-games/games";
 import { useLayoutEffect, useRef, useState } from "react";
 import { CoopBadge } from "#/components/shared/games/coop-badge";
 import { Badge } from "#/components/ui/badge";

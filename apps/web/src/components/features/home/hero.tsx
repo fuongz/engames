@@ -1,7 +1,8 @@
 import { PlayIcon, StarIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
-import { SUMMARY_KEY, categories, createStorage, type GameManifest, games, summaryText } from "@web-games/games";
+import { SUMMARY_KEY, createStorage, type GameManifest, summaryText } from "@web-games/core";
+import { categories, games } from "@web-games/games";
 import { play } from "cuelume";
 import {
   AnimatePresence,

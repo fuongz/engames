@@ -1,4 +1,4 @@
-import type { Locale } from "@web-games/games/i18n";
+import type { Locale } from "@web-games/core/i18n";
 import { catalogs, type Messages } from "#/content/messages";
 import { useLocaleStore } from "#/stores/locale";
 

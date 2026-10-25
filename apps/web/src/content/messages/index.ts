@@ -1,4 +1,4 @@
-import type { Locale } from "@web-games/games/i18n";
+import type { Locale } from "@web-games/core/i18n";
 import { en } from "./en";
 import { type Messages, vi } from "./vi";
 

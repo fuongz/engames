@@ -1,5 +1,5 @@
 import { BOSS_HALF_H, BOSS_HALF_W, type PickupKind, W } from "./config";
-import { mulberry32 } from "../core";
+import { mulberry32 } from "@web-games/core";
 
 // Procedural art in the ad's palette: a saturated blue Pacific, sandy islands
 // with dark rock and palms, a yellow-winged lead plane with grey wingmen, green
