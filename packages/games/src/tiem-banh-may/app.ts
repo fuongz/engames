@@ -12,6 +12,7 @@ import {
 import type { RecipeId, RecordId, UpgradeId } from "./config";
 import { H, W } from "./config";
 import type { BakeState } from "./kitchen";
+import type { Motion } from "./motion";
 import type { Cart, DayReport, SaveData } from "./logic";
 import type { SlotSummary } from "./cloud";
 import type { ShopState } from "./shop";
@@ -28,7 +29,14 @@ export type Screen =
   | { kind: "hub" }
   /** `aisle`: which shelf page is open (0 dry goods, 1 chilled, 2 flavours). */
   /** `records`: records in the basket, paid with the rest at the till. */
-  | { kind: "market"; cart: Cart; aisle?: number; records?: RecordId[] }
+  /** `basket`: the basket's list is open, on this page. */
+  | {
+      kind: "market";
+      cart: Cart;
+      aisle?: number;
+      records?: RecordId[];
+      basket?: number;
+    }
   | {
       kind: "book";
       tab: 0 | 1;
@@ -82,6 +90,8 @@ export interface App {
   screen: Screen;
   /** Seconds since mount, for idle animation. */
   time: number;
+  /** Entrances, exits and nudges, keyed by what each frame draws. */
+  motion: Motion;
   /** Fast-forward the night clock (waiting on the oven, or for morning). */
   fast: boolean;
   /** A prompt is up: the night clock holds for this frame. */
@@ -174,17 +184,26 @@ export function back(app: App, onTap: () => void) {
   });
 }
 
-/** Dim everything and swallow taps; `close` runs when the shade is tapped. */
+/** Dim everything and swallow taps; `close` runs when the shade is tapped. The dim fades in. */
 export function shade(app: App, close?: () => void) {
   const v = viewRect(app);
-  app.ctx.fillStyle = C.shade;
-  app.ctx.fillRect(v.x, v.y, v.w, v.h);
+  const { ctx } = app;
+  ctx.save();
+  ctx.globalAlpha *= app.motion.shade();
+  ctx.fillStyle = C.shade;
+  ctx.fillRect(v.x, v.y, v.w, v.h);
+  ctx.restore();
   app.ui.block(v, close);
 }
 
-/** A dialog modal: blocks taps behind it; returns the paper to draw on. */
+/**
+ * A dialog modal: blocks taps behind it; returns the paper to draw on. It pops
+ * open, so everything drawn after it this frame belongs to it (the shell
+ * settles the motion once the screen is drawn).
+ */
 export function sheet(app: App, r: Rect, title: string) {
   app.ui.block(r);
+  app.motion.pop(app.ctx, title, r);
   return dialog(app.ctx, r, title);
 }
 

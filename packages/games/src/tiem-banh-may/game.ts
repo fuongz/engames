@@ -33,6 +33,7 @@ import { drawDisplay } from "./display";
 import { drawLearned } from "./learned";
 import { drawMarket } from "./market";
 import { drawMusicBox } from "./musicbox";
+import { DUR, Motion, easeOut } from "./motion";
 import { drawReport } from "./report";
 import { drawShop, newDay, updateShop } from "./shop";
 import { loadSprites } from "./sprites";
@@ -48,6 +49,11 @@ import { dialogButtons, dialogHeight, dialogPage, pauseGlyph } from "./kit";
 // The shell: loads the bakery from the player's account, routes between the
 // screens, and floats toasts. Screens draw themselves and register their taps
 // with the Ui every frame; the rules live in logic.ts.
+//
+// Transitions: just before a tap (or a change of screen) the shell copies the
+// canvas, which still shows the frame the player tapped on. If the next frame
+// shows something else (another screen, another page, a dialog gone), the copy
+// fades out over it; a dialog that appears pops itself (motion.ts).
 
 const TOAST_LIFE = 1.5;
 /** Where a bakery's tour progress is kept (this device; -1 when over). */
@@ -55,11 +61,37 @@ const tourKey = (playerId: string, slot: number) => `tour:${playerId}:${slot}`;
 /** Real seconds between background saves while the night clock runs. */
 const SAVE_EVERY = 15;
 
+/**
+ * What a screen shows, apart from its moment-to-moment state (a basket count,
+ * an oven timer): when this changes, a page turned.
+ */
+function view(s: Screen): string {
+  switch (s.kind) {
+    case "market":
+      return `market:${s.aisle ?? 0}:${s.basket ?? ""}`;
+    case "book":
+      return `book:${s.tab}:${s.detail ?? ""}:${s.page ?? 0}`;
+    case "pick":
+      return `pick:${s.page ?? 0}`;
+    case "learned":
+      return `learned:${s.recipe}`;
+    case "slots":
+      return `slots:${s.list ? "list" : ""}`;
+    case "settings":
+      return `settings:${s.confirm}`;
+    default:
+      return s.kind;
+  }
+}
+
 export function setup(rt: Runtime): GameHooks {
   const { stage, ctx } = rt;
   const ui = new Ui();
   const sprites = loadSprites();
   const toasts: Toast[] = [];
+  const reduceMotion =
+    typeof matchMedia === "function" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches;
   let sync: SaveSync | null = null;
   let failure: "signin" | "network" | null = null;
   // The music box: whichever record is on it, from Cozy Tunes by Pizza Doggy
@@ -97,6 +129,7 @@ export function setup(rt: Runtime): GameHooks {
     save: newGame(0),
     screen: { kind: "loading" },
     time: 0,
+    motion: new Motion(reduceMotion),
     fast: false,
     held: false,
     paused: false,
@@ -132,6 +165,7 @@ export function setup(rt: Runtime): GameHooks {
       },
     },
     go(screen: Screen) {
+      capture();
       app.screen = screen;
     },
     commit(next, opts = {}) {
@@ -151,6 +185,80 @@ export function setup(rt: Runtime): GameHooks {
       toasts.push({ text: str, x, y, t: 0, color, size });
     },
   };
+
+  // The frame before a change, faded out over the frame after it
+  let snap: HTMLCanvasElement | null = null;
+  let armed = false;
+  let rendering = false;
+  let fade: { at: number; dur: number } | null = null;
+  let lastKind: Screen["kind"] = app.screen.kind;
+  let lastView = view(app.screen);
+  let lastSheets: string[] = [];
+
+  /** Copy the canvas as it stands (only between frames, when it is whole). */
+  function capture() {
+    if (rendering || armed) return;
+    const src = stage.canvas;
+    if (!snap) snap = document.createElement("canvas");
+    if (snap.width !== src.width || snap.height !== src.height) {
+      snap.width = src.width;
+      snap.height = src.height;
+    }
+    const sctx = snap.getContext("2d");
+    if (!sctx) return;
+    sctx.clearRect(0, 0, snap.width, snap.height);
+    sctx.drawImage(src, 0, 0);
+    armed = true;
+  }
+  ui.beforeTap = capture;
+
+  /** After drawing a frame: did it change enough since the copy to fade the copy out? */
+  function settleTransition() {
+    const kind = app.screen.kind;
+    const now = view(app.screen);
+    // The screen's own dialogs, and the shell's still to be drawn over them
+    const sheets = [
+      ...app.motion.sheets,
+      ...(app.info ? [`info:${app.info}`] : []),
+      ...(app.paused ? ["paused"] : []),
+      // The guide's bubble: skipped or moved on, it fades like a dialog
+      ...(app.tour !== null ? [`tour:${app.tour}`] : []),
+      ...(sync?.status === "conflict" ? ["conflict"] : []),
+    ];
+    if (armed) {
+      armed = false;
+      const closed = lastSheets.some((t) => !sheets.includes(t));
+      const opened = sheets.some((t) => !lastSheets.includes(t));
+      const dur =
+        kind !== lastKind
+          ? DUR.screen
+          : closed
+            ? DUR.sheetOut
+            : opened
+              ? 0 // the new dialog pops in by itself
+              : now !== lastView
+                ? DUR.page
+                : 0;
+      if (dur > 0) fade = { at: app.time, dur };
+    }
+    lastKind = kind;
+    lastView = now;
+    lastSheets = [...sheets];
+  }
+
+  function drawFade() {
+    if (!fade || !snap) return;
+    const k = (app.time - fade.at) / fade.dur;
+    if (k >= 1 || snap.width !== stage.canvas.width) {
+      fade = null;
+      return;
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1 - easeOut(k);
+    ctx.drawImage(snap, 0, 0);
+    ctx.restore();
+  }
 
   /** Signed in: show the account's bakeries to choose from. */
   async function boot() {
@@ -415,9 +523,14 @@ export function setup(rt: Runtime): GameHooks {
   function drawToasts() {
     for (const t of toasts) {
       const k = t.t / TOAST_LIFE;
+      // Fades in as it rises, eases to a stop, fades out at the end
+      const rise = app.motion.reduce ? 0 : easeOut(k) * 46;
       ctx.save();
-      ctx.globalAlpha = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
-      text(ctx, t.text, t.x, t.y - k * 46, {
+      ctx.globalAlpha = Math.min(
+        t.t / DUR.page,
+        k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3,
+      );
+      text(ctx, t.text, t.x, t.y - rise, {
         size: t.size,
         fill: t.color,
         outline: C.white,
@@ -448,8 +561,10 @@ export function setup(rt: Runtime): GameHooks {
         updateShop(app, s.shop, dt);
     },
     render() {
+      rendering = true;
       stage.begin();
       ui.frame();
+      app.motion.frame(app.time);
       app.held = false;
       const s = app.screen;
       if (s.kind === "loading" || (!sprites.ready && s.kind !== "error"))
@@ -460,7 +575,7 @@ export function setup(rt: Runtime): GameHooks {
       else if (s.kind === "music") drawMusicBox(app);
       else if (s.kind === "learned") drawLearned(app, s);
       else if (s.kind === "market")
-        drawMarket(app, s.cart, s.aisle ?? 0, s.records ?? []);
+        drawMarket(app, s.cart, s.aisle ?? 0, s.records ?? [], s.basket);
       else if (s.kind === "book") drawBook(app, s.tab, s.detail, s.page ?? 0);
       else if (s.kind === "pick") {
         drawHub(app);
@@ -470,13 +585,20 @@ export function setup(rt: Runtime): GameHooks {
       else if (s.kind === "report") drawReport(app, s.report);
       else if (s.kind === "slots") drawSlots(app, s);
       else if (s.kind === "settings") drawSettings(app, s);
+      app.motion.settle(ctx);
       if (s.kind !== "loading" && s.kind !== "error" && s.kind !== "slots")
         drawTour(app);
+      settleTransition();
+      drawFade();
       drawToasts();
       if (app.info) drawInfo(app.info);
+      app.motion.settle(ctx);
       if (app.paused) drawPause();
+      app.motion.settle(ctx);
       drawSync();
+      app.motion.settle(ctx);
       stage.end();
+      rendering = false;
     },
     pointer: {
       down: (p) => ui.down(p),

@@ -298,8 +298,10 @@ function bubble(
     text(ctx, l, box.x + 20, box.y + 30 + i * 26, { size: 18, align: "left" });
   });
   app.ui.block(box);
-  if (!step.button) return;
   const first = app.tour === 0;
+  // Every bubble after the first (which has its own "Skip") can end the tour
+  if (!first) skipCorner(app, box, tr);
+  if (!step.button) return;
   const by = box.y + box.h - 66;
   if (first)
     btn(
@@ -323,4 +325,30 @@ function bubble(
     },
     { fill: C.green, size: 19 },
   );
+}
+
+/** A small round ✕ on the bubble's corner: end the tour (Settings can replay it). */
+function skipCorner(app: App, box: Rect, tr: Strings) {
+  const { ctx } = app;
+  const cx = box.x + box.w - 6;
+  const cy = box.y + 6;
+  const r = 16;
+  const sink = app.ui.isPressed("tour-close") ? 2 : 0;
+  ctx.beginPath();
+  ctx.arc(cx, cy + sink, r, 0, Math.PI * 2);
+  ctx.fillStyle = C.white;
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  text(ctx, "✕", cx, cy + sink - 1, { size: 15 });
+  app.ui.add({
+    rect: { x: cx - 24, y: cy - 24, w: 48, h: 48 },
+    key: "tour-close",
+    tap: () => {
+      app.sfx.tap();
+      app.setTour(null);
+      app.toast(tr.tour.skipped, W / 2, box.y + box.h / 2, C.text, 18);
+    },
+  });
 }

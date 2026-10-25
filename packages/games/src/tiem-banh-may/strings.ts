@@ -197,6 +197,11 @@ export interface Strings {
   pauseTitle: string;
   aisles: Record<"dry" | "cold" | "flavour" | "special" | "records", string>;
   basket: (n: number) => string;
+  basketTitle: string;
+  basketEmpty: string;
+  basketHint: string;
+  keepShopping: string;
+  clearBasket: string;
   inStock: (q: string) => string;
   packOf: (q: string) => string;
   displayTitle: string;
@@ -218,6 +223,8 @@ export interface Strings {
     welcome: string;
     start: string;
     skip: string;
+    /** After skipping the tour: where to find it again. */
+    skipped: string;
     next: string;
     market: string;
     shopping: string;
@@ -549,6 +556,11 @@ export const STRINGS: Localized<Strings> = {
       records: "Đĩa nhạc",
     },
     basket: (n) => (n ? `Giỏ: ${n} món` : "Giỏ trống"),
+    basketTitle: "Giỏ hàng",
+    basketEmpty: "Giỏ đang trống",
+    basketHint: "Chạm vào món trên kệ để bỏ vào giỏ.",
+    keepShopping: "Chọn tiếp",
+    clearBasket: "Bỏ hết",
     inStock: (q) => `Trong kho: ${q}`,
     packOf: (q) => `Gói ${q}`,
     displayTitle: "Tủ kính",
@@ -584,6 +596,7 @@ export const STRINGS: Localized<Strings> = {
         "Chào mừng đến Tiệm Bánh Mây! Mình là Mây. Đêm nay mình cùng làm mẻ bánh đầu tiên nhé.",
       start: "Bắt đầu",
       skip: "Bỏ qua",
+      skipped: "Xem lại hướng dẫn trong Cài đặt nhé!",
       next: "Tiếp",
       market: "Kho đang trống. Đi siêu thị mua nguyên liệu trước nhé!",
       shopping:
@@ -927,6 +940,11 @@ export const STRINGS: Localized<Strings> = {
     },
     basket: (n) =>
       n ? `Basket: ${n} item${n > 1 ? "s" : ""}` : "Basket empty",
+    basketTitle: "Basket",
+    basketEmpty: "The basket is empty",
+    basketHint: "Tap things on the shelves to put them in.",
+    keepShopping: "Keep shopping",
+    clearBasket: "Empty it",
     inStock: (q) => `In pantry: ${q}`,
     packOf: (q) => `Pack of ${q}`,
     displayTitle: "Display case",
@@ -962,6 +980,7 @@ export const STRINGS: Localized<Strings> = {
         "Welcome to Cloud Bakery! I'm Mây. Let's bake our very first batch tonight.",
       start: "Let's go",
       skip: "Skip",
+      skipped: "You can replay the guide from Settings.",
       next: "Next",
       market: "The pantry is empty. Let's go to the supermarket first!",
       shopping:
