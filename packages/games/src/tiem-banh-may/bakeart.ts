@@ -110,6 +110,8 @@ export const PILE: Record<
   mascarpone: { sprite: "pile-cream", liquid: true, color: "#fff9ee" },
   saltedEgg: { sprite: "pile-egg", liquid: false, color: "#f79a2e" },
   porkFloss: { sprite: "pile-yeast", liquid: false, color: "#d9a35c" },
+  blueberry: { sprite: "pile-blueberry", liquid: false, color: "#5d6bb5" },
+  matcha: { sprite: "pile-matcha", liquid: false, color: "#8db86b" },
 };
 
 export const bowlSprite = (state: BowlState) => BOWL_SPRITE[state];
