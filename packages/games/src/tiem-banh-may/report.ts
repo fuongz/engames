@@ -31,6 +31,7 @@ export function drawReport(app: App, r: DayReport) {
     (r.preorders.done || r.preorders.missed ? 1 : 0) +
     (r.overChange ? 1 : 0) +
     (r.bailout ? 1 : 0) +
+    (r.charmCustomers > 0 ? 1 : 0) +
     r.tomorrow.length;
   const content = 4 + 94 + 106 * 2 + (soldCount ? 84 : 0) + noteCount * 34 + 8;
   const y0 = Math.max(v.y + 16, 20) + 50;
@@ -170,6 +171,12 @@ export function drawReport(app: App, r: DayReport) {
       picture: "tag",
       text: tr.overGiven(r.overChange),
       color: C.warn,
+    });
+  if (r.charmCustomers > 0)
+    notes.push({
+      picture: "heart",
+      text: tr.charmReport(r.charm, r.charmCustomers),
+      color: C.good,
     });
   if (r.bailout)
     notes.push({

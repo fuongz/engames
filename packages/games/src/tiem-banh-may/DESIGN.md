@@ -94,8 +94,7 @@ slot 0, as before slots, then `backup:<player>:<slot>`).
 
 Decided with the owner on 2026-10-25 (issues #16–#20). The player furnishes
 the storefront like a cosy café; the furniture gives a new stat, **Charm**
-(*Cuốn hút*, heart icon), and Charm brings more customers.
-
+(_Cuốn hút_, heart icon), and Charm brings more customers.
 - **The room** is redrawn in a three-quarter top-down view, straight on (no
   vanishing point, not isometric): the back wall with the arched door at the
   top, a floor of square tiles below that reads as a grid. Wall and floor are
@@ -104,7 +103,7 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
   counter, and the queue in front of the counter, can never take furniture,
   so customers never walk through it. Furniture is drawn sorted by its bottom
   row, then customers, then the counter.
-- **Decor mode** is a *Trang trí* button on the night screen (never while
+- **Decor mode** is a _Trang trí_ button on the night screen (never while
   open): drag from the storage drawer, tap to pick up, flip, put back. The
   charm counter is live while decorating.
 - **Charm** is the sum of placed pieces' charm. A second copy of the same
@@ -116,7 +115,7 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
   (capped), so seating matters beyond charm.
 - **Tiers** Giản dị → Ấm cúng → Dễ thương → Nổi tiếng: each new tier puts a
   new theme on sale and raises the VIP chance a little.
-- **The Furniture aisle** (*Nội thất*) in the market: tables and chairs, decor,
+- **The Furniture aisle** (_Nội thất_) in the market: tables and chairs, decor,
   walls and floors, each with a +charm chip; same basket and till. The basic
   set and unlocked themes are always on sale; 2–3 rarer pieces rotate daily.
 - **Starting set** (free, placed in a default layout; old saves get it too):
@@ -124,13 +123,21 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
 - **Themes**: Cơ bản (basic), Hồng ngọt (sweet pink), Vườn hoa (flower
   garden), Rừng xanh (forest), Cổ điển (classic). Every piece of a theme shares
   its colours and motifs; every piece of the game shares one camera and scale.
-- The leaderboard worth includes furniture value.
+- The leaderboard worth includes furniture value (what was paid beyond the
+  free starting set).
+- **Numbers** (`config.ts`, logic in `furniture.ts`): a 6×5 grid, the tile
+  inside the door and the two queue tiles at the till kept clear, a walkable
+  way from the door to the till and a free tile in front of every stand. Tiers
+  at charm 0 / 12 / 30 / 60, `CHARM_SCALE` 30, +3% VIP chance per tier, +4%
+  patience per seat up to +20%. Basic pieces give ~0–1 charm, Hồng ngọt 3–5,
+  the classic glass case and fridge 6–7. Save v5 adds `decor` (owned, placed,
+  wall, floor); v4 saves get the starting layout.
 
 ### Self-serve stands (2026-10-25)
 
 The player no longer picks pieces for each order: customers serve themselves
 and the player works the till.
-- **Cake stands** (*quầy bánh*) are furniture placed on the grid, bought in
+- **Cake stands** (_quầy bánh_) are furniture placed on the grid, bought in
   the Furniture aisle; each holds 2–3 batches, any recipe the player chooses
   in decor/night prep. They replace the display-case screen. Two basic stands
   come with the starting set; more stands mean more variety and add charm.

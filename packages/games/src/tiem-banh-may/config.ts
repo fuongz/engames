@@ -997,3 +997,188 @@ export const RECORDS: MusicRecord[] = [
 
 /** Mood gained at closing when a record was playing. */
 export const RECORD_MOOD = 2;
+
+// ---------------------------------------------------------------- storefront decor
+
+export type FurnitureId =
+  | "basic-table"
+  | "basic-chair"
+  | "basic-plant"
+  | "basic-stand"
+  | "pink-table"
+  | "pink-chair"
+  | "pink-candy"
+  | "pink-stand"
+  | "wood-shelf"
+  | "glass-case"
+  | "glass-fridge"
+  | "wall-plain"
+  | "floor-plain";
+
+export type FurnitureKind =
+  | "seat"
+  | "table"
+  | "decor"
+  | "stand"
+  | "wall"
+  | "floor";
+/** A theme: pieces of one set share colours, and placing several gives a bonus. */
+export type FurnitureSet = "basic" | "sweet" | "classic";
+
+export interface Furniture {
+  id: FurnitureId;
+  name: Localized<string>;
+  kind: FurnitureKind;
+  set: FurnitureSet;
+  charm: number;
+  /** Coins in the Furniture aisle. */
+  price: number;
+  /** Floor tiles it covers (walls and floors cover none). */
+  w: number;
+  h: number;
+  /** Stands only: batches it can show. */
+  shelves?: number;
+  /** Charm tier at which it goes on sale (0: from the start). */
+  tier: number;
+  sprite: string;
+}
+
+const piece = (
+  id: FurnitureId,
+  vi: string,
+  en: string,
+  kind: FurnitureKind,
+  set: FurnitureSet,
+  charm: number,
+  price: number,
+  more: Partial<Pick<Furniture, "w" | "h" | "shelves" | "tier">> = {},
+): Furniture => ({
+  id,
+  name: { vi, en },
+  kind,
+  set,
+  charm,
+  price,
+  w: kind === "wall" || kind === "floor" ? 0 : 1,
+  h: kind === "wall" || kind === "floor" ? 0 : 1,
+  tier: 0,
+  sprite: `f-${id}`,
+  ...more,
+});
+
+export const FURNITURE: Furniture[] = [
+  piece(
+    "basic-table",
+    "Bàn gỗ tròn",
+    "Round wooden table",
+    "table",
+    "basic",
+    1,
+    120,
+  ),
+  piece("basic-chair", "Ghế gỗ", "Wooden chair", "seat", "basic", 0.5, 60),
+  piece("basic-plant", "Chậu cây", "Potted plant", "decor", "basic", 1, 80),
+  piece(
+    "basic-stand",
+    "Quầy bánh gỗ",
+    "Wooden cake stand",
+    "stand",
+    "basic",
+    1,
+    300,
+    {
+      w: 2,
+      shelves: 2,
+    },
+  ),
+  piece("pink-table", "Bàn khăn ren", "Lace table", "table", "sweet", 4, 320, {
+    tier: 1,
+  }),
+  piece("pink-chair", "Ghế trái tim", "Heart chair", "seat", "sweet", 3, 180, {
+    tier: 1,
+  }),
+  piece("pink-candy", "Hũ kẹo", "Candy jar", "decor", "sweet", 5, 260, {
+    tier: 1,
+  }),
+  piece(
+    "pink-stand",
+    "Quầy bánh hồng",
+    "Pink cake stand",
+    "stand",
+    "sweet",
+    5,
+    650,
+    {
+      w: 2,
+      shelves: 2,
+      tier: 1,
+    },
+  ),
+  piece("wood-shelf", "Kệ bánh mì", "Bread shelf", "stand", "basic", 4, 600, {
+    w: 2,
+    shelves: 3,
+    tier: 1,
+  }),
+  piece("glass-case", "Tủ kính", "Glass case", "stand", "classic", 7, 900, {
+    w: 2,
+    shelves: 3,
+    tier: 2,
+  }),
+  piece("glass-fridge", "Tủ mát", "Cake fridge", "stand", "classic", 6, 1100, {
+    shelves: 4,
+    tier: 2,
+  }),
+  piece("wall-plain", "Tường kem", "Cream wall", "wall", "basic", 0, 0),
+  piece("floor-plain", "Sàn karo", "Checker floor", "floor", "basic", 0, 0),
+];
+
+/** The storefront floor, in tiles. */
+export const GRID_COLS = 6;
+export const GRID_ROWS = 5;
+/** Tiles that never take furniture: inside the door, and the queue at the till. */
+export const DOOR_TILE = { x: 1, y: 0 };
+export const TILL_TILES = [
+  { x: 2, y: 4 },
+  { x: 3, y: 4 },
+];
+
+export interface Placed {
+  id: FurnitureId;
+  x: number;
+  y: number;
+  /** Mirrored left-right (a chair facing the other way). */
+  flip: boolean;
+}
+
+/** What every bakery starts with, and where it stands. */
+export const START_LAYOUT: Placed[] = [
+  { id: "basic-plant", x: 0, y: 0, flip: false },
+  { id: "basic-stand", x: 2, y: 0, flip: false },
+  { id: "basic-stand", x: 4, y: 0, flip: false },
+  { id: "basic-chair", x: 3, y: 2, flip: false },
+  { id: "basic-table", x: 4, y: 2, flip: false },
+  { id: "basic-chair", x: 5, y: 2, flip: true },
+  { id: "basic-chair", x: 3, y: 3, flip: false },
+  { id: "basic-table", x: 4, y: 3, flip: false },
+  { id: "basic-chair", x: 5, y: 3, flip: true },
+];
+export const START_WALL: FurnitureId = "wall-plain";
+export const START_FLOOR: FurnitureId = "floor-plain";
+
+/** Copies of the same piece count less each time: variety beats spamming one. */
+export const CHARM_REPEAT = [1, 0.5, 0.25];
+/** A theme's own charm grows with this many of its pieces placed (basic has none). */
+export const SET_BONUS = [
+  { pieces: 5, bonus: 0.25 },
+  { pieces: 3, bonus: 0.1 },
+];
+/** Customers × (1 + MAX_BOOST × (1 − e^(−charm / SCALE))): never past +50%. */
+export const CHARM_MAX_BOOST = 0.5;
+export const CHARM_SCALE = 30;
+/** Giản dị → Ấm cúng → Dễ thương → Nổi tiếng: charm needed for each. */
+export const CHARM_TIERS = [0, 12, 30, 60];
+/** Each tier makes a VIP visit a little likelier. */
+export const VIP_PER_TIER = 0.03;
+/** Each placed seat makes queuers this much more patient, up to SEAT_MAX. */
+export const SEAT_PATIENCE = 0.04;
+export const SEAT_MAX = 0.2;

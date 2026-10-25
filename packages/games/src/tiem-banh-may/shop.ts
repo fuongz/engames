@@ -61,6 +61,7 @@ import {
   slept,
   piecePrice,
 } from "./logic";
+import { seatPatience } from "./furniture";
 import { dialogButtons, priceSticker } from "./kit";
 
 // Opening hours, in real time: customers walk in, queue, say what they want;
@@ -215,8 +216,10 @@ export function updateShop(app: App, s: ShopState, dt: number) {
       app.toast(tr.queueFull, DOOR.x + 60, DOOR.y - 160, C.bad, 18);
       continue;
     }
+    // A cheerful baker and somewhere to sit both make the wait easier
     const max =
       patienceFactor(s.opened.mood) *
+      seatPatience(s.opened.decor) *
       (v.kind === "vip"
         ? VIP_PATIENCE
         : v.kind === "preorder"

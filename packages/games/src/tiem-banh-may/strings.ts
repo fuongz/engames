@@ -169,6 +169,7 @@ export interface Strings {
   vipReport: Record<"happy" | "sad" | "missed", string>;
   preorderReport: (done: number, missed: number) => string;
   bailout: (n: number) => string;
+  charmReport: (charm: number, extra: number) => string;
   nextDay: string;
 
   /** Card summary and leaderboard detail. */
@@ -524,6 +525,8 @@ export const STRINGS: Localized<Strings> = {
     preorderReport: (d, m) =>
       `Đơn đặt trước: ${d} xong${m ? `, ${m} lỡ hẹn` : ""}`,
     bailout: (n) => `Bác hàng xóm cho mượn ${n} xu. Cố lên!`,
+    charmReport: (charm, extra) =>
+      `Cuốn hút ${charm}: tiệm xinh kéo thêm ${extra} khách.`,
     nextDay: "Sang ngày mới",
 
     summary: (d, c) => `Ngày ${d}, ${viNum(c)} xu`,
@@ -909,6 +912,8 @@ export const STRINGS: Localized<Strings> = {
     preorderReport: (d, m) =>
       `Pre-orders: ${d} done${m ? `, ${m} missed` : ""}`,
     bailout: (n) => `Your neighbour lent you ${n} coins. Hang in there!`,
+    charmReport: (charm, extra) =>
+      `Charm ${charm}: the storefront drew ${extra} more ${extra === 1 ? "customer" : "customers"}.`,
     nextDay: "Next day",
 
     summary: (d, c) => `Day ${d}, ${enNum(c)} coins`,

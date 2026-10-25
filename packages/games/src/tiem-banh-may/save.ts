@@ -1,6 +1,7 @@
 import type { SaveRules } from "../saves";
 import {
   CUSTOMERS,
+  FURNITURE,
   INGREDIENTS,
   MAX_REP,
   OPEN,
@@ -10,6 +11,7 @@ import {
   START_COINS,
   UPGRADES,
 } from "./config";
+import { arrange, startDecor } from "./furniture";
 import { type SaveData, assets } from "./logic";
 
 // What the server accepts as a save. The client keeps the bakery (it is a
@@ -21,6 +23,9 @@ const UPGRADE_IDS = new Set<string>(UPGRADES.map((u) => u.id));
 const INGREDIENT_IDS = new Set<string>(INGREDIENTS.map((i) => i.id));
 const CUSTOMER_IDS = new Set<string>(CUSTOMERS.map((c) => c.id));
 const RECORD_IDS = new Set<string>(RECORDS.map((r) => r.id));
+const FURNITURE_IDS = new Set<string>(FURNITURE.map((f) => f.id));
+/** More pieces than anyone could place or want in storage. */
+const MAX_FURNITURE = 200;
 
 /** Far above a perfect day (≈70 customers × 8 pieces × the dearest 3★ price). */
 const MAX_DAY_INCOME = 15_000;
@@ -43,9 +48,11 @@ const ids = (x: unknown, known: Set<string>) =>
  * had no energy or mood: map it onto the version-2 night and give defaults.
  */
 function migrate(raw: Record<string, unknown>): Record<string, unknown> {
+  // v4 → v5: the storefront, furnished with the starting set
+  if (raw.v === 4) return { ...raw, v: 5, decor: startDecor() };
   // v3 → v4: the music box, with the record it came with
   if (raw.v === 3)
-    return { ...raw, v: 4, records: ["sheep"], playing: "sheep" };
+    return migrate({ ...raw, v: 4, records: ["sheep"], playing: "sheep" });
   // v2 → v3: batches can run in the background
   if (raw.v === 2) return migrate({ ...raw, v: 3, jobs: [] });
   if (raw.v !== 1) return raw;
@@ -68,7 +75,7 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
 export function parseSave(raw: unknown): SaveData | null {
   if (!isObj(raw)) return null;
   const s = migrate(raw);
-  if (s.v !== 4) return null;
+  if (s.v !== 5) return null;
   // Records: known ones, and the one playing must be owned
   if (
     !ids(s.records, RECORD_IDS) ||
@@ -175,7 +182,34 @@ export function parseSave(raw: unknown): SaveData | null {
     !isNum(s.stats.bestProfit, -1e9, 1e9)
   )
     return null;
-  return s as unknown as SaveData;
+  // The storefront: known pieces, owned, and a layout the shop can open with
+  const d = s.decor;
+  if (
+    !isObj(d) ||
+    !Array.isArray(d.owned) ||
+    d.owned.length > MAX_FURNITURE ||
+    !d.owned.every((id) => typeof id === "string" && FURNITURE_IDS.has(id)) ||
+    !Array.isArray(d.placed) ||
+    d.placed.length > MAX_FURNITURE ||
+    !d.placed.every(
+      (p) =>
+        isObj(p) &&
+        typeof p.id === "string" &&
+        FURNITURE_IDS.has(p.id) &&
+        isInt(p.x, 0, 100) &&
+        isInt(p.y, 0, 100) &&
+        typeof p.flip === "boolean",
+    ) ||
+    typeof d.wall !== "string" ||
+    !FURNITURE_IDS.has(d.wall) ||
+    typeof d.floor !== "string" ||
+    !FURNITURE_IDS.has(d.floor)
+  )
+    return null;
+  const save = s as unknown as SaveData;
+  if (!arrange(save, save.decor.placed, save.decor.wall, save.decor.floor).ok)
+    return null;
+  return save;
 }
 
 /** Could `next` follow `prev` in real play? */
