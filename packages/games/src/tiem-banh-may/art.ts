@@ -995,3 +995,149 @@ export function face(ctx: Ctx, x: number, y: number, r: number, mood: number) {
   ctx.lineWidth = 2.2;
   ctx.stroke();
 }
+
+// ---------------------------------------------------------------- line icons
+// The settings' icons: thin brown line over white, like the reference settings
+// screen. Each fits a `s`-sized square centred on (cx, cy).
+
+function lineStyle(ctx: Ctx, s: number) {
+  ctx.lineWidth = Math.max(2.4, s * 0.06);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = C.ink;
+  ctx.fillStyle = C.white;
+}
+
+/** A speaker: sound waves when on, a cross when off. */
+export function speakerIcon(
+  ctx: Ctx,
+  cx: number,
+  cy: number,
+  s: number,
+  on: boolean,
+) {
+  ctx.save();
+  lineStyle(ctx, s);
+  const x = cx - s * 0.12;
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.3, cy - s * 0.12);
+  ctx.lineTo(x - s * 0.12, cy - s * 0.12);
+  ctx.lineTo(x + s * 0.1, cy - s * 0.3);
+  ctx.lineTo(x + s * 0.1, cy + s * 0.3);
+  ctx.lineTo(x - s * 0.12, cy + s * 0.12);
+  ctx.lineTo(x - s * 0.3, cy + s * 0.12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  if (on)
+    for (const r of [0.2, 0.34]) {
+      ctx.beginPath();
+      ctx.arc(x + s * 0.1, cy, s * r, -0.85, 0.85);
+      ctx.stroke();
+    }
+  else {
+    const k = s * 0.1;
+    const ox = x + s * 0.32;
+    ctx.beginPath();
+    ctx.moveTo(ox - k, cy - k);
+    ctx.lineTo(ox + k, cy + k);
+    ctx.moveTo(ox + k, cy - k);
+    ctx.lineTo(ox - k, cy + k);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Two beamed notes; struck through when the music is off. */
+export function noteIcon(
+  ctx: Ctx,
+  cx: number,
+  cy: number,
+  s: number,
+  on: boolean,
+) {
+  ctx.save();
+  lineStyle(ctx, s);
+  const heads = [
+    { x: cx - s * 0.2, y: cy + s * 0.24 },
+    { x: cx + s * 0.22, y: cy + s * 0.16 },
+  ];
+  // Stems up from each head's right side to a slanted beam
+  const top = [cy - s * 0.26, cy - s * 0.34];
+  ctx.beginPath();
+  heads.forEach((h, i) => {
+    ctx.moveTo(h.x + s * 0.11, h.y - s * 0.02);
+    ctx.lineTo(h.x + s * 0.11, top[i]);
+  });
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(heads[0].x + s * 0.11, top[0]);
+  ctx.lineTo(heads[1].x + s * 0.11, top[1]);
+  ctx.lineTo(heads[1].x + s * 0.11, top[1] + s * 0.1);
+  ctx.lineTo(heads[0].x + s * 0.11, top[0] + s * 0.1);
+  ctx.closePath();
+  ctx.fillStyle = C.ink;
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = C.white;
+  for (const h of heads) {
+    ctx.beginPath();
+    ctx.ellipse(h.x, h.y, s * 0.12, s * 0.085, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (!on) {
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.38, cy - s * 0.38);
+    ctx.lineTo(cx + s * 0.38, cy + s * 0.38);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A little shop with a red roof: another bakery. */
+export function shopIcon(ctx: Ctx, cx: number, cy: number, s: number) {
+  ctx.save();
+  lineStyle(ctx, s);
+  ctx.beginPath();
+  ctx.rect(cx - s * 0.3, cy - s * 0.04, s * 0.6, s * 0.38);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.4, cy);
+  ctx.lineTo(cx, cy - s * 0.36);
+  ctx.lineTo(cx + s * 0.4, cy);
+  ctx.closePath();
+  ctx.fillStyle = "#ef8a7e";
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.rect(cx - s * 0.08, cy + s * 0.12, s * 0.16, s * 0.22);
+  ctx.fillStyle = C.cream;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A circular arrow: start again. */
+export function restartIcon(ctx: Ctx, cx: number, cy: number, s: number) {
+  ctx.save();
+  lineStyle(ctx, s);
+  const r = s * 0.28;
+  // Clockwise from just below the right, round to the upper right
+  const end = -Math.PI * 0.35;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, Math.PI * 0.05, end);
+  ctx.stroke();
+  // The arrowhead points along the turn at its end
+  const tx = cx + Math.cos(end) * r;
+  const ty = cy + Math.sin(end) * r;
+  const dir = Math.atan2(Math.cos(end), -Math.sin(end));
+  const k = s * 0.15;
+  ctx.beginPath();
+  ctx.moveTo(tx - Math.cos(dir - 0.6) * k, ty - Math.sin(dir - 0.6) * k);
+  ctx.lineTo(tx, ty);
+  ctx.lineTo(tx - Math.cos(dir + 0.6) * k, ty - Math.sin(dir + 0.6) * k);
+  ctx.stroke();
+  ctx.restore();
+}

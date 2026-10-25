@@ -123,9 +123,9 @@ attempt looked like two games; the owner then moved everything but the
 customers to the cosy hand-drawn style above, first with a terracotta
 clipboard UI, then the lighter stitched dialogs.
 
-### The market
+### The market ("Siêu thị")
 
-A little grocery with one page per aisle, picked with tabs: dry goods, a
+A little supermarket: shop first, pay once at the till. A little grocery with one page per aisle, picked with tabs: dry goods, a
 chilled case (milk, cream, butter, eggs), flavours and fruit. Each page is two
 shelves of two products under the shop's awning, and the coffee waits by the
 till on every page. Price and amounts never share a line: the price is a round
@@ -133,8 +133,13 @@ yellow sticker on the product (just the number; the yellow says "price"); the ta
 shelf says the name, the pack ("Gói 1 kg") and what is in the pantry. Tapping
 a product puts a pack in the basket (a green ×count on its right, a "−" on its
 left, the tag turns green); the till shows the basket, its total and the pay
-button. Switching aisles keeps the basket. Art: `bg-market`, `shelf-wood`,
-`shelf-fridge`, `fridge-back` (a 9-slice, see `nine()`), `basket`.
+button. Switching aisles keeps the basket. Tapping the basket at the till (a
+green count badge on it, nudged each time something goes in) opens its list:
+one line per product with picture, pack, pantry stock, − count + and the
+line's price, records with a ✕, six lines a page; then the total, "Bỏ hết"
+(put it all back) and pay. The list's pay button shares the till's `pay` key,
+so the first-day tour points at whichever is showing. Art: `bg-market`,
+`shelf-wood`, `shelf-fridge`, `fridge-back` (a 9-slice, see `nine()`), `basket`.
 
 ### The kitchen, the display case and the forecast
 
@@ -172,12 +177,80 @@ the picture's bottom is the bowl's foot; the bowl stands on the counter with a
 shadow in every step. Prices show on a yellow sticker in the market and on each
 batch in the display case; the coin carries a little fish.
 
+### Mây, the mascot
+
+Mây is the bakery's white kitten baker (pink apron with a cupcake pocket, puffy
+chef hat, cloud-puff tail), drawn in the customers' style with the game's
+broken outline. Turnaround sheet and poses in `art-src/.../png-mascot2/`;
+in game: `mascot-wave`, `mascot-point`, `mascot-happy`, `mascot-avatar`.
+
+### First-day tour
+
+`tour.ts`: on day 1 Mây walks a new baker through the market, the first batch
+of cookies, the display, bed and the first customers. Each step darkens the
+screen except the button it points at (a Ui region key, found with
+`ui.find`), with a bobbing hand and Mây's speech bubble; only that button
+takes taps. A step ends when the game reaches its goal, so running ahead
+skips steps. Skippable from every bubble ("Bỏ qua" on the first, a small ✕ on
+the corner of the rest; a toast then says Settings can replay it); progress
+is kept per bakery on the device (`tour:<player>:<slot>`).
+
+### Music box and records
+
+The record sits in the kitchen's top bar beside the calendar as a vinyl disc
+(`vinyl.webp`, 2026-10-25) and plays the record on the box (tap it to
+choose). Playing, it spins and notes drift up; turned off, it slows to a stop
+and dims (`hud.ts`). A suitcase record player was tried first but sank into
+the bar (its sources stay in `art-src/.../png-r3/player/`).
+records go in the supermarket basket from its "Đĩa nhạc" aisle (a green tick; tap again to put one back) and are paid with everything else at the till; the last one bought goes straight on. Each record is a track
+from the owner's licensed Cozy Tunes pack, converted to
+`audio/music-<record>.mp3` (gitignored, like Sheep): a record whose file is
+missing is not offered. A record playing at closing adds `RECORD_MOOD` mood.
+Save v4 adds `records` and `playing` (older saves get Sheep, playing).
+
+To restore the tracks on a deploying machine, run the ffmpeg command under
+Music for each: sheep, cuddle (Cuddle Clouds), clouds (What Clouds Are Made
+Of), floating (Floating Dream), sunlight (Sunlight Through Leaves), breeze
+(Gentle Breeze), golden (Golden Gleam), evening (Evening Harmony), wildflowers
+(Wildflowers By The River).
+
+### More recipes
+
+Thirteen recipes: the first six, plus sweet milk bread, banana bread, bánh bò
+(steamed: a new stove mode), croissants, salted-egg sponge, macarons and
+tiramisu (coffee joins the shelf for it), with eight new ingredients (rice
+and almond flour, cocoa, bananas, coconut milk, mascarpone, salted eggs, pork
+floss) in a new "Đặc sản" aisle and the others. The book shows recipes six to
+a page, cheapest first, with Recipes/Upgrades tabs.
+
 ### UI kit
 
 `kit.ts` is the bakery's component set: `pill`, `roundButton` (settings,
-pause), `infoCard`, `weatherCard`, `calendar`, `toolbar`, `tabs`, `dialogButtons`, sized by one table `K` (pill
+pause), `infoCard`, `weatherCard`, `calendar`, `toolbar`, `tabs`, `statTile`, `priceSticker`, `dialogButtons`, sized by one table `K` (pill
 height, stroke, icon slot, gaps, dialog inset). `hud.ts` builds the top bar
 from it. New UI should start from the kit; screens move onto it over time.
+`toggle` (an on/off switch whose knob slides) and `menuButton` (a wide button
+with an icon in a white circle before its label) build the settings, whose
+line icons (speaker, notes, shop, restart) are drawn in `art.ts` and give way
+to `img/icon-<name>.webp` if one is ever added.
+
+### Motion
+
+`motion.ts`, after Emil Kowalski's rules: one strong ease-out
+(`cubic-bezier(0.23, 1, 0.32, 1)`), everything under 300 ms. A dialog's shade
+fades in and its paper grows from 0.95 while fading in (220 ms); keyed by
+title, so a dialog that appears pops itself. Exits cannot be drawn in an
+immediate-mode frame, so the shell copies the canvas just before every tap or
+change of screen and, if the next frame shows another screen (220 ms), a page
+or tab turned (150 ms) or a dialog gone (160 ms), fades the copy out over it.
+Toasts rise with the same ease-out. Counts nudge their badge (200 ms), and
+switches slide (160 ms). `prefers-reduced-motion` keeps the fades and drops
+scale, slide, spin and drift.
+
+The kitchen's next-step hint is a toast Mây says above the display case: it
+rises in, leaves by itself after 8 s or when tapped (✕), and returns when the
+advice changes or the player comes back to the kitchen, unless they skipped
+that advice. It stays away during the first-day tour.
 
 ### Step pictures and animation
 

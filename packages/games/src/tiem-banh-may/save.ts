@@ -5,6 +5,7 @@ import {
   MAX_REP,
   OPEN,
   RECIPES,
+  RECORDS,
   WAKE,
   START_COINS,
   UPGRADES,
@@ -19,6 +20,7 @@ const RECIPE_IDS = new Set<string>(RECIPES.map((r) => r.id));
 const UPGRADE_IDS = new Set<string>(UPGRADES.map((u) => u.id));
 const INGREDIENT_IDS = new Set<string>(INGREDIENTS.map((i) => i.id));
 const CUSTOMER_IDS = new Set<string>(CUSTOMERS.map((c) => c.id));
+const RECORD_IDS = new Set<string>(RECORDS.map((r) => r.id));
 
 /** Far above a perfect day (≈70 customers × 8 pieces × the dearest 3★ price). */
 const MAX_DAY_INCOME = 15_000;
@@ -41,21 +43,42 @@ const ids = (x: unknown, known: Set<string>) =>
  * had no energy or mood: map it onto the version-2 night and give defaults.
  */
 function migrate(raw: Record<string, unknown>): Record<string, unknown> {
+  // v3 → v4: the music box, with the record it came with
+  if (raw.v === 3)
+    return { ...raw, v: 4, records: ["sheep"], playing: "sheep" };
   // v2 → v3: batches can run in the background
-  if (raw.v === 2) return { ...raw, v: 3, jobs: [] };
+  if (raw.v === 2) return migrate({ ...raw, v: 3, jobs: [] });
   if (raw.v !== 1) return raw;
   const used = typeof raw.prepUsed === "number" ? raw.prepUsed : 0;
   // v1: 330 minutes of evening, then the morning from 5:00
   const night = used < 330 ? used : Math.max(WAKE, WAKE - 30 + (used - 330));
   const { prepUsed: _, ...rest } = raw;
-  return { ...rest, v: 3, night, energy: 80, mood: 60, caffeine: 0, jobs: [] };
+  return migrate({
+    ...rest,
+    v: 3,
+    night,
+    energy: 80,
+    mood: 60,
+    caffeine: 0,
+    jobs: [],
+  });
 }
 
 /** The save, if it has the right shape (older versions are upgraded); null otherwise. */
 export function parseSave(raw: unknown): SaveData | null {
   if (!isObj(raw)) return null;
   const s = migrate(raw);
-  if (s.v !== 3) return null;
+  if (s.v !== 4) return null;
+  // Records: known ones, and the one playing must be owned
+  if (
+    !ids(s.records, RECORD_IDS) ||
+    !(
+      s.playing === null ||
+      (typeof s.playing === "string" &&
+        (s.records as string[]).includes(s.playing))
+    )
+  )
+    return null;
   if (
     !Array.isArray(s.jobs) ||
     s.jobs.length > 6 ||

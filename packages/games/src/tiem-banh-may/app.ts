@@ -9,9 +9,10 @@ import {
   coin,
   text,
 } from "./art";
-import type { RecipeId, UpgradeId } from "./config";
+import type { RecipeId, RecordId, UpgradeId } from "./config";
 import { H, W } from "./config";
 import type { BakeState } from "./kitchen";
+import type { Motion } from "./motion";
 import type { Cart, DayReport, SaveData } from "./logic";
 import type { SlotSummary } from "./cloud";
 import type { ShopState } from "./shop";
@@ -27,16 +28,29 @@ export type Screen =
   | { kind: "error" }
   | { kind: "hub" }
   /** `aisle`: which shelf page is open (0 dry goods, 1 chilled, 2 flavours). */
-  | { kind: "market"; cart: Cart; aisle?: number }
+  /** `records`: records in the basket, paid with the rest at the till. */
+  /** `basket`: the basket's list is open, on this page. */
+  | {
+      kind: "market";
+      cart: Cart;
+      aisle?: number;
+      records?: RecordId[];
+      basket?: number;
+    }
   | {
       kind: "book";
       tab: 0 | 1;
       detail: RecipeId | null;
+      /** Which page of recipes (six to a page). */
+      page?: number;
       bought?: RecipeId | UpgradeId;
     }
-  | { kind: "pick" }
+  /** What shall I bake: the owned recipes, five to a page. */
+  | { kind: "pick"; page?: number }
   /** A recipe just bought: a moment to enjoy it, then back to its page. */
-  | { kind: "learned"; recipe: RecipeId; tab: 0 | 1; at: number }
+  | { kind: "learned"; recipe: RecipeId; tab: 0 | 1; page?: number; at: number }
+  /** The music box on the counter: pick a record. */
+  | { kind: "music" }
   /** The display case, shelf by shelf. */
   | { kind: "display" }
   | { kind: "bake"; bake: BakeState }
@@ -76,6 +90,8 @@ export interface App {
   screen: Screen;
   /** Seconds since mount, for idle animation. */
   time: number;
+  /** Entrances, exits and nudges, keyed by what each frame draws. */
+  motion: Motion;
   /** Fast-forward the night clock (waiting on the oven, or for morning). */
   fast: boolean;
   /** A prompt is up: the night clock holds for this frame. */
@@ -83,6 +99,9 @@ export interface App {
   /** The player paused: clock, ovens and customers stand still. */
   paused: boolean;
   setPaused(on: boolean): void;
+  /** The first-day guided tour: the step showing, or null when it is over. */
+  tour: number | null;
+  setTour(step: number | null): void;
   /** A HUD stat's explanation is open (the clock holds while it is). */
   info: "rep" | "energy" | "mood" | null;
   /** The save slot being played (0-based). */
@@ -165,17 +184,26 @@ export function back(app: App, onTap: () => void) {
   });
 }
 
-/** Dim everything and swallow taps; `close` runs when the shade is tapped. */
+/** Dim everything and swallow taps; `close` runs when the shade is tapped. The dim fades in. */
 export function shade(app: App, close?: () => void) {
   const v = viewRect(app);
-  app.ctx.fillStyle = C.shade;
-  app.ctx.fillRect(v.x, v.y, v.w, v.h);
+  const { ctx } = app;
+  ctx.save();
+  ctx.globalAlpha *= app.motion.shade();
+  ctx.fillStyle = C.shade;
+  ctx.fillRect(v.x, v.y, v.w, v.h);
+  ctx.restore();
   app.ui.block(v, close);
 }
 
-/** A dialog modal: blocks taps behind it; returns the paper to draw on. */
+/**
+ * A dialog modal: blocks taps behind it; returns the paper to draw on. It pops
+ * open, so everything drawn after it this frame belongs to it (the shell
+ * settles the motion once the screen is drawn).
+ */
 export function sheet(app: App, r: Rect, title: string) {
   app.ui.block(r);
+  app.motion.pop(app.ctx, title, r);
   return dialog(app.ctx, r, title);
 }
 

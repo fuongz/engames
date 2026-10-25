@@ -1,5 +1,6 @@
 import { type App, H, W, btn, icon, shade, sheet, viewRect } from "./app";
 import { hud } from "./hud";
+import { DUR, easeOut } from "./motion";
 import {
   dialogButtons,
   dialogHeight,
@@ -54,7 +55,7 @@ import {
   stockCount,
   timeLeft,
 } from "./logic";
-import { baked, ovenWindow, rawSprite } from "./bakeart";
+import { baked, ovenWindow, rawSprite, waitArt } from "./bakeart";
 import { resumeJob } from "./kitchen";
 import { openShop } from "./shop";
 
@@ -69,6 +70,7 @@ export function drawHub(app: App) {
   const y0 = hud(app, formatClock(clockAt(save.night)), {
     settings: () => app.go({ kind: "settings", confirm: 0 }),
     pause: true,
+    music: () => app.go({ kind: "music" }),
   });
 
   // ---- tomorrow
@@ -197,7 +199,13 @@ export function drawHub(app: App) {
       app,
       waits[0],
       { x: 104, y: worktop + 8, w: 150, h: 120 },
-      waits[0].recipe === "shortcake" ? "sponge-cooling" : "dough-proofed",
+      (() => {
+        const step = recipe(waits[0].recipe).steps[waits[0].step];
+        return waitArt(
+          waits[0].recipe,
+          step?.kind === "wait" ? step.mode : "proof",
+        );
+      })(),
     );
   } else {
     onTable(ctx, app.sprites.get("tool-bowl"), 104, worktop + 8, 140, 110);
@@ -265,17 +273,8 @@ export function drawHub(app: App) {
     },
   });
 
-  // ---- a hint for what to do next
-  const hint = nextHint(app);
-  if (hint) {
-    const lines2 = wrap(ctx, hint, W - 90, 18);
-    const hh = 18 + lines2.length * 24;
-    const hy = dy - hh - 12;
-    framed(ctx, { x: 30, y: hy, w: W - 60, h: hh }, C.white, 18, 3);
-    lines2.forEach((l, i) => {
-      text(ctx, l, W / 2, hy + 21 + i * 24, { size: 18, weight: 700 });
-    });
-  }
+  // ---- a hint for what to do next, as a toast Mây says (tap to skip it)
+  hintToast(app, nextHint(app), dy - 12);
 
   // ---- where to go
   const ty = H - 206;
@@ -470,6 +469,86 @@ function drawSleep(app: App) {
     });
   }
   ctx.restore();
+}
+
+/** Seconds a hint stays up before it tucks itself away. */
+const HINT_LIFE = 8;
+/** The hint showing: since when, when it started to leave, and whether the player skipped it. */
+const hints = new WeakMap<
+  App,
+  { text: string; at: number; out: number | null; skipped: boolean }
+>();
+
+/**
+ * The next-step hint as a toast resting on `bottom`: it rises in, leaves on
+ * its own after HINT_LIFE seconds or when tapped, and comes back when the
+ * advice changes or the player returns to the kitchen (unless they skipped it).
+ */
+function hintToast(app: App, hint: string | null, bottom: number) {
+  const { ctx } = app;
+  // First frame of a visit to the kitchen (the hub stays drawn under its dialogs)
+  const back = app.motion.age("hub") === 0;
+  if (!hint || app.tour !== null) return;
+  let s = hints.get(app);
+  if (!s || s.text !== hint) {
+    s = { text: hint, at: app.time, out: null, skipped: false };
+    hints.set(app, s);
+  } else if (back && !s.skipped) {
+    s.at = app.time;
+    s.out = null;
+  }
+  if (s.out === null && app.time - s.at > HINT_LIFE) s.out = s.at + HINT_LIFE;
+  const enter = easeOut((app.time - s.at) / DUR.sheetIn);
+  const leave = s.out === null ? 0 : easeOut((app.time - s.out) / DUR.sheetOut);
+  if (leave >= 1) return;
+  const k = enter * (1 - leave);
+
+  const x = 24;
+  const w = W - 48;
+  const lines = wrap(ctx, hint, w - 128, 17);
+  const h = Math.max(64, 22 + lines.length * 23);
+  const y = bottom - h;
+  ctx.save();
+  ctx.globalAlpha *= k;
+  if (!app.motion.reduce) ctx.translate(0, (1 - k) * 18);
+  framed(ctx, { x, y, w, h }, C.white, 18, 3);
+  // Mây says it
+  const ax = x + 36;
+  const ay = y + h / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(ax, ay, 22, 0, Math.PI * 2);
+  ctx.fillStyle = C.cream;
+  ctx.fill();
+  ctx.clip();
+  sprite(ctx, app.sprites.get("mascot-avatar"), ax, ay + 3, 52, 52);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(ax, ay, 22, 0, Math.PI * 2);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  lines.forEach((l, i) => {
+    text(ctx, l, x + 68, y + h / 2 + (i - (lines.length - 1) / 2) * 23, {
+      size: 17,
+      align: "left",
+    });
+  });
+  // The way to skip it
+  text(ctx, "✕", x + w - 26, y + h / 2, { size: 18, fill: C.muted });
+  ctx.restore();
+  if (s.out === null) {
+    const cur = s;
+    app.ui.add({
+      rect: { x, y, w, h },
+      key: "hint",
+      tap: () => {
+        app.sfx.tap();
+        cur.skipped = true;
+        cur.out = app.time;
+      },
+    });
+  }
 }
 
 /** The next sensible thing to do tonight, for players finding their feet. */

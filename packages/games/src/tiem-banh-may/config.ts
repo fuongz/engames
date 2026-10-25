@@ -103,7 +103,15 @@ export type IngredientId =
   | "strawberry"
   | "oil"
   | "chocolate"
-  | "coffee";
+  | "coffee"
+  | "riceFlour"
+  | "almondFlour"
+  | "cocoa"
+  | "banana"
+  | "coconutMilk"
+  | "mascarpone"
+  | "saltedEgg"
+  | "porkFloss";
 
 /** How the kitchen measures it: on the scale, one by one, or by the teaspoon (5 g/ml). */
 export type Measure = "pour" | "count" | "spoon";
@@ -121,6 +129,14 @@ export interface Ingredient {
   fresh: boolean;
   sprite: string;
 }
+
+const ing = (
+  id: IngredientId,
+  vi: string,
+  en: string,
+  rest: Omit<Ingredient, "id" | "name" | "sprite">,
+  sprite: string,
+): Ingredient => ({ id, name: { vi, en }, sprite, ...rest });
 
 export const INGREDIENTS: Ingredient[] = [
   {
@@ -254,6 +270,63 @@ export const INGREDIENTS: Ingredient[] = [
     fresh: false,
     sprite: "ing-coffee",
   },
+  // For the recipes bought later
+  ing(
+    "riceFlour",
+    "Bột gạo",
+    "Rice flour",
+    { unit: "g", measure: "pour", pack: 500, price: 10, fresh: false },
+    "ing-riceflour",
+  ),
+  ing(
+    "almondFlour",
+    "Bột hạnh nhân",
+    "Almond flour",
+    { unit: "g", measure: "pour", pack: 200, price: 30, fresh: false },
+    "ing-almondflour",
+  ),
+  ing(
+    "cocoa",
+    "Bột ca cao",
+    "Cocoa",
+    { unit: "g", measure: "spoon", pack: 100, price: 14, fresh: false },
+    "ing-cocoa",
+  ),
+  ing(
+    "banana",
+    "Chuối",
+    "Bananas",
+    { unit: "g", measure: "pour", pack: 500, price: 10, fresh: true },
+    "ing-banana",
+  ),
+  ing(
+    "coconutMilk",
+    "Nước cốt dừa",
+    "Coconut milk",
+    { unit: "ml", measure: "pour", pack: 400, price: 16, fresh: false },
+    "ing-coconutmilk",
+  ),
+  ing(
+    "mascarpone",
+    "Mascarpone",
+    "Mascarpone",
+    { unit: "g", measure: "pour", pack: 250, price: 45, fresh: true },
+    "ing-mascarpone",
+  ),
+  ing(
+    "saltedEgg",
+    "Trứng muối",
+    "Salted eggs",
+    { unit: "egg", measure: "count", pack: 6, price: 24, fresh: false },
+    "ing-saltedegg",
+  ),
+  ing(
+    "porkFloss",
+    "Chà bông",
+    "Pork floss",
+    { unit: "g", measure: "pour", pack: 200, price: 30, fresh: false },
+    "ing-porkfloss",
+  ),
 ];
 
 // ---------------------------------------------------------------- recipes
@@ -264,12 +337,25 @@ export type RecipeId =
   | "flan"
   | "donut"
   | "choux"
-  | "shortcake";
+  | "shortcake"
+  | "sweetbread"
+  | "bananacake"
+  | "banhbo"
+  | "croissant"
+  | "saltedegg"
+  | "macaron"
+  | "tiramisu";
 
 export type MixMode = "cream" | "whisk" | "fold" | "knead" | "stir";
-export type StoveMode = "caramel" | "fry" | "cook";
+export type StoveMode = "caramel" | "fry" | "cook" | "steam";
 export type WaitMode = "proof" | "cool";
-export type PipeMode = "frost" | "glaze" | "fill" | "cream";
+export type PipeMode =
+  | "frost"
+  | "glaze"
+  | "fill"
+  | "cream"
+  | "topping"
+  | "dust";
 
 /** One line of a recipe card, in order. */
 export type Step =
@@ -437,6 +523,156 @@ export const RECIPES: Recipe[] = [
       { kind: "mix", mode: "whisk", turns: 4 },
       add("strawberry", 250),
       { kind: "pipe", mode: "cream" },
+    ],
+  },
+  {
+    id: "sweetbread",
+    name: { vi: "Bánh mì ngọt", en: "Sweet milk bread" },
+    cost: 600,
+    yield: 8,
+    base: 5,
+    hands: 35,
+    qty: [1, 3],
+    sprite: "cake-sweetbread",
+    steps: [
+      add("flour", 250),
+      add("yeast", 5),
+      add("sugar", 30),
+      add("milk", 120),
+      add("eggs", 1),
+      add("butter", 30),
+      { kind: "mix", mode: "knead", turns: 6 },
+      { kind: "wait", mode: "proof", minutes: 40 },
+      { kind: "oven", temp: 180, minutes: 20 },
+    ],
+  },
+  {
+    id: "bananacake",
+    name: { vi: "Bánh chuối nướng", en: "Banana bread" },
+    cost: 900,
+    yield: 8,
+    base: 7,
+    hands: 30,
+    qty: [1, 2],
+    sprite: "cake-bananacake",
+    steps: [
+      add("banana", 300),
+      add("sugar", 50),
+      add("eggs", 2),
+      add("milk", 100),
+      add("butter", 30),
+      { kind: "mix", mode: "stir", turns: 4 },
+      add("flour", 150),
+      add("bakingPowder", 5),
+      { kind: "mix", mode: "fold", turns: 3 },
+      { kind: "oven", temp: 170, minutes: 30 },
+    ],
+  },
+  {
+    id: "banhbo",
+    name: { vi: "Bánh bò", en: "Bánh bò rice cakes" },
+    cost: 1000,
+    yield: 10,
+    base: 6,
+    hands: 30,
+    qty: [2, 4],
+    sprite: "cake-banhbo",
+    steps: [
+      add("riceFlour", 200),
+      add("coconutMilk", 200),
+      add("sugar", 100),
+      add("yeast", 5),
+      { kind: "mix", mode: "stir", turns: 4 },
+      { kind: "wait", mode: "proof", minutes: 60 },
+      { kind: "stove", mode: "steam", seconds: 5 },
+    ],
+  },
+  {
+    id: "croissant",
+    name: { vi: "Bánh sừng bò", en: "Croissants" },
+    cost: 1600,
+    yield: 8,
+    base: 12,
+    hands: 45,
+    qty: [1, 3],
+    sprite: "cake-croissant",
+    steps: [
+      add("flour", 250),
+      add("yeast", 5),
+      add("sugar", 20),
+      add("milk", 120),
+      { kind: "mix", mode: "knead", turns: 4 },
+      { kind: "wait", mode: "proof", minutes: 30 },
+      add("butter", 150),
+      { kind: "mix", mode: "fold", turns: 3 },
+      { kind: "oven", temp: 200, minutes: 18 },
+    ],
+  },
+  {
+    id: "saltedegg",
+    name: { vi: "Bông lan trứng muối", en: "Salted-egg sponge" },
+    cost: 2400,
+    yield: 6,
+    base: 20,
+    hands: 50,
+    qty: [1, 2],
+    sprite: "cake-saltedegg",
+    steps: [
+      add("eggs", 3),
+      add("sugar", 60),
+      { kind: "mix", mode: "whisk", turns: 6 },
+      add("flour", 80),
+      add("oil", 40),
+      add("milk", 40),
+      { kind: "mix", mode: "fold", turns: 3 },
+      { kind: "oven", temp: 160, minutes: 25 },
+      { kind: "wait", mode: "cool", minutes: 15 },
+      add("saltedEgg", 2),
+      add("porkFloss", 50),
+      { kind: "pipe", mode: "topping" },
+    ],
+  },
+  {
+    id: "macaron",
+    name: { vi: "Macaron", en: "Macarons" },
+    cost: 2800,
+    yield: 12,
+    base: 9,
+    hands: 50,
+    qty: [2, 4],
+    sprite: "cake-macaron",
+    steps: [
+      add("eggs", 2),
+      add("sugar", 100),
+      { kind: "mix", mode: "whisk", turns: 8 },
+      add("almondFlour", 100),
+      { kind: "mix", mode: "fold", turns: 4 },
+      { kind: "oven", temp: 150, minutes: 14 },
+      add("cream", 150),
+      { kind: "mix", mode: "whisk", turns: 4 },
+      { kind: "pipe", mode: "fill" },
+    ],
+  },
+  {
+    id: "tiramisu",
+    name: { vi: "Tiramisu", en: "Tiramisu" },
+    cost: 3200,
+    yield: 6,
+    base: 22,
+    hands: 40,
+    qty: [1, 2],
+    sprite: "cake-tiramisu",
+    steps: [
+      add("eggs", 2),
+      add("sugar", 50),
+      { kind: "mix", mode: "whisk", turns: 5 },
+      add("mascarpone", 250),
+      add("cream", 100),
+      { kind: "mix", mode: "fold", turns: 3 },
+      add("coffee", 1),
+      { kind: "wait", mode: "cool", minutes: 30 },
+      add("cocoa", 10),
+      { kind: "pipe", mode: "dust" },
     ],
   },
 ];
@@ -669,3 +905,51 @@ export const PREORDER_MIN_STARS = 2;
 export const VIP_FROM = 4;
 export const VIP_CHANCE = 0.2;
 export const VIP_TIP = 20;
+
+// ---------------------------------------------------------------- records
+// The music box plays one record at a time. Each record is a track from the
+// owner's licensed "Cozy Tunes" pack (Pizza Doggy); the audio files are kept
+// out of git (audio/music-<id>.mp3), and a record whose file is missing is
+// simply not offered. Playing any record lifts the baker's mood a little.
+
+export type RecordId =
+  | "sheep"
+  | "cuddle"
+  | "clouds"
+  | "floating"
+  | "sunlight"
+  | "breeze"
+  | "golden"
+  | "evening"
+  | "wildflowers";
+
+export interface MusicRecord {
+  id: RecordId;
+  /** The track's own title. */
+  title: string;
+  /** Coins at the market; 0 = the box comes with it. */
+  price: number;
+  sprite: string;
+}
+
+const rec = (id: RecordId, title: string, price: number): MusicRecord => ({
+  id,
+  title,
+  price,
+  sprite: `record-${id}`,
+});
+
+export const RECORDS: MusicRecord[] = [
+  rec("sheep", "Sheep", 0),
+  rec("cuddle", "Cuddle Clouds", 150),
+  rec("clouds", "What Clouds Are Made Of", 200),
+  rec("floating", "Floating Dream", 200),
+  rec("sunlight", "Sunlight Through Leaves", 250),
+  rec("breeze", "Gentle Breeze", 250),
+  rec("golden", "Golden Gleam", 300),
+  rec("evening", "Evening Harmony", 300),
+  rec("wildflowers", "Wildflowers By The River", 350),
+];
+
+/** Mood gained at closing when a record was playing. */
+export const RECORD_MOOD = 2;

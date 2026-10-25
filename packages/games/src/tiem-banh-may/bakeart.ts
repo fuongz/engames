@@ -102,6 +102,14 @@ export const PILE: Record<
   oil: { sprite: "pile-oil", liquid: true, color: "#f5c84a" },
   chocolate: { sprite: "pile-chocolate", liquid: false, color: "#6b3a22" },
   coffee: { sprite: "pile-milk", liquid: true, color: "#6b3a22" },
+  riceFlour: { sprite: "pile-flour", liquid: false, color: "#fbfbf6" },
+  almondFlour: { sprite: "pile-flour", liquid: false, color: "#f1dfc2" },
+  cocoa: { sprite: "pile-cocoa", liquid: false, color: "#6b3a22" },
+  banana: { sprite: "pile-banana", liquid: false, color: "#f6e08a" },
+  coconutMilk: { sprite: "pile-milk", liquid: true, color: "#fffdf6" },
+  mascarpone: { sprite: "pile-cream", liquid: true, color: "#fff9ee" },
+  saltedEgg: { sprite: "pile-egg", liquid: false, color: "#f79a2e" },
+  porkFloss: { sprite: "pile-yeast", liquid: false, color: "#d9a35c" },
 };
 
 export const bowlSprite = (state: BowlState) => BOWL_SPRITE[state];
@@ -111,6 +119,15 @@ export const shopBackdrop = (weather: Weather, dusk: boolean) =>
   weather === "sunny" && !dusk
     ? "bg-shop"
     : `bg-shop-${weather}-${dusk ? "dusk" : "day"}`;
+
+/** What a waiting step shows: rising dough, a cooling sponge, or a chilling dish. */
+export function waitArt(id: RecipeId, mode: "proof" | "cool") {
+  if (mode === "proof") return "dough-proofed";
+  // Nothing baked yet (tiramisu): the dish itself sets in the cold
+  return recipe(id).steps.some((s) => s.kind === "oven")
+    ? "sponge-cooling"
+    : rawSprite(id);
+}
 
 /** Raw in the tin / baked and bare / finished, per recipe. */
 export const rawSprite = (id: RecipeId) =>
@@ -196,6 +213,8 @@ export function baked(
   w: number,
   h: number,
   anchor: "center" | "bottom" = "center",
+  /** How golden it gets (steamed cakes barely colour). */
+  tint = 0.5,
 ) {
   if (!raw?.naturalWidth) return;
   const d = fitSize(raw, w, h);
@@ -221,7 +240,7 @@ export function baked(
   tc.globalCompositeOperation = "source-over";
   tc.drawImage(raw, 0, 0, d.w, d.h);
   tc.globalCompositeOperation = "source-atop";
-  tc.fillStyle = `rgba(214, 128, 40, ${0.5 * t})`;
+  tc.fillStyle = `rgba(214, 128, 40, ${tint * t})`;
   tc.fillRect(0, 0, pw, ph);
   tc.globalCompositeOperation = "source-over";
   ctx.drawImage(tintCanvas, 0, 0, pw, ph, x, top, pw, ph);

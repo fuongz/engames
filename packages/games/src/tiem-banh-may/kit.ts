@@ -1,6 +1,6 @@
 import type { Rect } from "@web-games/core";
 import { type App, btn, icon } from "./app";
-import { C, FONT, framed, panel, rr, text, wrap } from "./art";
+import { C, FONT, button, framed, panel, rr, text, wrap } from "./art";
 
 // The bakery's UI kit: every HUD fact, gauge, round button, info card and
 // toolbar is built from these, so they share one height, one stroke and one
@@ -492,5 +492,133 @@ export function priceSticker(
     size: r * (price >= 100 ? 0.7 : 0.9),
     fill: "#b0412c",
     maxWidth: r * 1.5,
+  });
+}
+
+/**
+ * A small tinted tile: a picture on top, a short label, and a value. The
+ * building block for summaries (the day's report, a recipe's facts).
+ */
+export function statTile(
+  app: App,
+  r: Rect,
+  tile: {
+    /** A sprite name (or an icon-* name). */
+    picture: string;
+    label: string;
+    value: string;
+    color?: string;
+    tint?: string;
+    /** Draw the picture greyed out (something that went wrong). */
+    faded?: boolean;
+  },
+) {
+  const { ctx } = app;
+  panel(ctx, r, { fill: tile.tint ?? C.white, radius: 16, line: 2 });
+  ctx.save();
+  if (tile.faded) ctx.globalAlpha *= 0.55;
+  icon(app, tile.picture, r.x + r.w / 2, r.y + 26, 36, () => undefined);
+  ctx.restore();
+  text(ctx, tile.label, r.x + r.w / 2, r.y + 54, {
+    size: 12,
+    fill: C.muted,
+    maxWidth: r.w - 10,
+  });
+  text(ctx, tile.value, r.x + r.w / 2, r.y + r.h - 16, {
+    size: 18,
+    fill: tile.color ?? C.text,
+    maxWidth: r.w - 10,
+  });
+}
+
+/**
+ * An on/off switch: a pill track, green when on, with a white knob that slides
+ * across when tapped. `cx`, `cy` is its centre.
+ */
+export function toggle(
+  app: App,
+  key: string,
+  cx: number,
+  cy: number,
+  on: boolean,
+  onTap: () => void,
+) {
+  const { ctx } = app;
+  const w = 92;
+  const h = 46;
+  const lip = 4;
+  const k = app.motion.slide(key, on);
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  // The base under the track, then the track itself
+  rr(ctx, x, y + lip, w, h - lip, (h - lip) / 2);
+  ctx.fillStyle = on ? "#93c06e" : "#cbbfb1";
+  ctx.fill();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  rr(ctx, x, y, w, h - lip, (h - lip) / 2);
+  ctx.fillStyle = on ? C.green : "#e9e2d8";
+  ctx.fill();
+  ctx.stroke();
+  const r = (h - lip) / 2 - 5;
+  const kx = x + 5 + r + k * (w - 10 - r * 2);
+  ctx.beginPath();
+  ctx.arc(kx, y + (h - lip) / 2, r, 0, Math.PI * 2);
+  ctx.fillStyle = C.white;
+  ctx.fill();
+  ctx.stroke();
+  app.ui.add({
+    rect: { x: x - 10, y: y - 10, w: w + 20, h: h + 20 },
+    key,
+    tap: () => {
+      app.sfx.tap();
+      onTap();
+    },
+  });
+}
+
+/**
+ * A wide cream button with an icon in a white circle before its label (the
+ * settings' list). `drawIcon` draws into an `s`-sized square at (cx, cy).
+ */
+export function menuButton(
+  app: App,
+  key: string,
+  r: Rect,
+  label: string,
+  drawIcon: (cx: number, cy: number, s: number) => void,
+  onTap: () => void,
+  opts: { fill?: string } = {},
+) {
+  const { ctx } = app;
+  const pressed = app.ui.isPressed(key);
+  button(ctx, r, "", { fill: opts.fill, pressed });
+  // Same face as button(): it stands on a 6px lip and sinks 5px when pressed
+  const face = r.h - 6;
+  const cy = r.y + face / 2 + (pressed ? 5 : 0);
+  const ir = face * 0.36;
+  const icx = r.x + 16 + ir;
+  ctx.beginPath();
+  ctx.arc(icx, cy, ir, 0, Math.PI * 2);
+  ctx.fillStyle = C.white;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = C.ink;
+  ctx.stroke();
+  drawIcon(icx, cy, ir * 1.5);
+  text(ctx, label, icx + ir + 14, cy - 1, {
+    size: 21,
+    weight: 600,
+    align: "left",
+    maxWidth: r.x + r.w - (icx + ir + 14) - 18,
+  });
+  app.ui.add({
+    rect: r,
+    key,
+    tap: () => {
+      app.sfx.tap();
+      onTap();
+    },
   });
 }

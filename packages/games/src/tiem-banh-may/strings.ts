@@ -195,14 +195,78 @@ export interface Strings {
   cancel: string;
   restarted: string;
   pauseTitle: string;
-  aisles: Record<"dry" | "cold" | "flavour", string>;
+  aisles: Record<"dry" | "cold" | "flavour" | "special" | "records", string>;
   basket: (n: number) => string;
+  basketTitle: string;
+  basketEmpty: string;
+  basketHint: string;
+  keepShopping: string;
+  clearBasket: string;
   inStock: (q: string) => string;
   packOf: (q: string) => string;
   displayTitle: string;
   stat: Record<"rep" | "energy" | "mood", { title: string; body: string }>;
   gotIt: string;
   ingredientsTitle: string;
+  trayLabel: string;
+  musicBox: {
+    title: string;
+    playing: string;
+    off: string;
+    buyMore: string;
+    owned: string;
+    bought: string;
+    buyAsk: string;
+    buy: string;
+  };
+  tour: {
+    welcome: string;
+    start: string;
+    skip: string;
+    /** After skipping the tour: where to find it again. */
+    skipped: string;
+    next: string;
+    market: string;
+    shopping: string;
+    pay: string;
+    bake: string;
+    pickCookie: string;
+    kitchen: string;
+    display: string;
+    bed: string;
+    open: string;
+    selling: string;
+    done: string;
+    thanks: string;
+    replay: string;
+  };
+  trayHint: string;
+  tile: Record<
+    | "revenue"
+    | "tips"
+    | "boxes"
+    | "ingredients"
+    | "rep"
+    | "served"
+    | "walked"
+    | "wasted"
+    | "spoiled",
+    string
+  >;
+  fact: {
+    time: (m: number) => string;
+    pieces: (n: number) => string;
+    price: (p: number) => string;
+    batch: (p: number) => string;
+    mastery: string;
+  };
+  stepTag: {
+    mix: Record<MixMode, string>;
+    stove: Record<StoveMode, string>;
+    wait: Record<WaitMode, string>;
+    oven: string;
+    pipe: Record<PipeMode, string>;
+  };
   stepsTitle: string;
   learned: string;
   tapContinue: string;
@@ -250,7 +314,7 @@ export const STRINGS: Localized<Strings> = {
     tired: "Mệt quá, nghỉ chút đã",
     napLabel: "Chợp mắt",
     coffeeLabel: "Cà phê",
-    noCoffee: "Hết cà phê, mua ở chợ nhé",
+    noCoffee: "Hết cà phê, mua ở siêu thị nhé",
     leave: "Ra ngoài",
     openNow: "Tới giờ mở cửa rồi!",
     ovenBusy: "Lò đang bận",
@@ -278,11 +342,11 @@ export const STRINGS: Localized<Strings> = {
     preorder: (who, qty, cake, time) =>
       `${who} đặt ${qty} ${cake}, lấy lúc ${time}`,
     noPreorder: "Chưa có đơn đặt trước",
-    market: "Đi chợ",
+    market: "Siêu thị",
     book: "Sổ công thức",
     bake: "Làm bánh",
     open: "Mở cửa",
-    hintMarket: "Kho trống trơn. Đi chợ mua nguyên liệu trước nhé!",
+    hintMarket: "Kho trống trơn. Đi siêu thị mua nguyên liệu trước nhé!",
     hintBake: "Có nguyên liệu rồi, vào bếp làm bánh thôi!",
     hintOpen: "Bánh đã lên kệ. Mở cửa khi bạn sẵn sàng!",
     hintTimeUp: "Hết giờ làm việc rồi. Đến giờ mở cửa!",
@@ -342,7 +406,12 @@ export const STRINGS: Localized<Strings> = {
       stir: "Khuấy đều",
     },
     turns: (n) => `${n} vòng`,
-    stepStove: { caramel: "Thắng caramel", fry: "Chiên vàng", cook: "Nấu bột" },
+    stepStove: {
+      caramel: "Thắng caramel",
+      fry: "Chiên vàng",
+      cook: "Nấu bột",
+      steam: "Hấp bánh",
+    },
     stepWait: (mode, m) =>
       mode === "proof" ? `Ủ bột ${m} phút` : `Để nguội ${m} phút`,
     stepOven: (t, m) => `Nướng ${t}°C trong ${m} phút`,
@@ -351,6 +420,8 @@ export const STRINGS: Localized<Strings> = {
       glaze: "Phủ sốt dâu",
       fill: "Bơm kem",
       cream: "Phủ kem, xếp dâu",
+      topping: "Phết sốt, rắc chà bông",
+      dust: "Rắc bột ca cao",
     },
     pickIng: "Chọn đúng nguyên liệu trên kệ",
     holdPour: "Giữ để đổ, thả tay để dừng",
@@ -477,8 +548,19 @@ export const STRINGS: Localized<Strings> = {
     cancel: "Huỷ",
     restarted: "Tiệm mới đã sẵn sàng!",
     pauseTitle: "Tạm dừng",
-    aisles: { dry: "Đồ khô", cold: "Tủ mát", flavour: "Hương liệu" },
+    aisles: {
+      dry: "Đồ khô",
+      cold: "Tủ mát",
+      flavour: "Hương liệu",
+      special: "Đặc sản",
+      records: "Đĩa nhạc",
+    },
     basket: (n) => (n ? `Giỏ: ${n} món` : "Giỏ trống"),
+    basketTitle: "Giỏ hàng",
+    basketEmpty: "Giỏ đang trống",
+    basketHint: "Chạm vào món trên kệ để bỏ vào giỏ.",
+    keepShopping: "Chọn tiếp",
+    clearBasket: "Bỏ hết",
     inStock: (q) => `Trong kho: ${q}`,
     packOf: (q) => `Gói ${q}`,
     displayTitle: "Tủ kính",
@@ -498,6 +580,85 @@ export const STRINGS: Localized<Strings> = {
     },
     gotIt: "Đã hiểu",
     ingredientsTitle: "Nguyên liệu",
+    trayLabel: "Khay",
+    musicBox: {
+      title: "Hộp nhạc",
+      playing: "Đang phát",
+      off: "Tắt nhạc",
+      buyMore: "Mua thêm đĩa ở siêu thị",
+      owned: "Đã có",
+      bought: "Đĩa mới đã lên hộp nhạc!",
+      buyAsk: "Mua đĩa này?",
+      buy: "Mua",
+    },
+    tour: {
+      welcome:
+        "Chào mừng đến Tiệm Bánh Mây! Mình là Mây. Đêm nay mình cùng làm mẻ bánh đầu tiên nhé.",
+      start: "Bắt đầu",
+      skip: "Bỏ qua",
+      skipped: "Xem lại hướng dẫn trong Cài đặt nhé!",
+      next: "Tiếp",
+      market: "Kho đang trống. Đi siêu thị mua nguyên liệu trước nhé!",
+      shopping:
+        "Chạm món để bỏ vào giỏ, mua xong thì ra quầy tính tiền. Bánh quy cần bột mì, đường, bơ và trứng.",
+      pay: "Đủ rồi! Bấm thanh toán nhé.",
+      bake: "Có nguyên liệu rồi. Vào bếp làm bánh thôi!",
+      pickCookie: "Làm Bánh quy bơ, món dễ nhất.",
+      kitchen:
+        "Làm theo thẻ công thức ở trên: chọn đúng nguyên liệu, đong vừa đủ, trộn đủ vòng, nướng đúng nhiệt.",
+      display: "Bánh đã vào tủ kính. Sáng mai bán cho khách nhé.",
+      bed: "Khuya rồi, đi ngủ cho có sức bán hàng.",
+      open: "Trời sáng rồi! Mở cửa đón khách nào.",
+      selling:
+        "Khách gọi món trong bong bóng. Chạm bánh trong tủ để đặt lên khay, rồi bấm Giao bánh.",
+      done: "Bạn làm tốt lắm! Từ giờ tiệm là của bạn. Chúc buôn may bán đắt!",
+      thanks: "Cảm ơn Mây!",
+      replay: "Xem lại hướng dẫn",
+    },
+    trayHint: "Chạm bánh trong tủ để đặt lên khay",
+    tile: {
+      revenue: "Bán bánh",
+      tips: "Tiền tip",
+      boxes: "Hộp",
+      ingredients: "Nguyên liệu",
+      rep: "Uy tín",
+      served: "Phục vụ",
+      walked: "Bỏ về",
+      wasted: "Bánh bỏ",
+      spoiled: "Đồ hỏng",
+    },
+    fact: {
+      time: (m) => `${m} phút`,
+      pieces: (n) => `${n} cái/mẻ`,
+      price: (p) => `${p} xu/cái`,
+      batch: (p) => `${p} xu/mẻ`,
+      mastery: "Thành thạo",
+    },
+    stepTag: {
+      mix: {
+        cream: "Đánh bông",
+        whisk: "Đánh bông",
+        fold: "Trộn nhẹ",
+        knead: "Nhồi bột",
+        stir: "Khuấy",
+      },
+      stove: {
+        caramel: "Thắng đường",
+        fry: "Chiên",
+        cook: "Nấu bột",
+        steam: "Hấp",
+      },
+      wait: { proof: "Ủ bột", cool: "Để nguội" },
+      oven: "Nướng",
+      pipe: {
+        frost: "Bắt kem",
+        glaze: "Phủ sốt",
+        fill: "Bơm kem",
+        cream: "Phủ kem",
+        topping: "Phủ topping",
+        dust: "Rắc ca cao",
+      },
+    },
     stepsTitle: "Các bước",
     learned: "Học được công thức mới!",
     tapContinue: "Chạm để tiếp tục",
@@ -533,7 +694,7 @@ export const STRINGS: Localized<Strings> = {
     tired: "Too tired, rest first",
     napLabel: "Nap",
     coffeeLabel: "Coffee",
-    noCoffee: "No coffee left, buy some at the market",
+    noCoffee: "No coffee left, buy some at the supermarket",
     leave: "Step out",
     openNow: "Time to open the shop!",
     ovenBusy: "The oven is busy",
@@ -562,11 +723,11 @@ export const STRINGS: Localized<Strings> = {
     preorder: (who, qty, cake, time) =>
       `${who} ordered ${qty} ${cake}, pickup ${time}`,
     noPreorder: "No pre-orders yet",
-    market: "Market",
+    market: "Supermarket",
     book: "Recipe book",
     bake: "Bake",
     open: "Open shop",
-    hintMarket: "The pantry is empty. Go to the market first!",
+    hintMarket: "The pantry is empty. Go to the supermarket first!",
     hintBake: "Ingredients are in. Time to bake!",
     hintOpen: "Cakes are on display. Open when you're ready!",
     hintTimeUp: "Out of working hours. Time to open!",
@@ -632,6 +793,7 @@ export const STRINGS: Localized<Strings> = {
       caramel: "Make caramel",
       fry: "Fry golden",
       cook: "Cook the paste",
+      steam: "Steam the cakes",
     },
     stepWait: (mode, m) =>
       mode === "proof" ? `Proof ${m} min` : `Cool ${m} min`,
@@ -641,6 +803,8 @@ export const STRINGS: Localized<Strings> = {
       glaze: "Dip in glaze",
       fill: "Fill with cream",
       cream: "Cream & strawberries",
+      topping: "Spread, add floss & egg",
+      dust: "Dust with cocoa",
     },
     pickIng: "Pick the right ingredient",
     holdPour: "Hold to pour, let go to stop",
@@ -767,9 +931,20 @@ export const STRINGS: Localized<Strings> = {
     cancel: "Cancel",
     restarted: "Your new bakery is ready!",
     pauseTitle: "Paused",
-    aisles: { dry: "Dry goods", cold: "Chilled", flavour: "Flavours" },
+    aisles: {
+      dry: "Dry goods",
+      cold: "Chilled",
+      flavour: "Flavours",
+      special: "Specials",
+      records: "Records",
+    },
     basket: (n) =>
       n ? `Basket: ${n} item${n > 1 ? "s" : ""}` : "Basket empty",
+    basketTitle: "Basket",
+    basketEmpty: "The basket is empty",
+    basketHint: "Tap things on the shelves to put them in.",
+    keepShopping: "Keep shopping",
+    clearBasket: "Empty it",
     inStock: (q) => `In pantry: ${q}`,
     packOf: (q) => `Pack of ${q}`,
     displayTitle: "Display case",
@@ -789,6 +964,80 @@ export const STRINGS: Localized<Strings> = {
     },
     gotIt: "Got it",
     ingredientsTitle: "Ingredients",
+    trayLabel: "Tray",
+    musicBox: {
+      title: "Music box",
+      playing: "Now playing",
+      off: "Stop",
+      buyMore: "More records at the supermarket",
+      owned: "Owned",
+      bought: "The new record is on!",
+      buyAsk: "Buy this record?",
+      buy: "Buy",
+    },
+    tour: {
+      welcome:
+        "Welcome to Cloud Bakery! I'm Mây. Let's bake our very first batch tonight.",
+      start: "Let's go",
+      skip: "Skip",
+      skipped: "You can replay the guide from Settings.",
+      next: "Next",
+      market: "The pantry is empty. Let's go to the supermarket first!",
+      shopping:
+        "Tap things to put them in the basket. Cookies need flour, sugar, butter and eggs.",
+      pay: "That's everything! Tap pay.",
+      bake: "We have ingredients. Into the kitchen!",
+      pickCookie: "Make butter cookies, the easiest one.",
+      kitchen:
+        "Follow the recipe card above: pick the right ingredient, measure just enough, stir the right turns, bake at the right heat.",
+      display: "The cookies are in the display case, ready for tomorrow.",
+      bed: "It's late. Sleep, so you have energy to sell.",
+      open: "Good morning! Time to open the doors.",
+      selling:
+        "Customers order in their bubble. Tap cakes in the case to put them on the tray, then tap Serve.",
+      done: "Well done! The bakery is yours now. Good luck!",
+      thanks: "Thanks, Mây!",
+      replay: "Replay the tutorial",
+    },
+    trayHint: "Tap a cake in the case to put it here",
+    tile: {
+      revenue: "Sales",
+      tips: "Tips",
+      boxes: "Boxes",
+      ingredients: "Ingredients",
+      rep: "Reputation",
+      served: "Served",
+      walked: "Walked off",
+      wasted: "Binned",
+      spoiled: "Spoiled",
+    },
+    fact: {
+      time: (m) => `${m} min`,
+      pieces: (n) => `${n} per batch`,
+      price: (p) => `${p} each`,
+      batch: (p) => `${p} a batch`,
+      mastery: "Mastery",
+    },
+    stepTag: {
+      mix: {
+        cream: "Cream",
+        whisk: "Whisk",
+        fold: "Fold",
+        knead: "Knead",
+        stir: "Stir",
+      },
+      stove: { caramel: "Caramel", fry: "Fry", cook: "Cook", steam: "Steam" },
+      wait: { proof: "Prove", cool: "Cool" },
+      oven: "Bake",
+      pipe: {
+        frost: "Frost",
+        glaze: "Glaze",
+        fill: "Fill",
+        cream: "Top",
+        topping: "Top",
+        dust: "Dust",
+      },
+    },
     stepsTitle: "Steps",
     learned: "New recipe learned!",
     tapContinue: "Tap to continue",

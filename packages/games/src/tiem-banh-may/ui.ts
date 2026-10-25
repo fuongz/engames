@@ -25,6 +25,8 @@ export class Ui {
   private travelled = 0;
   /** Key of the region currently held down, for drawing it pressed. */
   pressed: string | null = null;
+  /** Runs just before any tap fires, while the canvas still shows the frame tapped on. */
+  beforeTap: (() => void) | null = null;
 
   /** Call at the start of each render; screens re-register what they draw. */
   frame() {
@@ -39,6 +41,13 @@ export class Ui {
   /** A full-screen region that swallows taps behind a modal. */
   block(rect: Rect, tap?: () => void) {
     this.regions.push({ rect, tap });
+  }
+
+  /** Where the region registered under `key` this frame is (the guided tour points at it). */
+  find(key: string): Rect | undefined {
+    for (let i = this.regions.length - 1; i >= 0; i--)
+      if (this.regions[i].key === key) return this.regions[i].rect;
+    return undefined;
   }
 
   isPressed(key: string) {
@@ -74,8 +83,10 @@ export class Ui {
     this.pressed = null;
     if (!r) return;
     r.up?.(p);
-    if (r.tap && inRect(p, r.rect) && (this.travelled < SLOP || !r.move))
+    if (r.tap && inRect(p, r.rect) && (this.travelled < SLOP || !r.move)) {
+      this.beforeTap?.();
       r.tap();
+    }
   }
 
   /** Drop a hold when the game is suspended (tab hidden). */

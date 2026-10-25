@@ -1,7 +1,24 @@
-import { type App, W, btn, close, shade, sheet, viewRect } from "./app";
-import { C, card, cover, sprite, text, wrap } from "./art";
+import { type App, W, close, icon, shade, sheet, viewRect } from "./app";
+import {
+  C,
+  card,
+  cover,
+  noteIcon,
+  restartIcon,
+  shopIcon,
+  speakerIcon,
+  sprite,
+  text,
+  wrap,
+} from "./art";
 import { drawHub } from "./hub";
-import { dialogButtons, dialogHeight, dialogPage } from "./kit";
+import {
+  dialogButtons,
+  dialogHeight,
+  dialogPage,
+  menuButton,
+  toggle,
+} from "./kit";
 
 // The account's bakeries (save slots) and the settings dialog: switch bakery,
 // sound and music, and starting a bakery over (asked twice).
@@ -158,51 +175,95 @@ export function drawSettings(
     return;
   }
 
-  const m = { x: 40, y: 250, w: W - 80, h: 470 };
+  const m = { x: 40, y: 220, w: W - 80, h: 520 };
   const paper = sheet(app, m, tr.settings);
   close(app, m, back);
   const audio = app.rt.game.audio;
-  const row = (i: number) => ({
-    x: paper.x + 14,
-    y: paper.y + 18 + i * 88,
-    w: paper.w - 28,
-    h: 72,
-  });
-  // Sound and music: a label and an on/off pill
-  const toggle = (
-    i: number,
+
+  // Sound and music: an icon, its name, and a switch under it
+  const sw = (
+    cx: number,
     key: string,
     label: string,
     on: boolean,
+    glyph: (cx: number, cy: number, s: number, on: boolean) => void,
     set: (on: boolean) => void,
   ) => {
-    const r = row(i);
-    text(ctx, label, r.x + 10, r.y + r.h / 2 + 2, {
-      size: 22,
-      align: "left",
-    });
-    btn(
-      app,
-      key,
-      { x: r.x + r.w - 140, y: r.y + 4, w: 140, h: 64 },
-      on ? tr.on : tr.off,
-      () => set(!on),
-      { fill: on ? C.green : "#e4dcd2", size: 21 },
+    const iy = paper.y + 36;
+    icon(app, `${key}-${on ? "on" : "off"}`, cx, iy, 56, () =>
+      glyph(cx, iy, 56, on),
     );
+    text(ctx, label, cx, paper.y + 82, { size: 18 });
+    toggle(app, key, cx, paper.y + 124, on, () => set(!on));
   };
-  toggle(0, "sound", tr.sound, !audio.muted, (on) => audio.setMuted(!on));
-  toggle(1, "music", tr.music, app.shell.music, (on) => app.shell.setMusic(on));
-  btn(app, "switch", row(2), tr.switchShop, () => app.shell.pick(), {
-    fill: "#c9cdea",
-    size: 22,
+  sw(
+    W / 2 - 100,
+    "sound",
+    tr.sound,
+    !audio.muted,
+    (x, y, s, on) => speakerIcon(ctx, x, y, s, on),
+    (on) => audio.setMuted(!on),
+  );
+  sw(
+    W / 2 + 100,
+    "music",
+    tr.music,
+    app.shell.music,
+    (x, y, s, on) => noteIcon(ctx, x, y, s, on),
+    (on) => app.shell.setMusic(on),
+  );
+
+  // The rest as a list, each with its picture
+  const row = (i: number) => ({
+    x: paper.x + 6,
+    y: paper.y + 170 + i * 84,
+    w: paper.w - 12,
+    h: 70,
   });
-  btn(
+  menuButton(
+    app,
+    "switch",
+    row(0),
+    tr.switchShop,
+    (x, y, s) => icon(app, "shop", x, y, s, () => shopIcon(ctx, x, y, s)),
+    () => app.shell.pick(),
+    { fill: "#c9cdea" },
+  );
+  menuButton(
+    app,
+    "tour-replay",
+    row(1),
+    tr.tour.replay,
+    (x, y, s) => {
+      // Mây herself, cropped to the circle
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, s / 1.5 - 1, 0, Math.PI * 2);
+      ctx.clip();
+      sprite(
+        ctx,
+        app.sprites.get("mascot-avatar"),
+        x,
+        y + s * 0.08,
+        s * 1.3,
+        s * 1.3,
+      );
+      ctx.restore();
+    },
+    () => {
+      app.setTour(0);
+      app.go({ kind: "hub" });
+    },
+    { fill: "#fff0bf" },
+  );
+  menuButton(
     app,
     "restart",
-    row(3),
+    row(2),
     tr.restart,
+    (x, y, s) => icon(app, "restart", x, y, s, () => restartIcon(ctx, x, y, s)),
     () => app.go({ kind: "settings", confirm: 1 }),
-    { fill: "#f2c4bc", size: 22 },
+    { fill: "#f2c4bc" },
   );
   text(ctx, tr.slotName(app.slot + 1), W / 2, m.y + m.h - 30, {
     size: 16,
