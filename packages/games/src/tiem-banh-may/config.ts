@@ -111,7 +111,9 @@ export type IngredientId =
   | "coconutMilk"
   | "mascarpone"
   | "saltedEgg"
-  | "porkFloss";
+  | "porkFloss"
+  | "blueberry"
+  | "matcha";
 
 /** How the kitchen measures it: on the scale, one by one, or by the teaspoon (5 g/ml). */
 export type Measure = "pour" | "count" | "spoon";
@@ -293,6 +295,20 @@ export const INGREDIENTS: Ingredient[] = [
     "ing-cocoa",
   ),
   ing(
+    "blueberry",
+    "Việt quất",
+    "Blueberries",
+    { unit: "g", measure: "pour", pack: 100, price: 12, fresh: true },
+    "ing-blueberry",
+  ),
+  ing(
+    "matcha",
+    "Bột matcha",
+    "Matcha powder",
+    { unit: "g", measure: "spoon", pack: 50, price: 24, fresh: false },
+    "ing-matcha",
+  ),
+  ing(
     "banana",
     "Chuối",
     "Bananas",
@@ -344,7 +360,8 @@ export type RecipeId =
   | "croissant"
   | "saltedegg"
   | "macaron"
-  | "tiramisu";
+  | "tiramisu"
+  | "matcharoll";
 
 export type MixMode = "cream" | "whisk" | "fold" | "knead" | "stir";
 export type StoveMode = "caramel" | "fry" | "cook" | "steam";
@@ -355,7 +372,8 @@ export type PipeMode =
   | "fill"
   | "cream"
   | "topping"
-  | "dust";
+  | "dust"
+  | "roll";
 
 /** One line of a recipe card, in order. */
 export type Step =
@@ -413,7 +431,7 @@ export const RECIPES: Recipe[] = [
   },
   {
     id: "cupcake",
-    name: { vi: "Cupcake vani", en: "Vanilla cupcakes" },
+    name: { vi: "Cupcake việt quất", en: "Blueberry cupcakes" },
     cost: 0,
     yield: 6,
     base: 8,
@@ -431,6 +449,7 @@ export const RECIPES: Recipe[] = [
       add("vanilla", 5),
       { kind: "mix", mode: "fold", turns: 3 },
       { kind: "oven", temp: 180, minutes: 18 },
+      add("blueberry", 30),
       { kind: "pipe", mode: "frost" },
     ],
   },
@@ -455,8 +474,10 @@ export const RECIPES: Recipe[] = [
     ],
   },
   {
+    // Chocolate since 2026-10-25; the strawberry glaze (strawberry 50,
+    // "Donut dâu") is set aside for now. Same id, so old saves keep the recipe.
     id: "donut",
-    name: { vi: "Donut dâu", en: "Strawberry donuts" },
+    name: { vi: "Donut sô-cô-la", en: "Chocolate donuts" },
     cost: 800,
     yield: 10,
     base: 9,
@@ -473,7 +494,7 @@ export const RECIPES: Recipe[] = [
       { kind: "wait", mode: "proof", minutes: 40 },
       add("oil", 500),
       { kind: "stove", mode: "fry", seconds: 4 },
-      add("strawberry", 50),
+      add("chocolate", 50),
       { kind: "pipe", mode: "glaze" },
     ],
   },
@@ -523,6 +544,29 @@ export const RECIPES: Recipe[] = [
       { kind: "mix", mode: "whisk", turns: 4 },
       add("strawberry", 250),
       { kind: "pipe", mode: "cream" },
+    ],
+  },
+  {
+    id: "matcharoll",
+    name: { vi: "Bánh cuộn matcha", en: "Matcha roll cake" },
+    cost: 1500,
+    yield: 8,
+    base: 13,
+    hands: 45,
+    qty: [1, 2],
+    sprite: "cake-matcharoll",
+    steps: [
+      add("eggs", 4),
+      add("sugar", 100),
+      { kind: "mix", mode: "whisk", turns: 5 },
+      add("flour", 80),
+      add("matcha", 10),
+      { kind: "mix", mode: "fold", turns: 3 },
+      { kind: "oven", temp: 180, minutes: 12 },
+      { kind: "wait", mode: "cool", minutes: 15 },
+      add("cream", 300),
+      { kind: "mix", mode: "whisk", turns: 4 },
+      { kind: "pipe", mode: "roll" },
     ],
   },
   {

@@ -49,7 +49,16 @@ const AISLES: { id: Aisle; items: IngredientId[] }[] = [
   },
   {
     id: "flavour",
-    items: ["vanilla", "chocolate", "cocoa", "oil", "strawberry", "banana"],
+    items: [
+      "vanilla",
+      "chocolate",
+      "cocoa",
+      "matcha",
+      "oil",
+      "strawberry",
+      "blueberry",
+      "banana",
+    ],
   },
   { id: "special", items: ["saltedEgg", "porkFloss"] },
   // Records for the music box: bought at once, not through the basket

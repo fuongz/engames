@@ -753,6 +753,8 @@ function streamColor(id: IngredientId) {
     strawberry: "#ff6b7d",
     oil: "#ffd84d",
     chocolate: "#6b3b2a",
+    blueberry: "#5d6bb5",
+    matcha: "#8db86b",
   };
   return colors[id] ?? "#fff3d6";
 }

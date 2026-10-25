@@ -90,6 +90,59 @@ slot and asks twice; the leaderboard keeps the player's best of all slots, so
 nothing is lost there. Each slot has its own local backup (`backup:<player>` for
 slot 0, as before slots, then `backup:<player>:<slot>`).
 
+## Storefront decor
+
+Decided with the owner on 2026-10-25 (issues #16–#20). The player furnishes
+the storefront like a cosy café; the furniture gives a new stat, **Charm**
+(*Cuốn hút*, heart icon), and Charm brings more customers.
+
+- **The room** is redrawn in a three-quarter top-down view, straight on (no
+  vanishing point, not isometric): the back wall with the arched door at the
+  top, a floor of square tiles below that reads as a grid. Wall and floor are
+  split on one straight baseboard line, so the player picks each separately.
+- **Free placement on the grid.** Tiles on the path from the door to the
+  counter, and the queue in front of the counter, can never take furniture,
+  so customers never walk through it. Furniture is drawn sorted by its bottom
+  row, then customers, then the counter.
+- **Decor mode** is a *Trang trí* button on the night screen (never while
+  open): drag from the storage drawer, tap to pick up, flip, put back. The
+  charm counter is live while decorating.
+- **Charm** is the sum of placed pieces' charm. A second copy of the same
+  piece counts 50%, a third 25%, more nothing; stored pieces count nothing.
+  **Set bonus**: 3 placed pieces of one theme +10%, 5 pieces +25%.
+- **Demand**: customers × `1 + 0.5 × (1 − e^(−charm / CHARM_SCALE))`, beside
+  weekday × weather, so it never outweighs reputation.
+- **Seats**: each placed seat makes queuing customers a little more patient
+  (capped), so seating matters beyond charm.
+- **Tiers** Giản dị → Ấm cúng → Dễ thương → Nổi tiếng: each new tier puts a
+  new theme on sale and raises the VIP chance a little.
+- **The Furniture aisle** (*Nội thất*) in the market: tables and chairs, decor,
+  walls and floors, each with a +charm chip; same basket and till. The basic
+  set and unlocked themes are always on sale; 2–3 rarer pieces rotate daily.
+- **Starting set** (free, placed in a default layout; old saves get it too):
+  two round tables, four wooden chairs, a potted plant, plain wall and floor.
+- **Themes**: Cơ bản (basic), Hồng ngọt (sweet pink), Vườn hoa (flower
+  garden), Rừng xanh (forest), Cổ điển (classic). Every piece of a theme shares
+  its colours and motifs; every piece of the game shares one camera and scale.
+- The leaderboard worth includes furniture value.
+
+### Self-serve stands (2026-10-25)
+
+The player no longer picks pieces for each order: customers serve themselves
+and the player works the till.
+- **Cake stands** (*quầy bánh*) are furniture placed on the grid, bought in
+  the Furniture aisle; each holds 2–3 batches, any recipe the player chooses
+  in decor/night prep. They replace the display-case screen. Two basic stands
+  come with the starting set; more stands mean more variety and add charm.
+- **Customers** walk in, browse the stands, take their pieces and queue at
+  the till. A wanted recipe that is missing: they usually take something else
+  on display; if the stands are nearly empty they leave a little sad (small
+  reputation cost), so a full, varied display still matters.
+- **The till** keeps the two skills: boxing (4+ pieces, the snuggest box tips)
+  and counting the change.
+- **The critic** looks for a 3★ piece on the stands and leaves without one;
+  **pre-orders** are taken from the held-back pieces automatically.
+
 ## Art
 
 Two looks for the world, plus the interface:
@@ -222,6 +275,14 @@ tiramisu (coffee joins the shelf for it), with eight new ingredients (rice
 and almond flour, cocoa, bananas, coconut milk, mascarpone, salted eggs, pork
 floss) in a new "Đặc sản" aisle and the others. The book shows recipes six to
 a page, cheapest first, with Recipes/Upgrades tabs.
+
+Changed with the owner on 2026-10-25: the donut is now **chocolate** (same
+`donut` id, so saves keep it; the strawberry glaze is set aside), the starter
+cupcake is **blueberry** (30 g of blueberries before the frosting, a cheap
+fresh pack so the first week still pays for a recipe), and a fourteenth
+recipe, the **matcha roll cake** (1500, sponge with matcha powder, cooled,
+spread with cream and rolled: a new `roll` finishing step). Blueberries and
+matcha powder are on the flavour aisle.
 
 ### UI kit
 
