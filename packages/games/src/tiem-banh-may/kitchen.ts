@@ -1,4 +1,4 @@
-import type { PointerInfo, Rect } from "../core";
+import type { PointerInfo, Rect } from "@web-games/core";
 import { type App, H, W, btn, icon, viewRect } from "./app";
 import {
   C,

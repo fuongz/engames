@@ -1,4 +1,5 @@
-import { findOnlineGame, isRoomCode, verifyTicket } from "@web-games/games/online";
+import { isRoomCode, verifyTicket } from "@web-games/core/online";
+import { findOnlineGame } from "@web-games/games/online";
 
 export { GameRoom } from "./game-room";
 

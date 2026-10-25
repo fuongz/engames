@@ -1,6 +1,6 @@
 import { GlobeIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { isLocale, LOCALES } from "@web-games/games/i18n";
+import { isLocale, LOCALES } from "@web-games/core/i18n";
 import { Button } from "#/components/ui/button";
 import {
   DropdownMenu,

@@ -1,4 +1,4 @@
-import { CODE_ALPHABET, CODE_LENGTH } from "@web-games/games/online";
+import { CODE_ALPHABET, CODE_LENGTH } from "@web-games/core/online";
 
 // Where online rooms live. Override with VITE_REALTIME_URL; otherwise the local
 // realtime Worker in dev and the production one in a build.

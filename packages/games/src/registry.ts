@@ -1,5 +1,4 @@
-import type { Localized } from "./core/i18n";
-import type { GameCategory, GameManifest, GameModule } from "./core/types";
+import type { GameCategory, GameManifest, GameModule, Localized } from "@web-games/core";
 
 // Every folder with a manifest.ts is a game. Manifests are eager (small, needed
 // for listings); game code is lazy so each game ships as its own chunk and only
@@ -42,19 +41,3 @@ export const categories: { id: GameCategory; label: Localized<string> }[] = [
   { id: "phieu-luu", label: { vi: "Phiêu lưu", en: "Adventure" } },
   { id: "the-thao", label: { vi: "Thể thao", en: "Sports" } },
 ];
-
-export { SUMMARY_KEY, summaryText } from "./core/types";
-export { DEFAULT_LOCALE, LOCALES, isLocale } from "./core/i18n";
-export type { Locale, Localized } from "./core/i18n";
-export type {
-  CloudSave,
-  CloudSaveResult,
-  CloudSlot,
-  GameCategory,
-  GameManifest,
-  GameModule,
-  OnlineMatch,
-  ScoreReport,
-} from "./core/types";
-export { audioBus } from "./core/audio";
-export { createStorage } from "./core/storage";

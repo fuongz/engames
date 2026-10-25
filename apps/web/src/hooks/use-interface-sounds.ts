@@ -1,4 +1,4 @@
-import { audioBus } from "@web-games/games";
+import { audioBus } from "@web-games/core";
 import { bind, play, setEnabled, setTheme, setVolume, unlock } from "cuelume";
 import { useEffect } from "react";
 

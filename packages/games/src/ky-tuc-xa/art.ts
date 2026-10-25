@@ -14,7 +14,7 @@ import {
   WORLD_W,
   WORLD_H,
 } from "./config";
-import { mulberry32 } from "../core";
+import { mulberry32 } from "@web-games/core";
 import {
   bedTile,
   doorPos,

@@ -1,4 +1,4 @@
-import type { Rect } from "../core";
+import type { Rect } from "@web-games/core";
 import type { Weather } from "./config";
 
 // The interface is drawn in code, cosy bakery style: cream paper pages on a

@@ -3,7 +3,7 @@
 How a game in `packages/games` becomes playable online, and how the pieces that
 carry it — the shared online layer, the realtime Worker and the portal — fit
 together. Read it before adding online play to a game or touching
-`apps/realtime/` or `packages/games/src/online/`.
+`apps/realtime/` or `packages/core/src/online/`.
 
 The first online game is **Ký Túc Xá Đêm / Night Dorm** in **co-op**: up to six
 people share one dorm against the Dream Hunter, and bots fill any empty bed.
@@ -50,36 +50,39 @@ people share one dorm against the Dream Hunter, and bots fill any empty bed.
         ▼
  Durable Object GameRoom (one per room)
    • lobby: seats, host, ready flags (kept in WebSocket attachments → can hibernate)
-   • match: RoomGame from packages/games/src/online/registry.ts, setInterval 20 Hz
+   • match: RoomGame from packages/games/src/online.ts, setInterval 20 Hz
    • snapshots 10 Hz + events every tick; results at the end
 ```
 
 | Piece | Path | Owns |
 | --- | --- | --- |
-| Shared online layer | `packages/games/src/online/` | protocol types, ticket sign/verify, `RoomGame` contract, the registry of online games, the browser `RoomClient` |
+| Shared online layer | `packages/core/src/online/` | protocol types, ticket sign/verify, `RoomGame` contract, the browser `RoomClient` |
+| Online registry | `packages/games/src/online.ts` | which games are playable online (`onlineGames`, `findOnlineGame`) |
 | A game's adapter | `packages/games/src/<slug>/online.ts` | maps the game's `logic.ts` onto `RoomGame` |
 | Realtime Worker | `apps/realtime/` | ticket check, `GameRoom` Durable Object, posting results |
 | Portal | `apps/web/src/server/online.ts` (+ `server/online/`), `routes/api/online/results.ts`, `components/features/online/`, `lib/online.ts` | tickets, saving results, lobby UI, the realtime URL |
 
-Everything in `packages/games/src/online/` except `client.ts` is **pure**: no DOM,
+Everything in `packages/core/src/online/` except `client.ts` is **pure**: no DOM,
 no Worker APIs beyond Web Crypto, so it runs in the browser, in `workerd` and in
-`vitest` alike. It is exported as `@web-games/games/online`; the browser client as
-`@web-games/games/online/client`, so the Worker never bundles DOM code.
+`vitest` alike. It is exported as `@web-games/core/online`; the browser client as
+`@web-games/core/online/client`, so the Worker never bundles DOM code. The
+registry of online games is `@web-games/games/online` — core never names a game.
 
-`core/conventions.test.ts` enforces this for every game's `logic.ts`, `config.ts`,
-`strings.ts` and `online.ts`: they may import only `core/math`, `core/i18n` and
-`online/room-game` — never the `../core` barrel, which pulls in the canvas runtime.
+`packages/games/src/conventions.test.ts` enforces this for every game's `logic.ts`,
+`config.ts`, `strings.ts` and `online.ts`: besides their own folder they may import
+only `@web-games/core/math`, `@web-games/core/i18n` and `@web-games/core/online` —
+never the `@web-games/core` root, which pulls in the canvas runtime.
 
 ### Inside each piece
 
 | File | Role |
 | --- | --- |
-| `packages/games/src/online/protocol.ts` | message types, `parseClientMessage`, room codes, `boardKey`, limits |
-| `packages/games/src/online/ticket.ts` | `signTicket` / `verifyTicket`, `hmac` / `verifyHmac` |
-| `packages/games/src/online/room-game.ts` | the `RoomGame` / `RoomSim` contract |
-| `packages/games/src/online/registry.ts` | `onlineGames`, `findOnlineGame` |
-| `packages/games/src/online/client.ts` | `RoomClient`: one socket, ping/RTT, events |
-| `packages/games/src/core/net.ts` | `InputLog` (prediction replay), `approach` (easing) |
+| `packages/core/src/online/protocol.ts` | message types, `parseClientMessage`, room codes, `boardKey`, limits |
+| `packages/core/src/online/ticket.ts` | `signTicket` / `verifyTicket`, `hmac` / `verifyHmac` |
+| `packages/core/src/online/room-game.ts` | the `RoomGame` / `RoomSim` contract |
+| `packages/games/src/online.ts` | `onlineGames`, `findOnlineGame` |
+| `packages/core/src/online/client.ts` | `RoomClient`: one socket, ping/RTT, events |
+| `packages/core/src/net.ts` | `InputLog` (prediction replay), `approach` (easing) |
 | `apps/realtime/src/index.ts` | Worker entry: Origin + ticket check, forward to the room |
 | `apps/realtime/src/game-room.ts` | the Durable Object: sockets, hibernation, timer, result posts |
 | `apps/realtime/src/room-core.ts` | the room's rules, DO-free (tested in `room-core.test.ts`) |
@@ -138,7 +141,7 @@ no Worker APIs beyond Web Crypto, so it runs in the browser, in `workerd` and in
 ## 4. Protocol
 
 All messages are JSON objects with a `t` field. Types live in
-`packages/games/src/online/protocol.ts`; never hand-write a message shape
+`packages/core/src/online/protocol.ts`; never hand-write a message shape
 elsewhere.
 
 ### Client → server
@@ -180,7 +183,7 @@ elsewhere.
 
 ## 5. The `RoomGame` contract
 
-`packages/games/src/online/room-game.ts`:
+`packages/core/src/online/room-game.ts`:
 
 ```ts
 export interface RoomGame<Input = unknown> {
@@ -213,7 +216,7 @@ Rules:
   rebuilds its view from it alone.
 - Results are computed by the simulation, never by a client.
 
-The registry, `packages/games/src/online/registry.ts`, is an explicit map
+The registry, `packages/games/src/online.ts`, is an explicit map
 (`{ "ky-tuc-xa": kyTucXaOnline }`): the realtime Worker is bundled by Wrangler,
 which has no `import.meta.glob`. A test checks that every manifest with an
 `online` block has a registry entry and vice versa.
@@ -286,7 +289,7 @@ Online results use the existing `score` table with a **board key** in
 `game_slug`: `"<slug>:<mode>"` (e.g. `ky-tuc-xa:coop`). Solo keeps the bare slug.
 No migration is needed and the best-per-player rule keeps working per board.
 Only signed-in players are saved; guests see their result in the match but not
-on the board. `boardKey(slug, mode)` in `packages/games/src/online/protocol.ts`
+on the board. `boardKey(slug, mode)` in `packages/core/src/online/protocol.ts`
 is the one place that builds the key.
 
 ---

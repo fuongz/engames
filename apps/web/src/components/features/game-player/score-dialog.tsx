@@ -1,7 +1,7 @@
 import { GoogleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter } from "@tanstack/react-router";
-import type { GameManifest, ScoreReport } from "@web-games/games";
+import type { GameManifest, ScoreReport } from "@web-games/core";
 import { play } from "cuelume";
 import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
 import { type FormEvent, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from "react";

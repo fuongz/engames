@@ -1,4 +1,4 @@
-import type { CloudSave, GameStorage, ScoreReport } from "../core";
+import type { CloudSave, GameStorage, ScoreReport } from "@web-games/core";
 import { type SaveData, newGame } from "./logic";
 import { parseSave } from "./save";
 

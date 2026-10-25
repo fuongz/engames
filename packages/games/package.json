@@ -4,12 +4,10 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "//": "Framework-free canvas games. Consumed as TypeScript source by the web app's Vite build (import.meta.glob discovers games), so there is no build step here.",
+  "//": "Framework-free canvas games, one folder each, built on @web-games/core. This package is the catalogue: which games exist (registry), which save rules and online adapters they ship. Engine code never lives here. Consumed as TypeScript source by the web app's Vite build (import.meta.glob discovers games), so there is no build step here.",
   "exports": {
     ".": "./src/registry.ts",
-    "./i18n": "./src/core/i18n.ts",
-    "./online": "./src/online/index.ts",
-    "./online/client": "./src/online/client.ts",
+    "./online": "./src/online.ts",
     "./saves": "./src/saves.ts"
   },
   "scripts": {
@@ -22,6 +20,7 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@web-games/core": "workspace:*",
     "@fontsource/baloo-2": "^5.3.0",
     "@fontsource/handjet": "^5.3.1",
     "@fontsource/mali": "^5.3.0"

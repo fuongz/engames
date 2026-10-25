@@ -1,4 +1,4 @@
-import { type PointerInfo, type Rect, inRect } from "../core";
+import { type PointerInfo, type Rect, inRect } from "@web-games/core";
 
 // Immediate-mode hit regions: every frame each screen draws its buttons and
 // registers them here; pointer events between frames go to the topmost region

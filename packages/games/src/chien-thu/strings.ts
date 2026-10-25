@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "@web-games/core/i18n";
 
 // Every player-visible string the game draws. game.ts picks the catalog for the
 // current locale each frame, so flipping the language mid-run takes effect at once.

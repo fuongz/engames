@@ -1,4 +1,4 @@
-import type { RoomGame, RoomSim } from "../online/room-game";
+import type { RoomGame, RoomSim } from "@web-games/core/online";
 import { BUILDS, type BuildKind, COLS, ROWS } from "./config";
 import { type Action, type GameEvent, type GameState, type Inputs, type SeatInput, createGame, humans, scoreOf, update } from "./logic";
 import { STRINGS } from "./strings";

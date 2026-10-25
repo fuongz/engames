@@ -1,4 +1,4 @@
-import { mulberry32 } from "../core/math";
+import { mulberry32 } from "@web-games/core/math";
 import {
   BOMB_BOSS_DAMAGE,
   BOMB_DAMAGE,

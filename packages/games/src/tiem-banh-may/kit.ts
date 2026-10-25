@@ -1,4 +1,4 @@
-import type { Rect } from "../core";
+import type { Rect } from "@web-games/core";
 import { type App, btn, icon } from "./app";
 import { C, FONT, framed, panel, rr, text, wrap } from "./art";
 

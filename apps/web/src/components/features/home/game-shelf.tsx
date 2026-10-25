@@ -1,7 +1,7 @@
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
-import type { GameManifest } from "@web-games/games";
+import type { GameManifest } from "@web-games/core";
 import { motion, useReducedMotion } from "motion/react";
 import { GameCard } from "#/components/shared/games/game-card";
 import { useMessages } from "#/hooks/use-messages";

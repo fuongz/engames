@@ -1,4 +1,4 @@
-import { clamp, nextRandom } from "../core/math";
+import { clamp, nextRandom } from "@web-games/core/math";
 import {
   BAILOUT,
   BAILOUT_BELOW,

@@ -1,4 +1,4 @@
-import { mulberry32 } from "../core/math";
+import { mulberry32 } from "@web-games/core/math";
 import { BEAST_MAX, FLOOR_Y, type FighterId, H, STATS, W, moveSpec } from "./config";
 import { type Fighter, moveStage } from "./logic";
 

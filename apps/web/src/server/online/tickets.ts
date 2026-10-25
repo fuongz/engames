@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { CODE_ALPHABET, CODE_LENGTH, TICKET_TTL_MS, signTicket } from "@web-games/games/online";
+import { CODE_ALPHABET, CODE_LENGTH, TICKET_TTL_MS, signTicket } from "@web-games/core/online";
 
 // SERVER-ONLY: reads TICKET_SECRET. Behind server/online.ts.
 

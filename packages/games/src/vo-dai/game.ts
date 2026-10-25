@@ -1,5 +1,5 @@
 import "@fontsource/handjet/800.css";
-import { type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, type StageHandlers, inRect } from "../core";
+import { type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, type StageHandlers, inRect } from "@web-games/core";
 import {
   FX,
   POSE,

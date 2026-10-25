@@ -1,0 +1,22 @@
+{
+  "name": "@web-games/core",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "//": "The engine and the online layer every game builds on. Knows no game by name: it never imports @web-games/games. Consumed as TypeScript source, so there is no build step. The pure entry points (math, i18n, online) are what logic.ts and the realtime Worker may import; the root entry pulls in the DOM runtime.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./math": "./src/math.ts",
+    "./i18n": "./src/i18n.ts",
+    "./online": "./src/online/index.ts",
+    "./online/client": "./src/online/client.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
+  }
+}

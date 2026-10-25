@@ -7,7 +7,7 @@ import {
   SUMMARY_KEY,
   inRect,
   smoothstep as ease,
-} from "../core";
+} from "@web-games/core";
 import {
   CONFETTI,
   type Glyph,

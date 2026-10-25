@@ -20,9 +20,9 @@ import {
   type GameManifest,
   type GameModule,
   type OnlineMatch,
-  loadGame,
   type ScoreReport,
-} from "@web-games/games";
+} from "@web-games/core";
+import { loadGame } from "@web-games/games";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/ui/dialog";

@@ -1,4 +1,4 @@
-import type { Localized } from "../core/i18n";
+import type { Localized } from "@web-games/core/i18n";
 import type { FighterId } from "./config";
 
 export interface Strings {

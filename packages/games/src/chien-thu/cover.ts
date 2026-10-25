@@ -1,7 +1,7 @@
 // Key art for the portal (poster 3:4, banner 2:1), composed from the game's own
 // drawing code. Not imported by the game: `tools/render-art` runs it in a
 // browser and saves poster.webp / banner.webp next to this file.
-import { type Locale, type Localized, fitFontSize } from "../core";
+import { type Locale, type Localized, fitFontSize } from "@web-games/core";
 import { drawBlade, drawBladeTrail, drawCritter, drawEgg, drawEnemy, drawKid, renderBackground, FONT, text } from "./art";
 import { CENTER, TRACK_R, bladeCount, bladeHalf, bladeOrbit, speciesFor, type EnemyKind } from "./config";
 

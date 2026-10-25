@@ -1,4 +1,4 @@
-import { nextRandom } from "../core/math";
+import { nextRandom } from "@web-games/core/math";
 import {
   BEAST_DAMAGE,
   BEAST_DURATION,

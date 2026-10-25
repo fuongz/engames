@@ -1,4 +1,4 @@
-import type { ServerMessage, TicketClaims } from "@web-games/games/online";
+import type { ServerMessage, TicketClaims } from "@web-games/core/online";
 import { onlineGames } from "@web-games/games/online";
 import { describe, expect, it } from "vitest";
 import { type Conn, type MatchResult, RoomCore } from "./room-core";

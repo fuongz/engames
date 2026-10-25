@@ -1,7 +1,6 @@
-import type { GameManifest, OnlineMatch } from "@web-games/games";
-import { audioBus } from "@web-games/games";
-import type { ServerMessage } from "@web-games/games/online";
-import { RoomClient } from "@web-games/games/online/client";
+import { audioBus, type GameManifest, type OnlineMatch } from "@web-games/core";
+import type { ServerMessage } from "@web-games/core/online";
+import { RoomClient } from "@web-games/core/online/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "#/hooks/use-session";
 import { roomSocketUrl } from "#/lib/online";

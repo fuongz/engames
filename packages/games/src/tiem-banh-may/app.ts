@@ -1,4 +1,4 @@
-import type { Rect, Runtime } from "../core";
+import type { Rect, Runtime } from "@web-games/core";
 import {
   C,
   FONT,
