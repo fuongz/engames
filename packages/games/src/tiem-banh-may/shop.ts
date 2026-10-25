@@ -1,5 +1,5 @@
 import type { Rect } from "@web-games/core";
-import { type App, H, W, btn, shade, sheet, viewRect } from "./app";
+import { type App, W, btn, shade, sheet, viewRect } from "./app";
 import { hud } from "./hud";
 import {
   C,
@@ -13,7 +13,6 @@ import {
   stars,
   text,
   FONT,
-  nine,
 } from "./art";
 import {
   BOX_FROM,
@@ -24,6 +23,7 @@ import {
   DISCOUNT_FROM,
   DOOR_TILE,
   OPEN,
+  type Placed,
   OPEN_AT,
   PATIENCE,
   PREORDER_PATIENCE,
@@ -32,7 +32,6 @@ import {
   RECIPES,
   type RecipeId,
   SELL_SECONDS,
-  TILL_TILES,
   VIP_PATIENCE,
 } from "./config";
 import {
@@ -58,9 +57,15 @@ import {
   reserve,
   settle,
   slept,
-  piecePrice,
 } from "./logic";
-import { furniture, seatPatience, standFront, walkPath } from "./furniture";
+import {
+  furniture,
+  seatPatience,
+  serviceTile,
+  standFront,
+  tillOf,
+  walkPath,
+} from "./furniture";
 import {
   ROOM,
   drawLight,
@@ -72,12 +77,14 @@ import {
   drawShelf,
   feet,
   shelve,
+  tileRect,
 } from "./storefront";
-import { dialogButtons, priceSticker } from "./kit";
+import { dialogButtons } from "./kit";
 
-// Opening hours, in real time: customers walk in, queue, say what they want;
-// the player picks it from the display, boxes big orders and counts the change.
-// No baking now: what was made last night is all there is.
+// Opening hours, in real time: customers walk in, take what they want from the
+// cake stands and queue at the checkout counter in the room, where Mây rings
+// them up on a timer the player can hurry along by tapping the counter; big
+// orders still get a box. No baking now: last night's batches are all there is.
 
 type Mood = "happy" | "ok" | "angry" | "sad";
 
@@ -142,11 +149,24 @@ export interface ShopState {
   opened: SaveData;
   /** Seconds before tired hands can pick the next piece. */
   busy: number;
+  /** How far the front customer's checkout has got (0–1). */
+  ring: number;
 }
 
-const COUNTER_Y = 566;
-/** The room stands on the counter: its floor ends where the counter begins. */
-const FLOOR = floorAt(COUNTER_Y - ROOM.size);
+/** The room fills the screen under the bar; the stock strip sits under it. */
+/** Room top below the top of the screen, clear of the status bar. */
+const ROOM_BELOW_TOP = 128;
+let FLOOR = floorAt(ROOM_BELOW_TOP);
+const stripY = () => FLOOR.top + ROOM.size + 22;
+
+/** Fit the room under the status bar on this screen (taller phones show more). */
+function fitRoom(app: App) {
+  const top = Math.round(viewRect(app).y + ROOM_BELOW_TOP);
+  if (top !== FLOOR.top) FLOOR = floorAt(top);
+}
+/** Seconds Mây takes to ring someone up; a tap on the counter takes off a third. */
+const CHECKOUT_SECONDS = 3.2;
+const TAP_RING = 0.34;
 /** Customers' size in the room (their sprites are drawn 250 × this tall). */
 const CUSTOMER_S = 0.46;
 /** The light turns golden between these minutes of the day. */
@@ -167,6 +187,7 @@ export function openShop(app: App) {
     app.toast(app.tr().slept(Math.round(hours * 60)), W / 2, 330, C.text, 22);
   }
   const opened: SaveData = { ...save, phase: "open" };
+  fitRoom(app);
   app.commit(opened, { now: true });
   app.go({ kind: "shop", shop: newDay(opened) });
 }
@@ -193,6 +214,7 @@ export function newDay(opened: SaveData): ShopState {
     closing: null,
     opened,
     busy: 0,
+    ring: 0,
   };
 }
 
@@ -240,8 +262,9 @@ function leave(s: ShopState, w: Walker, mood: Mood) {
 
 /** Queue tiles: the walkway from the till back towards the door. */
 function queueSlots(placed: SaveData["decor"]["placed"]): Tile[] {
-  const path = walkPath(placed) ?? [DOOR_TILE, TILL_TILES[0]];
-  return path.slice(1).reverse();
+  const pay = serviceTile(placed) ?? DOOR_TILE;
+  const path = walkPath(placed) ?? [DOOR_TILE, pay];
+  return path.length > 1 ? path.slice(1).reverse() : [pay];
 }
 
 const DOOR_STEP = () => {
@@ -324,6 +347,7 @@ function joinLine(s: ShopState, w: Walker) {
 
 export function updateShop(app: App, s: ShopState, dt: number) {
   const tr = app.tr();
+  fitRoom(app);
   if (s.closing !== null) {
     s.closing += dt;
     moveWalkers(s, dt);
@@ -405,6 +429,14 @@ export function updateShop(app: App, s: ShopState, dt: number) {
 
   const f = front(s);
   if (f && !f.lines) atCounter(app, s, f);
+  // Mây rings up the front customer; a box choice waits for the player
+  if (f?.lines && !f.leaving && !s.checkout) {
+    s.ring += dt / CHECKOUT_SECONDS;
+    if (s.ring >= 1) {
+      s.ring = 0;
+      handOver(app, s, f);
+    }
+  } else if (!f) s.ring = 0;
   for (const w of s.line) {
     // The one being served doesn't lose patience while paying
     if (s.checkout?.walker === w) continue;
@@ -514,16 +546,6 @@ function finishDay(app: App, s: ShopState) {
   app.go({ kind: "report", report });
 }
 
-/** Does the tray hold exactly what the front customer asked for? */
-function trayMatches(s: ShopState, lines: Line[]) {
-  const counts = new Map<RecipeId, number>();
-  for (const p of s.tray) counts.set(p.recipe, (counts.get(p.recipe) ?? 0) + 1);
-  return (
-    lines.every((l) => counts.get(l.recipe) === l.qty) &&
-    s.tray.length === lines.reduce((n, l) => n + l.qty, 0)
-  );
-}
-
 function handOver(app: App, s: ShopState, w: Walker) {
   if (s.tray.length >= BOX_FROM) s.checkout = { kind: "box", walker: w };
   else pay(app, s, w, null);
@@ -566,6 +588,7 @@ function finish(
     delete s.held[w.v.preorder];
   s.tray = [];
   s.checkout = null;
+  s.ring = 0;
   app.sfx.coin();
   const y = w.y - 270 * w.s;
   app.toast(`+${tr.num(out.coins - out.boxCost)}`, w.x, y, C.good, 26);
@@ -602,7 +625,16 @@ export function drawShop(app: App, s: ShopState) {
     1,
     Math.max(0, (s.clock - DUSK_FROM) / (DUSK_TO - DUSK_FROM)),
   );
-  drawRoom(app, FLOOR, v);
+  fitRoom(app);
+  // Under the room: the shop's own floor colour, then the room on top
+  ctx.fillStyle = "#f3dfc0";
+  ctx.fillRect(
+    v.x,
+    FLOOR.top + ROOM.size - 2,
+    v.w,
+    v.y + v.h - FLOOR.top - ROOM.size + 2,
+  );
+  drawRoom(app, FLOOR, v, s.opened.decor);
   if (weather === "rainy") drawRain(app, glassRects(FLOOR));
   drawLight(app, FLOOR, weather, dusk);
   // The till counts up as the day goes
@@ -626,7 +658,7 @@ export function drawShop(app: App, s: ShopState) {
       btn(
         app,
         "discount",
-        { x: W - 176, y: top + 126, w: 162, h: 54 },
+        { x: W - 190, y: stripY() + 92, w: 176, h: 56 },
         s.discount ? tr.discountOn : tr.discount,
         () => (s.discount = true),
         {
@@ -640,7 +672,7 @@ export function drawShop(app: App, s: ShopState) {
       btn(
         app,
         "close-early",
-        { x: W / 2 - 110, y: top + 126, w: 220, h: 56 },
+        { x: 14, y: stripY() + 92, w: 220, h: 56 },
         tr.closeEarly,
         () => close(app, s),
         { fill: C.green, size: 19 },
@@ -673,10 +705,16 @@ export function drawShop(app: App, s: ShopState) {
       draw: () => drawWalker(app, s, w),
     })),
   ];
+  // Mây behind the checkout counter
+  const till = tillOf(s.opened.decor.placed);
+  if (till)
+    scene.push({
+      y: FLOOR.y0 + (till.y + 1) * FLOOR.th - 1,
+      draw: () => drawCashier(app, till),
+    });
   for (const d of scene.sort((a, b) => a.y - b.y)) d.draw();
-  drawCounter(app, s);
-  if (f?.lines && !f.leaving && s.closing === null) drawOrder(app, s, f);
-  drawTray(app, s, f);
+  if (till) drawTill(app, s, till, f);
+  drawStrip(app, s);
 
   if (s.checkout?.kind === "box") drawBoxes(app, s, s.checkout.walker);
   else if (s.checkout?.kind === "change") drawChange(app, s, s.checkout);
@@ -732,150 +770,6 @@ function drawWalker(app: App, s: ShopState, w: Walker) {
   }
 }
 
-function drawCounter(app: App, s: ShopState) {
-  const { ctx } = app;
-  const tr = app.tr();
-  const v = app.rt.stage.view;
-  // Counter top, then the glass case on its pink front
-  panel(
-    ctx,
-    { x: v.x - 10, y: COUNTER_Y, w: v.w + 20, h: 34 },
-    { fill: "#f4d3a1", stroke: C.ink, radius: 10, line: 4 },
-  );
-  ctx.fillStyle = "#e7b08a";
-  ctx.fillRect(v.x, COUNTER_Y + 34, v.w, H - COUNTER_Y - 34 + 200);
-  ctx.strokeStyle = C.ink;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(v.x, COUNTER_Y + 34);
-  ctx.lineTo(v.x + v.w, COUNTER_Y + 34);
-  ctx.stroke();
-  // The glass case: a honey-wood frame round icy glass, with its name on top
-  const glass = { x: 14, y: COUNTER_Y + 46, w: W - 28, h: 262 };
-  panel(
-    ctx,
-    { x: glass.x - 6, y: glass.y - 6, w: glass.w + 12, h: glass.h + 12 },
-    { fill: "#e2b47e", stroke: C.ink, radius: 22, line: 3.5 },
-  );
-  if (!nine(ctx, app.sprites.get("fridge-back"), glass, 60, 18))
-    panel(ctx, glass, {
-      fill: "rgba(232, 247, 255, 0.92)",
-      stroke: C.ink,
-      radius: 18,
-      line: 4,
-    });
-  sectionLabel(app, glass.x + 12, glass.y - 18, tr.onStands);
-  const slots = displaySlots(s);
-  const cols = 4;
-  const rows = 3;
-  const cw = (glass.w - 16) / cols;
-  const ch = (glass.h - 16) / rows;
-  const f = front(s);
-  const serving = f?.lines && !f.leaving && s.closing === null && !s.checkout;
-  // Glass shelves between the rows
-  const plank = app.sprites.get("shelf-fridge");
-  for (let r = 1; r < rows; r++) {
-    const sy = glass.y + 8 + r * ch - 8;
-    if (plank?.naturalWidth)
-      ctx.drawImage(plank, glass.x + 4, sy, glass.w - 8, 16);
-    else {
-      ctx.fillStyle = "rgba(201, 225, 240, 0.9)";
-      ctx.fillRect(glass.x + 6, sy + 6, glass.w - 12, 4);
-    }
-  }
-
-  slots.slice(0, cols * rows).forEach((slot, i) => {
-    const rect = {
-      x: glass.x + 8 + (i % cols) * cw,
-      y: glass.y + 8 + Math.floor(i / cols) * ch,
-      w: cw,
-      h: ch,
-    };
-    const pressed = false;
-    const wanted = serving && f?.lines?.some((l) => l.recipe === slot.recipe);
-    if (wanted) {
-      panel(
-        ctx,
-        { x: rect.x + 3, y: rect.y + 3, w: rect.w - 6, h: rect.h - 6 },
-        { fill: "rgba(255, 236, 160, 0.65)", radius: 14, line: 0 },
-      );
-    }
-    sprite(
-      ctx,
-      app.sprites.get(recipe(slot.recipe).sprite),
-      rect.x + rect.w / 2,
-      rect.y + rect.h / 2 - 6 + (pressed ? 3 : 0),
-      rect.w - 30,
-      rect.h - 30,
-    );
-    stars(ctx, rect.x + rect.w / 2, rect.y + rect.h - 13, slot.stars, 8);
-    // What one piece sells for
-    const price = Math.max(
-      1,
-      Math.round(piecePrice({ ...slot, cost: 0 }, !!s.discount, false)),
-    );
-    priceSticker(app, rect.x + 18, rect.y + 18, price, 14);
-    text(ctx, `×${slot.count}`, rect.x + rect.w - 22, rect.y + 16, {
-      size: 17,
-      fill: C.text,
-      outline: C.white,
-    });
-  });
-  // Pre-ordered cakes on hold
-  const held = Object.entries(s.held).filter(([, p]) => p.length);
-  held.forEach(([id, pieces], i) => {
-    const idx = Math.min(slots.length, cols * rows - held.length) + i;
-    const rect = {
-      x: glass.x + 8 + (idx % cols) * cw,
-      y: glass.y + 8 + Math.floor(idx / cols) * ch,
-      w: cw,
-      h: ch,
-    };
-    panel(
-      ctx,
-      { x: rect.x + 3, y: rect.y + 3, w: rect.w - 6, h: rect.h - 6 },
-      { fill: "#fff1c7", stroke: C.warn, radius: 14, line: 3 },
-    );
-    sprite(
-      ctx,
-      app.sprites.get("cake-box"),
-      rect.x + rect.w / 2,
-      rect.y + rect.h / 2 - 4,
-      rect.w - 40,
-      rect.h - 34,
-    );
-    text(ctx, tr.preorderTag, rect.x + rect.w / 2, rect.y + rect.h - 12, {
-      size: 12,
-      maxWidth: rect.w - 8,
-    });
-    text(ctx, `×${pieces.length}`, rect.x + rect.w - 22, rect.y + 16, {
-      size: 17,
-      outline: C.white,
-    });
-    app.ui.add({
-      rect,
-      tap: () => {
-        if (
-          f?.v.kind !== "preorder" ||
-          String(f.v.preorder) !== id ||
-          !f.lines ||
-          s.checkout
-        )
-          return app.sfx.bad();
-        app.sfx.tap();
-        s.tray.push(...pieces);
-        s.held[Number(id)] = [];
-      },
-    });
-  });
-  if (!slots.length && !held.length)
-    text(ctx, tr.emptyDisplay, W / 2, glass.y + glass.h / 2, {
-      size: 20,
-      weight: 700,
-      fill: C.muted,
-    });
-}
-
 /** A little name tag sitting on the top edge of a panel. */
 function sectionLabel(app: App, x: number, y: number, label: string) {
   const { ctx } = app;
@@ -896,97 +790,128 @@ function displaySlots(s: ShopState): Slot[] {
     );
 }
 
-function drawOrder(app: App, s: ShopState, w: Walker) {
-  const { ctx } = app;
-  const tr = app.tr();
-  const lines = w.lines ?? [];
-  const special =
-    w.v.kind === "vip"
-      ? tr.vipWants
-      : w.v.kind === "preorder"
-        ? tr.preorderTag
-        : null;
-  const r: Rect = {
-    x: 318,
-    y: 262,
-    w: 206,
-    h: 30 + lines.length * 64 + (special ? 26 : 0),
-  };
-  bubble(ctx, r, 340);
-  lines.forEach((l, i) => {
-    const y = r.y + 46 + i * 64;
-    sprite(ctx, app.sprites.get(recipe(l.recipe).sprite), r.x + 50, y, 62, 54);
-    const got = s.tray.filter((p) => p.recipe === l.recipe).length;
-    text(ctx, `${got}/${l.qty}`, r.x + 140, y, {
-      size: 26,
-      fill: got === l.qty ? C.good : C.text,
-    });
-  });
-  if (special)
-    text(ctx, special, r.x + r.w / 2, r.y + r.h - 20, {
-      size: 15,
-      fill: w.v.kind === "vip" ? C.warn : C.text,
-      maxWidth: r.w - 16,
-    });
-  const k = w.patience / w.max;
-  bar(
-    ctx,
-    { x: r.x + 14, y: r.y - 22, w: r.w - 28, h: 14 },
-    k,
-    k < 0.3 ? C.bad : k < 0.6 ? C.warn : C.good,
+/** Mây at work behind the counter, a little bob while someone is paying. */
+function drawCashier(app: App, till: Placed) {
+  const def = furniture(till.id);
+  const r = tileRect(FLOOR, till.x, till.y, def.w, 1);
+  const h = 250 * CUSTOMER_S * 1.05;
+  const bob = Math.abs(Math.sin(app.time * 3)) * 2;
+  sprite(
+    app.ctx,
+    app.sprites.get("mascot-happy"),
+    r.x + r.w / 2,
+    r.y + r.h - 2 - bob,
+    h,
+    h,
+    "bottom",
   );
 }
 
-function drawTray(app: App, s: ShopState, f: Walker | undefined) {
+/**
+ * Over the counter: what the front customer brings, the checkout's progress
+ * and the total. Tapping the counter hurries Mây along.
+ */
+function drawTill(app: App, s: ShopState, till: Placed, f: Walker | undefined) {
   const { ctx } = app;
   const tr = app.tr();
-  const ty = H - 108;
-  const tray = { x: 14, y: ty, w: 300, h: 92 };
-  panel(ctx, tray, { fill: "#f4d3a1", stroke: C.ink, radius: 20, line: 4 });
-  // Cakes line up to the right of the tray's name tag
-  const start = 74;
-  sectionLabel(app, tray.x + 10, tray.y + tray.h / 2 - 13, tr.trayLabel);
-  if (!s.tray.length)
-    text(ctx, tr.trayHint, tray.x + (start + tray.w) / 2, tray.y + tray.h / 2, {
-      size: 13,
-      fill: C.muted,
-      maxWidth: tray.w - start - 14,
-    });
-  const size = Math.min(52, (tray.w - start - 10) / Math.max(4, s.tray.length));
-  s.tray.forEach((p, i) => {
-    const rect = {
-      x: tray.x + start + i * size,
-      y: tray.y + 12,
-      w: size,
-      h: tray.h - 24,
-    };
+  const def = furniture(till.id);
+  const r = tileRect(FLOOR, till.x, till.y, def.w, def.h);
+  const serving = f?.lines && !f.leaving && s.closing === null;
+  app.ui.add({
+    rect: { x: r.x - 10, y: r.y - 60, w: r.w + 20, h: r.h + 70 },
+    key: "till",
+    tap: () => {
+      if (!serving || s.checkout) return;
+      app.sfx.tap();
+      s.ring = Math.min(0.999, s.ring + TAP_RING);
+    },
+  });
+  if (!serving || !f) return;
+  const count = s.tray.length;
+  const total = Math.round(
+    orderTotal(s.tray, s.discount, f.v.kind === "preorder"),
+  );
+  // Above Mây, who stands on the counter's back row
+  const b = {
+    x: Math.min(W - 222, Math.max(14, r.x + r.w / 2 - 104)),
+    y: r.y + FLOOR.th - 250 * CUSTOMER_S * 1.05 - 70,
+    w: 208,
+    h: 62,
+  };
+  bubble(ctx, b, r.x + r.w / 2);
+  // The pieces, a few at most, then the bar and the price
+  const kinds = [...new Set(s.tray.map((p) => p.recipe))].slice(0, 3);
+  kinds.forEach((id, i) => {
     sprite(
       ctx,
-      app.sprites.get(recipe(p.recipe).sprite),
-      rect.x + size / 2,
-      rect.y + rect.h / 2,
-      size - 4,
-      size - 4,
+      app.sprites.get(recipe(id).sprite),
+      b.x + 26 + i * 30,
+      b.y + 24,
+      30,
+      28,
     );
   });
-  const ready =
-    !!f?.lines &&
-    !f.leaving &&
-    !s.checkout &&
-    s.closing === null &&
-    trayMatches(s, f.lines);
-  btn(
-    app,
-    "give",
-    { x: W - 206, y: ty, w: 192, h: 92 },
-    tr.ringUp,
-    () => f && handOver(app, s, f),
-    {
-      fill: ready ? C.green : C.cream,
-      size: 24,
-      disabled: !ready,
-    },
+  text(ctx, `×${count}`, b.x + 26 + kinds.length * 30, b.y + 24, {
+    size: 15,
+    align: "left",
+  });
+  coin(ctx, b.x + b.w - 54, b.y + 22, 10);
+  text(ctx, `${total}`, b.x + b.w - 40, b.y + 23, { size: 17, align: "left" });
+  bar(
+    ctx,
+    { x: b.x + 14, y: b.y + 42, w: b.w - 28, h: 10 },
+    s.checkout ? 1 : s.ring,
+    C.good,
   );
+  if (f.v.kind === "vip" || f.v.kind === "preorder")
+    text(
+      ctx,
+      f.v.kind === "vip" ? tr.vipWants : tr.preorderTag,
+      b.x + b.w / 2,
+      b.y - 12,
+      {
+        size: 13,
+        fill: f.v.kind === "vip" ? C.warn : C.text,
+        outline: C.white,
+      },
+    );
+}
+
+/** Under the room: what is left on the stands, and the hint to tap the counter. */
+function drawStrip(app: App, s: ShopState) {
+  const { ctx } = app;
+  const tr = app.tr();
+  const strip = { x: 14, y: stripY(), w: W - 28, h: 78 };
+  panel(ctx, strip, { fill: "#fff8eb", radius: 20, line: 2.5 });
+  sectionLabel(app, strip.x + 12, strip.y - 13, tr.onStands);
+  const slots = displaySlots(s).slice(0, 6);
+  if (!slots.length)
+    text(ctx, tr.emptyDisplay, W / 2, strip.y + strip.h / 2, {
+      size: 16,
+      fill: C.muted,
+    });
+  slots.forEach((slot, i) => {
+    const cx = strip.x + 40 + i * 78;
+    sprite(
+      ctx,
+      app.sprites.get(recipe(slot.recipe).sprite),
+      cx,
+      strip.y + 38,
+      50,
+      46,
+    );
+    text(ctx, `×${slot.count}`, cx + 26, strip.y + 22, {
+      size: 14,
+      outline: C.white,
+    });
+    stars(ctx, cx, strip.y + 66, slot.stars, 6);
+  });
+  if (front(s) && !s.checkout && s.closing === null)
+    text(ctx, tr.tapTill, W / 2, stripY() + 168, {
+      size: 14,
+      fill: C.muted,
+      outline: C.white,
+    });
 }
 
 function drawBoxes(app: App, s: ShopState, w: Walker) {

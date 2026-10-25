@@ -7,17 +7,16 @@ import {
   GRID_COLS,
   GRID_ROWS,
   type Placed,
-  TILL_TILES,
 } from "./config";
 import {
   arrange,
   charm,
   charmTier,
   furniture,
-  layoutOk,
+  layoutProblem,
   occupied,
+  serviceTile,
   stored,
-  walkPath,
 } from "./furniture";
 import { K, pillWidth } from "./kit";
 import {
@@ -56,13 +55,23 @@ export interface DecorState {
   /** The piece tapped (index in `placed`), showing flip and store. */
   selected: number | null;
   page: number;
+  /** The wall and floor showing, from those owned. */
+  look: { wall: FurnitureId; floor: FurnitureId };
+  /** Which drawer is open: stored furniture, walls or floors. */
+  tab: "pieces" | "wall" | "floor";
 }
 
-export const newDecor = (placed: Placed[]): DecorState => ({
-  placed: placed.map((p) => ({ ...p })),
+export const newDecor = (decor: {
+  placed: Placed[];
+  wall: FurnitureId;
+  floor: FurnitureId;
+}): DecorState => ({
+  placed: decor.placed.map((p) => ({ ...p })),
   drag: null,
   selected: null,
   page: 0,
+  look: { wall: decor.wall, floor: decor.floor },
+  tab: "pieces",
 });
 
 /** Pieces in the drawer, one card per kind with how many. */
@@ -93,10 +102,8 @@ function storage(app: App, s: DecorState) {
 
 /** Why a layout can't be saved, or null if it can. */
 function problem(app: App, placed: Placed[]) {
-  const tr = app.tr();
-  if (layoutOk(placed)) return null;
-  if (!walkPath(placed)) return tr.decor.blocked;
-  return tr.decor.standFront;
+  const why = layoutProblem(placed);
+  return why ? app.tr().decor.problems[why] : null;
 }
 
 /** The piece under a point: its own tiles first, then a tall picture's top. */
@@ -144,7 +151,7 @@ export function drawDecor(app: App, s: DecorState) {
   const { y0, floor: f, drawer } = layout(app);
   ctx.fillStyle = C.page;
   ctx.fillRect(v.x, v.y, v.w, v.h);
-  drawRoom(app, f, v);
+  drawRoom(app, f, v, s.look);
 
   // The grid: faint lines, the door and the till kept clear
   ctx.save();
@@ -163,24 +170,23 @@ export function drawDecor(app: App, s: DecorState) {
     ctx.stroke();
   }
   ctx.restore();
-  for (const t of [DOOR_TILE, ...TILL_TILES]) {
+  // The door, and where customers pay, are kept clear
+  const pay = serviceTile(s.placed);
+  for (const [t, label] of [
+    [DOOR_TILE, tr.decor.door],
+    ...(pay && pay.y < GRID_ROWS ? [[pay, tr.decor.till] as const] : []),
+  ] as const) {
     const r = tileRect(f, t.x, t.y);
     panel(
       ctx,
       { x: r.x + 6, y: r.y + 6, w: r.w - 12, h: r.h - 12 },
       { fill: "rgba(255, 255, 255, 0.45)", radius: 12, line: 1.5 },
     );
-    text(
-      ctx,
-      t === DOOR_TILE ? tr.decor.door : tr.decor.till,
-      r.x + r.w / 2,
-      r.y + r.h / 2,
-      {
-        size: 12,
-        fill: C.muted,
-        maxWidth: r.w - 14,
-      },
-    );
+    text(ctx, label, r.x + r.w / 2, r.y + r.h / 2, {
+      size: 12,
+      fill: C.muted,
+      maxWidth: r.w - 14,
+    });
   }
 
   // Where a dragged piece would go
@@ -222,7 +228,7 @@ export function drawDecor(app: App, s: DecorState) {
   close(app, { x: 0, y: y0 + 12, w: W - 30, h: 0 }, () =>
     app.go({ kind: "hub" }),
   );
-  const c = charm({ ...save.decor, placed: s.placed });
+  const c = charm({ ...save.decor, placed: s.placed, ...s.look });
   const chip = { x: W / 2 - 110, y: y0 + 50, w: 220, h: 30 };
   panel(ctx, chip, { fill: "#fde3ea", radius: 15, line: 2 });
   heart(ctx, chip.x + 22, chip.y + 15, 8);
@@ -317,7 +323,7 @@ export function drawDecor(app: App, s: DecorState) {
     { x: 214, y: by, w: W - 232, h: 64 },
     tr.decor.done,
     () => {
-      const res = arrange(save, s.placed);
+      const res = arrange(save, s.placed, s.look.wall, s.look.floor);
       if (!res.ok) return;
       app.sfx.coin();
       app.commit(res.save);
@@ -389,11 +395,37 @@ function drawDrawer(
   const { ctx } = app;
   const tr = app.tr();
   panel(ctx, r, { fill: "#f6e7cd", radius: 22, line: 2.5 });
-  text(ctx, tr.decor.storage, r.x + 18, r.y + 18, {
-    size: 15,
-    align: "left",
-    fill: C.muted,
+  // Three drawers: stored pieces, walls, floors
+  const tabs = [
+    ["pieces", tr.decor.storage],
+    ["wall", tr.decor.walls],
+    ["floor", tr.decor.floors],
+  ] as const;
+  tabs.forEach(([id, label], i) => {
+    const tw = (r.w - 24) / 3;
+    const t = { x: r.x + 12 + i * tw, y: r.y + 6, w: tw - 6, h: 24 };
+    const on = s.tab === id;
+    panel(ctx, t, {
+      fill: on ? "#dff3f6" : "rgba(255,255,255,0.5)",
+      radius: 12,
+      line: on ? 2 : 1.2,
+    });
+    text(ctx, label, t.x + t.w / 2, t.y + t.h / 2, {
+      size: 13,
+      fill: on ? C.text : C.muted,
+      maxWidth: t.w - 8,
+    });
+    app.ui.add({
+      rect: { x: t.x, y: t.y - 6, w: t.w, h: t.h + 10 },
+      key: `decor-tab-${id}`,
+      tap: () => {
+        app.sfx.tap();
+        s.tab = id;
+        s.page = 0;
+      },
+    });
   });
+  if (s.tab !== "pieces") return drawLooks(app, s, r, locale);
   const kinds = storage(app, s);
   if (!kinds.length) {
     text(ctx, tr.decor.storageEmpty, r.x + r.w / 2, r.y + r.h / 2 + 8, {
@@ -496,4 +528,63 @@ function roundAction(
       onTap();
     },
   });
+}
+
+/** The wall or floor drawer: every one owned, the showing one ticked. */
+function drawLooks(app: App, s: DecorState, r: Rect, locale: "vi" | "en") {
+  const { ctx, save } = app;
+  const kind = s.tab === "wall" ? "wall" : "floor";
+  const owned = [...new Set(save.decor.owned)].filter(
+    (id) => furniture(id).kind === kind,
+  );
+  const per = PER_PAGE;
+  const pages = Math.max(1, Math.ceil(owned.length / per));
+  const page = Math.min(s.page, pages - 1);
+  const cw = (r.w - 20 - (pages > 1 ? 60 : 0)) / per;
+  owned.slice(page * per, page * per + per).forEach((id, i) => {
+    const def = furniture(id);
+    const card = {
+      x: r.x + 10 + (pages > 1 ? 30 : 0) + i * cw + 4,
+      y: r.y + 36,
+      w: cw - 8,
+      h: r.h - 46,
+    };
+    const on = s.look[kind] === id;
+    panel(ctx, card, {
+      fill: on ? "#eaf7e1" : C.white,
+      radius: 14,
+      line: on ? 3 : 2,
+    });
+    sprite(
+      ctx,
+      app.sprites.get(def.sprite),
+      card.x + card.w / 2,
+      card.y + card.h / 2 - 8,
+      card.w - 14,
+      card.h - 36,
+    );
+    text(ctx, def.name[locale], card.x + card.w / 2, card.y + card.h - 12, {
+      size: 11,
+      maxWidth: card.w - 8,
+    });
+    app.ui.add({
+      rect: card,
+      key: `decor-look-${id}`,
+      tap: () => {
+        app.sfx.tap();
+        s.look = { ...s.look, [kind]: id };
+      },
+    });
+  });
+  if (pages > 1) {
+    const cy = r.y + 36 + (r.h - 46) / 2;
+    if (page > 0)
+      roundAction(app, "decor-prev", r.x + 22, cy, "‹", () => {
+        s.page = page - 1;
+      });
+    if (page < pages - 1)
+      roundAction(app, "decor-next", r.x + r.w - 22, cy, "›", () => {
+        s.page = page + 1;
+      });
+  }
 }

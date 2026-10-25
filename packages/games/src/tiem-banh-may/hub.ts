@@ -313,7 +313,7 @@ export function drawHub(app: App) {
       key: "decor",
       label: tr.decor.title,
       img: "f-pink-chair",
-      go: () => app.go({ kind: "decor", decor: newDecor(save.decor.placed) }),
+      go: () => app.go({ kind: "decor", decor: newDecor(save.decor) }),
     },
   ];
   tiles.forEach((t, i) => {

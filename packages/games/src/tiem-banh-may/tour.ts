@@ -114,6 +114,7 @@ const STEPS: Step[] = [
     on: (a) => a.screen.kind === "shop",
     say: (tr) => tr.tour.selling,
     mascot: "wave",
+    target: () => "till",
     button: (tr) => tr.tour.next,
   },
   {

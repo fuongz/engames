@@ -48,8 +48,31 @@ const ids = (x: unknown, known: Set<string>) =>
  * had no energy or mood: map it onto the version-2 night and give defaults.
  */
 function migrate(raw: Record<string, unknown>): Record<string, unknown> {
+  // v5 → v6: the checkout counter moved into the room; the floor is laid out
+  // afresh around it and every piece bought before waits in storage
+  if (raw.v === 5 && isObj(raw.decor)) {
+    const start = startDecor();
+    const old = Array.isArray(raw.decor.owned)
+      ? (raw.decor.owned as string[])
+      : [];
+    const extra = [...old];
+    for (const id of start.owned) {
+      const i = extra.indexOf(id);
+      if (i >= 0) extra.splice(i, 1);
+    }
+    return {
+      ...raw,
+      v: 6,
+      decor: {
+        ...start,
+        owned: [...start.owned, ...extra],
+        wall: raw.decor.wall ?? start.wall,
+        floor: raw.decor.floor ?? start.floor,
+      },
+    };
+  }
   // v4 → v5: the storefront, furnished with the starting set
-  if (raw.v === 4) return { ...raw, v: 5, decor: startDecor() };
+  if (raw.v === 4) return migrate({ ...raw, v: 5, decor: startDecor() });
   // v3 → v4: the music box, with the record it came with
   if (raw.v === 3)
     return migrate({ ...raw, v: 4, records: ["sheep"], playing: "sheep" });
@@ -75,7 +98,7 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
 export function parseSave(raw: unknown): SaveData | null {
   if (!isObj(raw)) return null;
   const s = migrate(raw);
-  if (s.v !== 5) return null;
+  if (s.v !== 6) return null;
   // Records: known ones, and the one playing must be owned
   if (
     !ids(s.records, RECORD_IDS) ||

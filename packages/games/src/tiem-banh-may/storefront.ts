@@ -2,15 +2,13 @@ import type { Rect } from "@web-games/core";
 import type { App } from "./app";
 import { sprite } from "./art";
 import {
-  DOOR_TILE,
   type FurnitureId,
   GRID_COLS,
   GRID_ROWS,
   type Placed,
-  TILL_TILES,
   type Weather,
 } from "./config";
-import { furniture, walkPath } from "./furniture";
+import { furniture } from "./furniture";
 
 // The storefront as drawn: the room (wall above, a floor of tiles below), the
 // furniture standing on its tiles, and where customers walk. The room art is
@@ -70,21 +68,43 @@ export const feet = (f: Floor, t: { x: number; y: number }) => ({
   y: f.y0 + (t.y + 0.8) * f.th,
 });
 
-/** Door → till, as points for the customers' feet (the door step first). */
-export function walkway(f: Floor, placed: Placed[]) {
-  const tiles = walkPath(placed) ?? [DOOR_TILE, TILL_TILES[0]];
-  // They come in through the door, a step above the first tile
-  const door = feet(f, DOOR_TILE);
-  return [{ x: door.x, y: f.y0 - 4 }, ...tiles.map((t) => feet(f, t))];
-}
+/** A room picture: the plain room, or a variant painted for one wall or floor. */
+const roomArt = (id: FurnitureId) =>
+  id === "wall-plain" || id === "floor-plain" ? "room-plain" : `room-${id}`;
 
-/** The room: wall colour above it on tall screens, then the room art. */
-export function drawRoom(app: App, f: Floor, view: Rect) {
+/** The room: wall colour above it on tall screens, then the wall and the floor. */
+export function drawRoom(
+  app: App,
+  f: Floor,
+  view: Rect,
+  look: { wall: FurnitureId; floor: FurnitureId },
+) {
   const { ctx } = app;
   ctx.fillStyle = WALL;
   ctx.fillRect(view.x, view.y, view.w, f.top - view.y + 2);
-  const img = app.sprites.get("room-plain");
-  if (img?.naturalWidth) ctx.drawImage(img, 0, f.top, ROOM.size, ROOM.size);
+  const plain = app.sprites.get("room-plain");
+  const wall = app.sprites.get(roomArt(look.wall)) ?? plain;
+  const floor = app.sprites.get(roomArt(look.floor)) ?? plain;
+  // Each picture is split on the baseboard: the wall's top, the floor's bottom
+  const cut = ROOM.baseboard;
+  for (const [img, from, to] of [
+    [wall, 0, cut + 0.01],
+    [floor, cut + 0.01, 1],
+  ] as const) {
+    if (!img?.naturalWidth) continue;
+    const ih = img.naturalHeight;
+    ctx.drawImage(
+      img,
+      0,
+      from * ih,
+      img.naturalWidth,
+      (to - from) * ih,
+      0,
+      f.top + from * ROOM.size,
+      ROOM.size,
+      (to - from) * ROOM.size,
+    );
+  }
 }
 
 /** The light of the day over the room: grey for clouds and rain, gold at dusk. */
@@ -171,6 +191,14 @@ const SHELF_ART: Partial<
     { y: 0.3, x0: 0.13, x1: 0.88 },
     { y: 0.49, x0: 0.11, x1: 0.9 },
     { y: 0.67, x0: 0.09, x1: 0.93 },
+  ],
+  "lavender-cart": [
+    { y: 0.44, x0: 0.1, x1: 0.9 },
+    { y: 0.66, x0: 0.08, x1: 0.92 },
+  ],
+  "lavender-counter": [
+    { y: 0.36, x0: 0.12, x1: 0.9 },
+    { y: 0.66, x0: 0.08, x1: 0.92 },
   ],
   "glass-fridge": [
     { y: 0.31, x0: 0.08, x1: 0.92 },

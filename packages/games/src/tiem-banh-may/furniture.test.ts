@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CHARM_MAX_BOOST,
-  DOOR_TILE,
-  type Placed,
-  START_COINS,
-  TILL_TILES,
-} from "./config";
+import { CHARM_MAX_BOOST, DOOR_TILE, type Placed, START_COINS } from "./config";
 import {
   arrange,
   buyFurniture,
@@ -16,6 +10,7 @@ import {
   layoutOk,
   receive,
   seatPatience,
+  serviceTile,
   shelvesOf,
   startDecor,
   stored,
@@ -89,7 +84,7 @@ describe("charm", () => {
     );
     expect(charmBoost(10_000)).toBeLessThanOrEqual(1 + CHARM_MAX_BOOST);
     expect(charmTier(0)).toBe(0);
-    expect(charmTier(8)).toBe(1);
+    expect(charmTier(7.5)).toBe(1);
     expect(charmTier(55)).toBe(3);
   });
 
@@ -115,7 +110,7 @@ describe("charm", () => {
 
   it("makes queuers more patient with seats, up to a cap", () => {
     expect(seatPatience(decor([]))).toBe(1);
-    expect(seatPatience(startDecor())).toBeCloseTo(1.16);
+    expect(seatPatience(startDecor())).toBeCloseTo(1.08);
     const many = decor(
       [0, 1, 2, 3, 4, 5].flatMap((x) => [
         at("basic-chair", x, 2),
@@ -177,7 +172,7 @@ describe("the walkway", () => {
   it("walks free tiles from the door to the till, and finds none when blocked", () => {
     const path = walkPath(startDecor().placed);
     expect(path?.[0]).toEqual(DOOR_TILE);
-    expect(path?.at(-1)).toEqual(TILL_TILES[0]);
+    expect(path?.at(-1)).toEqual(serviceTile(startDecor().placed));
     const taken = new Set(startDecor().placed.map((p) => `${p.x},${p.y}`));
     for (const t of path ?? []) expect(taken.has(`${t.x},${t.y}`)).toBe(false);
     const wall = [0, 1, 2, 3, 4, 5].map((x) => at("basic-table", x, 2));
@@ -233,7 +228,7 @@ describe("saves", () => {
   it("upgrades a version-4 save with the starting furniture", () => {
     const { decor: _, ...rest } = newGame(3);
     const up = parseSave({ ...rest, v: 4 });
-    expect(up?.v).toBe(5);
+    expect(up?.v).toBe(6);
     expect(up?.decor).toEqual(startDecor());
     expect(up && assets(up)).toBe(START_COINS + 0);
   });

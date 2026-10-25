@@ -16,7 +16,6 @@ import {
   START_FLOOR,
   START_LAYOUT,
   START_WALL,
-  TILL_TILES,
 } from "./config";
 import type { Outcome, SaveData } from "./logic";
 
@@ -75,7 +74,7 @@ const tiles = (p: Placed) => {
 };
 
 const key = (x: number, y: number) => y * GRID_COLS + x;
-const BLOCKED = new Set([DOOR_TILE, ...TILL_TILES].map((t) => key(t.x, t.y)));
+const BLOCKED = new Set([key(DOOR_TILE.x, DOOR_TILE.y)]);
 
 /** Tiles under furniture, or null if a piece is off the floor or on another. */
 export function occupied(placed: Placed[]): Set<number> | null {
@@ -118,14 +117,27 @@ function reachable(taken: Set<number>) {
 
 type Tile = { x: number; y: number };
 
+/** The checkout counter on the floor (one per shop). */
+export const tillOf = (placed: Placed[]) =>
+  placed.find((p) => furniture(p.id).kind === "till");
+
+/** Where customers stand to pay: in front of the counter's left half. */
+export function serviceTile(placed: Placed[]): Tile | null {
+  const t = tillOf(placed);
+  if (!t) return null;
+  const def = furniture(t.id);
+  return { x: t.x, y: t.y + def.h };
+}
+
 /** The shortest walk over free tiles (door → till unless told otherwise), or null. */
 export function walkPath(
   placed: Placed[],
   start: Tile = DOOR_TILE,
-  goal: Tile = TILL_TILES[0],
+  to: Tile | null = serviceTile(placed),
 ) {
   const taken = occupied(placed);
-  if (!taken) return null;
+  if (!taken || !to) return null;
+  const goal = to;
   const from = new Map<number, number>([[key(start.x, start.y), -1]]);
   const queue = [start];
   while (queue.length) {
@@ -160,21 +172,47 @@ export function walkPath(
  * and every stand reachable from the tile in front of it.
  */
 export function layoutOk(placed: Placed[]) {
+  return layoutProblem(placed) === null;
+}
+
+/** Why a layout can't open, or null if it can. */
+export function layoutProblem(
+  placed: Placed[],
+): "overlap" | "till" | "stand" | "blocked" | "standFront" | null {
   const taken = occupied(placed);
-  if (!taken) return false;
-  // Customers serve themselves: at least one cake stand
-  if (!placed.some((p) => furniture(p.id).kind === "stand")) return false;
+  if (!taken) return "overlap";
+  // Exactly one checkout counter, and at least one cake stand
+  if (placed.filter((p) => furniture(p.id).kind === "till").length !== 1)
+    return "till";
+  if (!placed.some((p) => furniture(p.id).kind === "stand")) return "stand";
   const walk = reachable(taken);
-  if (!TILL_TILES.every((t) => walk.has(key(t.x, t.y)))) return false;
-  return placed.every((p) => {
-    const f = furniture(p.id);
-    if (f.kind !== "stand") return true;
-    const front = p.y + f.h;
-    if (front >= GRID_ROWS) return false;
-    for (let dx = 0; dx < f.w; dx++)
-      if (walk.has(key(p.x + dx, front))) return true;
-    return false;
-  });
+  const pay = serviceTile(placed);
+  if (!pay || pay.y >= GRID_ROWS || !walk.has(key(pay.x, pay.y)))
+    return "blocked";
+  const ok = placed.every(
+    (p) => furniture(p.id).kind !== "stand" || spotNear(p, walk) !== null,
+  );
+  return ok ? null : "standFront";
+}
+
+/** A walkable tile next to a piece: in front first, then behind, then the sides. */
+function spotNear(p: Placed, walk: Set<number>): Tile | null {
+  const f = furniture(p.id);
+  const around: Tile[] = [];
+  for (let dx = 0; dx < f.w; dx++) around.push({ x: p.x + dx, y: p.y + f.h });
+  for (let dx = 0; dx < f.w; dx++) around.push({ x: p.x + dx, y: p.y - 1 });
+  for (let dy = 0; dy < f.h; dy++)
+    around.push({ x: p.x - 1, y: p.y + dy }, { x: p.x + f.w, y: p.y + dy });
+  return (
+    around.find(
+      (t) =>
+        t.x >= 0 &&
+        t.y >= 0 &&
+        t.x < GRID_COLS &&
+        t.y < GRID_ROWS &&
+        walk.has(key(t.x, t.y)),
+    ) ?? null
+  );
 }
 
 // ---------------------------------------------------------------- charm
@@ -221,14 +259,8 @@ export const shelvesOf = (decor: Decor) =>
 
 /** The free tile a customer stands on to take from a stand, or null. */
 export function standFront(placed: Placed[], p: Placed): Tile | null {
-  const def = furniture(p.id);
   const taken = occupied(placed);
-  if (!taken) return null;
-  const walk = reachable(taken);
-  const y = p.y + def.h;
-  for (let dx = 0; dx < def.w; dx++)
-    if (walk.has(key(p.x + dx, y))) return { x: p.x + dx, y };
-  return null;
+  return taken ? spotNear(p, reachable(taken)) : null;
 }
 
 /** Extra patience from the seats on the floor. */
@@ -254,7 +286,7 @@ export function furnitureWorth(decor: Decor) {
 /** Pieces the Furniture aisle sells (the plain wall and floor come with the shop). */
 export const forSale = (id: FurnitureId) => {
   const f = furniture(id);
-  return f.price > 0 && f.kind !== "wall" && f.kind !== "floor";
+  return f.price > 0;
 };
 
 // ---------------------------------------------------------------- actions
@@ -281,7 +313,16 @@ export function receive(decor: Decor, ids: FurnitureId[]): Decor {
     const spot = freeSpot(placed, id);
     if (spot) placed = [...placed, spot];
   }
-  return { ...decor, owned: [...decor.owned, ...ids], placed };
+  // A new wall or floor goes up at once
+  const wall = [...ids].reverse().find((id) => furniture(id).kind === "wall");
+  const floor = [...ids].reverse().find((id) => furniture(id).kind === "floor");
+  return {
+    ...decor,
+    owned: [...decor.owned, ...ids],
+    placed,
+    wall: wall ?? decor.wall,
+    floor: floor ?? decor.floor,
+  };
 }
 
 /** Buy a piece: it stands in a free spot, or goes to storage (walls and floors once). */

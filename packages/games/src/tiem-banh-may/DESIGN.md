@@ -176,6 +176,31 @@ and the player works the till.
   their pick is on the tray and the player rings it up ("Tính tiền"), boxes
   4+ and counts change. Walking off with a pick puts it back. The case under
   the counter now just shows what is left ("Trên quầy").
+- **The checkout counter in the room** (decided 2026-10-25 after the owner's
+  reference): the till is furniture (`till-basic`, free; `till-pink` on sale),
+  exactly one per shop, two tiles wide with the cashier's row behind it. Mây
+  stands behind it; customers pay on the tile in front of its left half and
+  queue back along the walkway to the door. Checkout runs on its own
+  (`CHECKOUT_SECONDS` 3.2 s, a bubble over the counter with the pieces, the
+  total and a progress bar); tapping the counter takes a third off. 4+
+  pieces still open the box choice; change is given automatically. The big
+  counter, glass case and tray at the bottom are gone: the room fills the
+  screen under the bar, with a strip under it showing what is left on the
+  stands and the discount / close-early buttons. Stands can be reached from
+  any free side. Save v6 lays v5 floors out afresh around the counter (pieces
+  bought before wait in storage).
+- **Walls and floors**: one wall and one floor show at a time; buying one puts
+  it up at once, and the decor drawer has Đồ đạc / Tường / Sàn tabs to switch
+  between those owned. Each variant is a full room picture (`room-<id>`,
+  edited from the plain room so the door, window and grid stay put); the game
+  draws the wall from one picture and the floor from another, split on the
+  baseboard. Walls: cream (free), pink stripes, mint gingham, tiny flowers,
+  butter stripes; floors: cream checks (free), wood, pink, mint, flower
+  tiles, argyle, lemon.
+- **More themes** (from the owner's references, described in words, never
+  copied): Tiệm hoa (florist, Ấm cúng), Mây (clouds, Dễ thương), Kẹo tím
+  (lavender sweets with two stands, Dễ thương), Bánh mì (toast and melon
+  buns, Nổi tiếng).
 - **Themes in the aisle** (nine to a page, by tier): Cơ bản, then Hồng ngọt,
   Vườn hoa, the bread shelf (Ấm cúng); Rừng xanh, glass case and fridge
   (Dễ thương); Cổ điển clock, lamp, armchair, tea table (Nổi tiếng).

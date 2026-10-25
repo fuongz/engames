@@ -216,8 +216,12 @@ export interface Strings {
     till: string;
     storage: string;
     storageEmpty: string;
-    blocked: string;
-    standFront: string;
+    walls: string;
+    floors: string;
+    problems: Record<
+      "overlap" | "till" | "stand" | "blocked" | "standFront",
+      string
+    >;
   };
   basket: (n: number) => string;
   basketTitle: string;
@@ -265,6 +269,7 @@ export interface Strings {
   };
   trayHint: string;
   onStands: string;
+  tapTill: string;
   tile: Record<
     | "revenue"
     | "tips"
@@ -599,8 +604,15 @@ export const STRINGS: Localized<Strings> = {
       till: "Quầy",
       storage: "Kho đồ",
       storageEmpty: "Kho trống. Mua thêm đồ ở Siêu thị nhé!",
-      blocked: "Chừa lối đi từ cửa tới quầy nhé",
-      standFront: "Quầy bánh cần một ô trống phía trước",
+      walls: "Tường",
+      floors: "Sàn",
+      problems: {
+        overlap: "Hai món đang chồng lên nhau",
+        till: "Tiệm cần đúng một quầy thu ngân",
+        stand: "Đặt ít nhất một quầy bánh nhé",
+        blocked: "Chừa lối đi từ cửa tới chỗ khách trả tiền nhé",
+        standFront: "Quầy bánh cần một ô trống bên cạnh cho khách",
+      },
     },
     basket: (n) => (n ? `Giỏ: ${n} món` : "Giỏ trống"),
     basketTitle: "Giỏ hàng",
@@ -653,17 +665,18 @@ export const STRINGS: Localized<Strings> = {
       pickCookie: "Làm Bánh quy bơ, món dễ nhất.",
       kitchen:
         "Làm theo thẻ công thức ở trên: chọn đúng nguyên liệu, đong vừa đủ, trộn đủ vòng, nướng đúng nhiệt.",
-      display: "Bánh đã vào tủ kính. Sáng mai bán cho khách nhé.",
+      display: "Bánh đã lên quầy bánh. Sáng mai khách tự tới chọn nhé.",
       bed: "Khuya rồi, đi ngủ cho có sức bán hàng.",
       open: "Trời sáng rồi! Mở cửa đón khách nào.",
       selling:
-        "Khách gọi món trong bong bóng. Chạm bánh trong tủ để đặt lên khay, rồi bấm Giao bánh.",
+        "Khách tự chọn bánh ở quầy rồi xếp hàng. Mây tính tiền ở quầy thu ngân, chạm vào quầy để tính nhanh hơn!",
       done: "Bạn làm tốt lắm! Từ giờ tiệm là của bạn. Chúc buôn may bán đắt!",
       thanks: "Cảm ơn Mây!",
       replay: "Xem lại hướng dẫn",
     },
     trayHint: "Khách tự chọn ở quầy rồi mang tới đây",
     onStands: "Trên quầy",
+    tapTill: "Chạm quầy thu ngân để tính nhanh hơn",
     tile: {
       revenue: "Bán bánh",
       tips: "Tiền tip",
@@ -1006,8 +1019,15 @@ export const STRINGS: Localized<Strings> = {
       till: "Till",
       storage: "Storage",
       storageEmpty: "Nothing stored. Buy more at the market!",
-      blocked: "Keep a way from the door to the till",
-      standFront: "A cake stand needs a free tile in front",
+      walls: "Walls",
+      floors: "Floors",
+      problems: {
+        overlap: "Two pieces overlap",
+        till: "The shop needs exactly one checkout counter",
+        stand: "Place at least one cake stand",
+        blocked: "Keep a way from the door to where customers pay",
+        standFront: "A cake stand needs a free tile beside it",
+      },
     },
     basket: (n) =>
       n ? `Basket: ${n} item${n > 1 ? "s" : ""}` : "Basket empty",
@@ -1061,17 +1081,18 @@ export const STRINGS: Localized<Strings> = {
       pickCookie: "Make butter cookies, the easiest one.",
       kitchen:
         "Follow the recipe card above: pick the right ingredient, measure just enough, stir the right turns, bake at the right heat.",
-      display: "The cookies are in the display case, ready for tomorrow.",
+      display: "The cookies are on the stands, ready for tomorrow.",
       bed: "It's late. Sleep, so you have energy to sell.",
       open: "Good morning! Time to open the doors.",
       selling:
-        "Customers order in their bubble. Tap cakes in the case to put them on the tray, then tap Serve.",
+        "Customers pick from the stands and queue. Mây rings them up at the counter: tap it to hurry!",
       done: "Well done! The bakery is yours now. Good luck!",
       thanks: "Thanks, Mây!",
       replay: "Replay the tutorial",
     },
     trayHint: "Customers pick at the stands and bring it here",
     onStands: "On the stands",
+    tapTill: "Tap the counter to ring up faster",
     tile: {
       revenue: "Sales",
       tips: "Tips",

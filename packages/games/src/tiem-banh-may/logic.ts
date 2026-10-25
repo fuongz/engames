@@ -147,7 +147,7 @@ export interface Job {
 }
 
 export interface SaveData {
-  v: 5;
+  v: 6;
   /** The business day being prepared (the night before) or sold. */
   day: number;
   /** "open": saved at opening, so a reload replays the day from 9:00. */
@@ -232,7 +232,7 @@ const between = (r: number, lo: number, hi: number) =>
 
 export function newGame(seed: number): SaveData {
   return {
-    v: 5,
+    v: 6,
     day: 1,
     phase: "prep",
     coins: START_COINS,
@@ -461,6 +461,18 @@ export function buyIngredients(
   const tier = charmTier(charm(save.decor));
   if (pieces.some((id) => !forSale(id) || furniture(id).tier > tier))
     return { ok: false, why: "locked" };
+  // Walls and floors are bought once
+  const once = (id: FurnitureId) => {
+    const k = furniture(id).kind;
+    return k === "wall" || k === "floor";
+  };
+  if (
+    pieces.some(
+      (id, i) =>
+        once(id) && (save.decor.owned.includes(id) || pieces.indexOf(id) !== i),
+    )
+  )
+    return { ok: false, why: "owned" };
   if (cost > save.coins) return { ok: false, why: "coins" };
   const why = workable(save, MARKET_TRIP);
   if (why) return { ok: false, why };
