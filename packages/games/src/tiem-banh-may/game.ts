@@ -32,6 +32,7 @@ import {
 import { drawDisplay } from "./display";
 import { drawLearned } from "./learned";
 import { drawMarket } from "./market";
+import { drawDecor } from "./decor";
 import { drawMusicBox } from "./musicbox";
 import { DUR, Motion, easeOut } from "./motion";
 import { drawReport } from "./report";
@@ -572,6 +573,7 @@ export function setup(rt: Runtime): GameHooks {
       else if (s.kind === "error") drawError();
       else if (s.kind === "hub") drawHub(app);
       else if (s.kind === "display") drawDisplay(app);
+      else if (s.kind === "decor") drawDecor(app, s.decor);
       else if (s.kind === "music") drawMusicBox(app);
       else if (s.kind === "learned") drawLearned(app, s);
       else if (s.kind === "market")

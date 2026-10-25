@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { CHARM_MAX_BOOST, START_COINS, type Placed } from "./config";
+import {
+  CHARM_MAX_BOOST,
+  DOOR_TILE,
+  type Placed,
+  START_COINS,
+  TILL_TILES,
+} from "./config";
 import {
   arrange,
   buyFurniture,
@@ -12,6 +18,7 @@ import {
   seatPatience,
   startDecor,
   stored,
+  walkPath,
 } from "./furniture";
 import { assets, closeDay, dayInfo, emptyLedger, newGame } from "./logic";
 import { parseSave } from "./save";
@@ -143,6 +150,18 @@ describe("the storefront grid", () => {
         at("basic-table", 5, 1),
       ]),
     ).toBe(false);
+  });
+});
+
+describe("the walkway", () => {
+  it("walks free tiles from the door to the till, and finds none when blocked", () => {
+    const path = walkPath(startDecor().placed);
+    expect(path?.[0]).toEqual(DOOR_TILE);
+    expect(path?.at(-1)).toEqual(TILL_TILES[0]);
+    const taken = new Set(startDecor().placed.map((p) => `${p.x},${p.y}`));
+    for (const t of path ?? []) expect(taken.has(`${t.x},${t.y}`)).toBe(false);
+    const wall = [0, 1, 2, 3, 4, 5].map((x) => at("basic-table", x, 2));
+    expect(walkPath(wall)).toBeNull();
   });
 });
 

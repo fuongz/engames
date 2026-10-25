@@ -1,3 +1,4 @@
+import { newDecor } from "./decor";
 import { type App, H, W, btn, icon, shade, sheet, viewRect } from "./app";
 import { hud } from "./hud";
 import { DUR, easeOut } from "./motion";
@@ -278,7 +279,7 @@ export function drawHub(app: App) {
 
   // ---- where to go
   const ty = H - 206;
-  const tw = (W - 36 - 20) / 3;
+  const tw = (W - 36 - 30) / 4;
   const affordable = RECIPES.some(
     (r) => !save.recipes.includes(r.id) && r.cost <= save.coins,
   );
@@ -308,6 +309,12 @@ export function drawHub(app: App) {
       img: "tool-bowl",
       go: () => app.go({ kind: "pick" }),
     },
+    {
+      key: "decor",
+      label: tr.decor.title,
+      img: "f-pink-chair",
+      go: () => app.go({ kind: "decor", decor: newDecor(save.decor.placed) }),
+    },
   ];
   tiles.forEach((t, i) => {
     const r = { x: 18 + i * (tw + 10), y: ty, w: tw, h: 112 };
@@ -322,7 +329,7 @@ export function drawHub(app: App) {
       52,
     );
     text(ctx, t.label, r.x + r.w / 2, r.y + r.h - 22 + (pressed ? 2 : 0), {
-      size: 19,
+      size: 17,
       maxWidth: r.w - 16,
     });
     if (t.badge) dot(ctx, r.x + r.w - 8, r.y + 8);

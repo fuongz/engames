@@ -208,6 +208,15 @@ export interface Strings {
     owned: (n: number) => string;
     charmNow: (charm: number, tier: string) => string;
     charmNext: (charm: number, tier: string, next: number) => string;
+    title: string;
+    cancel: string;
+    done: string;
+    door: string;
+    till: string;
+    storage: string;
+    storageEmpty: string;
+    blocked: string;
+    standFront: string;
   };
   basket: (n: number) => string;
   basketTitle: string;
@@ -580,6 +589,15 @@ export const STRINGS: Localized<Strings> = {
       charmNow: (c, tier) => `Cuốn hút ${c} · ${tier}`,
       charmNext: (c, tier, next) =>
         `Cuốn hút ${c} · ${tier} (hạng sau: ${next})`,
+      title: "Trang trí",
+      cancel: "Huỷ",
+      done: "Xong",
+      door: "Cửa",
+      till: "Quầy",
+      storage: "Kho đồ",
+      storageEmpty: "Kho trống. Mua thêm đồ ở Siêu thị nhé!",
+      blocked: "Chừa lối đi từ cửa tới quầy nhé",
+      standFront: "Quầy bánh cần một ô trống phía trước",
     },
     basket: (n) => (n ? `Giỏ: ${n} món` : "Giỏ trống"),
     basketTitle: "Giỏ hàng",
@@ -976,6 +994,15 @@ export const STRINGS: Localized<Strings> = {
       owned: (n) => `Own ${n}`,
       charmNow: (c, tier) => `Charm ${c} · ${tier}`,
       charmNext: (c, tier, next) => `Charm ${c} · ${tier} (next tier: ${next})`,
+      title: "Decorate",
+      cancel: "Cancel",
+      done: "Done",
+      door: "Door",
+      till: "Till",
+      storage: "Storage",
+      storageEmpty: "Nothing stored. Buy more at the market!",
+      blocked: "Keep a way from the door to the till",
+      standFront: "A cake stand needs a free tile in front",
     },
     basket: (n) =>
       n ? `Basket: ${n} item${n > 1 ? "s" : ""}` : "Basket empty",

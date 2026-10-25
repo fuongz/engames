@@ -116,6 +116,39 @@ function reachable(taken: Set<number>) {
   return seen;
 }
 
+/** The shortest walk over free tiles from the door to the till, or null. */
+export function walkPath(placed: Placed[]) {
+  const taken = occupied(placed);
+  if (!taken) return null;
+  const goal = TILL_TILES[0];
+  const from = new Map<number, number>([[key(DOOR_TILE.x, DOOR_TILE.y), -1]]);
+  const queue = [DOOR_TILE];
+  while (queue.length) {
+    const t = queue.shift() as { x: number; y: number };
+    if (t.x === goal.x && t.y === goal.y) {
+      const path: { x: number; y: number }[] = [];
+      for (let k = key(t.x, t.y); k !== -1; k = from.get(k) ?? -1)
+        path.unshift({ x: k % GRID_COLS, y: Math.floor(k / GRID_COLS) });
+      return path;
+    }
+    for (const [dx, dy] of [
+      [0, 1],
+      [1, 0],
+      [-1, 0],
+      [0, -1],
+    ]) {
+      const x = t.x + dx;
+      const y = t.y + dy;
+      const k = key(x, y);
+      if (x < 0 || y < 0 || x >= GRID_COLS || y >= GRID_ROWS) continue;
+      if (from.has(k) || taken.has(k)) continue;
+      from.set(k, key(t.x, t.y));
+      queue.push({ x, y });
+    }
+  }
+  return null;
+}
+
 /**
  * Can the shop open with this layout? Every piece on the floor and on no other,
  * the door and the till kept clear, a walkable way from the door to the till,

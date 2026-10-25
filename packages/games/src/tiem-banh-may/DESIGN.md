@@ -103,9 +103,19 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
   counter, and the queue in front of the counter, can never take furniture,
   so customers never walk through it. Furniture is drawn sorted by its bottom
   row, then customers, then the counter.
-- **Decor mode** is a _Trang trí_ button on the night screen (never while
-  open): drag from the storage drawer, tap to pick up, flip, put back. The
-  charm counter is live while decorating.
+- **Decor mode** is a _Trang trí_ tile on the night screen (never while
+  open), `decor.ts`: the room with a faint grid, the door and till tiles
+  marked; drag a piece (its tiles turn green where it fits, red where it
+  doesn't), drop it on the storage drawer to put it away, drag one up from the
+  drawer; tap a piece for flip ⇄ and store ▾. The charm chip updates live; a
+  layout that blocks the way or a stand's front shows why and "Xong" stays
+  shut until it is fixed. "Huỷ" or ✕ leave without saving.
+- **The storefront while open** (`storefront.ts`, `shop.ts`): the room stands
+  on the counter (its floor ends at the counter's top), furniture and
+  customers are drawn back to front, customers walk the shortest free path
+  from the door to the till and queue back along it, so nobody stands in a
+  piece. Clouds, rain and dusk tint the room; rain falls past the door's and
+  the window's glass. The day report still uses the old painted shop.
 - **Charm** is the sum of placed pieces' charm. A second copy of the same
   piece counts 50%, a third 25%, more nothing; stored pieces count nothing.
   **Set bonus**: 3 placed pieces of one theme +10%, 5 pieces +25%.

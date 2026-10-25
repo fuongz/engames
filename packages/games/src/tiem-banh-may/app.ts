@@ -10,6 +10,7 @@ import {
   text,
 } from "./art";
 import type { FurnitureId, RecipeId, RecordId, UpgradeId } from "./config";
+import type { DecorState } from "./decor";
 import { H, W } from "./config";
 import type { BakeState } from "./kitchen";
 import type { Motion } from "./motion";
@@ -55,6 +56,8 @@ export type Screen =
   | { kind: "music" }
   /** The display case, shelf by shelf. */
   | { kind: "display" }
+  /** Decor mode: the storefront grid, edited in place until saved. */
+  | { kind: "decor"; decor: DecorState }
   | { kind: "bake"; bake: BakeState }
   | { kind: "shop"; shop: ShopState }
   | { kind: "report"; report: DayReport }
