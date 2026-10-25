@@ -159,9 +159,11 @@ Two looks for the world, plus the interface:
   cream, butter, caramel, toasted brown, terracotta, mint, soft pink. It must
   stay 2D: no 3D-render or "AI CGI" look, no gloss, no volumetric light. No
   text or logos inside images.
-- **Customers** (`customer-*.webp`): unchanged from the first art pass, by the
-  owner's choice: flat fills, thin wobbly brown outline, dot eyes. They sit
-  well next to the new items because the outline colour matches.
+- **Customers** (`customer-*.webp`): redrawn on 2026-10-25 with the decor
+  (the owner's call): tiny chubby mochi animals, flat pastel fills, dot eyes
+  and blush, and the decor's thick broken cocoa line (#765e4c), applied by
+  the outline tool in `art-src/.../tools/outline.py` (gitignored with the
+  sources) so every customer has the same line.
 - **Interface** (`art.ts`): light and hand-made, after a reference settings
   screen the owner picked (2026-10-24): thin dark-brown outlines (`LINE`);
   pill buttons on a darker base of their own colour with a broken "stitched"
