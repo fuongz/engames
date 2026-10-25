@@ -32,6 +32,7 @@ import {
 import { drawDisplay } from "./display";
 import { drawLearned } from "./learned";
 import { drawMarket } from "./market";
+import { drawDecor } from "./decor";
 import { drawMusicBox } from "./musicbox";
 import { DUR, Motion, easeOut } from "./motion";
 import { drawReport } from "./report";
@@ -68,7 +69,7 @@ const SAVE_EVERY = 15;
 function view(s: Screen): string {
   switch (s.kind) {
     case "market":
-      return `market:${s.aisle ?? 0}:${s.basket ?? ""}`;
+      return `market:${s.aisle ?? 0}:${s.basket ?? ""}:${s.fpage ?? 0}`;
     case "book":
       return `book:${s.tab}:${s.detail ?? ""}:${s.page ?? 0}`;
     case "pick":
@@ -572,10 +573,18 @@ export function setup(rt: Runtime): GameHooks {
       else if (s.kind === "error") drawError();
       else if (s.kind === "hub") drawHub(app);
       else if (s.kind === "display") drawDisplay(app);
+      else if (s.kind === "decor") drawDecor(app, s.decor);
       else if (s.kind === "music") drawMusicBox(app);
       else if (s.kind === "learned") drawLearned(app, s);
       else if (s.kind === "market")
-        drawMarket(app, s.cart, s.aisle ?? 0, s.records ?? [], s.basket);
+        drawMarket(
+          app,
+          s.cart,
+          s.aisle ?? 0,
+          s.records ?? [],
+          s.basket,
+          s.furniture ?? [],
+        );
       else if (s.kind === "book") drawBook(app, s.tab, s.detail, s.page ?? 0);
       else if (s.kind === "pick") {
         drawHub(app);

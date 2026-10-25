@@ -78,8 +78,9 @@ export const START_REP = 50;
 export const MAX_REP = 100;
 export const FRESH_DAYS = 3;
 export const FRIDGE_DAYS = 5;
-export const DISPLAY_CAP = 50;
-export const BIG_DISPLAY_CAP = 90;
+/** Pieces one cake-stand shelf holds (more with the big-display upgrade). */
+export const SHELF_CAP = 12;
+export const BIG_SHELF_CAP = 18;
 export const MASTERY_BAKES = 3;
 export const FAST_STARS = 2;
 export const STAR_PRICE: Record<1 | 2 | 3, number> = { 1: 0.8, 2: 1, 3: 1.25 };
@@ -997,3 +998,591 @@ export const RECORDS: MusicRecord[] = [
 
 /** Mood gained at closing when a record was playing. */
 export const RECORD_MOOD = 2;
+
+// ---------------------------------------------------------------- storefront decor
+
+export type FurnitureId =
+  | "basic-table"
+  | "basic-chair"
+  | "basic-plant"
+  | "basic-stand"
+  | "pink-table"
+  | "pink-chair"
+  | "pink-candy"
+  | "pink-stand"
+  | "wood-shelf"
+  | "glass-case"
+  | "glass-fridge"
+  | "garden-table"
+  | "garden-chair"
+  | "garden-flowers"
+  | "garden-easel"
+  | "garden-shelf"
+  | "forest-table"
+  | "forest-stool"
+  | "forest-chair"
+  | "forest-lantern"
+  | "forest-fern"
+  | "classic-clock"
+  | "classic-lamp"
+  | "classic-armchair"
+  | "classic-table"
+  | "wall-plain"
+  | "floor-plain"
+  | "till-basic"
+  | "till-pink"
+  | "florist-cart"
+  | "florist-bench"
+  | "florist-stand"
+  | "florist-vase"
+  | "florist-chair"
+  | "cloud-rug"
+  | "cloud-stool"
+  | "cloud-table"
+  | "cloud-sofa"
+  | "cloud-lamp"
+  | "bread-cabinet"
+  | "bread-rug"
+  | "bread-cart"
+  | "bread-sofa"
+  | "bread-ottoman"
+  | "wall-pink"
+  | "wall-mint"
+  | "wall-butter"
+  | "wall-stripe"
+  | "floor-wood"
+  | "floor-pink"
+  | "floor-mint"
+  | "floor-flower"
+  | "floor-argyle"
+  | "floor-lemon"
+  | "lavender-cart"
+  | "lavender-counter"
+  | "lavender-table"
+  | "lavender-chair"
+  | "lavender-gumball"
+  | "lavender-balloons";
+
+export type FurnitureKind =
+  | "till"
+  | "seat"
+  | "table"
+  | "decor"
+  | "stand"
+  | "wall"
+  | "floor";
+/** A theme: pieces of one set share colours, and placing several gives a bonus. */
+export type FurnitureSet =
+  | "basic"
+  | "sweet"
+  | "garden"
+  | "forest"
+  | "classic"
+  | "florist"
+  | "cloud"
+  | "bread"
+  | "lavender";
+
+export interface Furniture {
+  id: FurnitureId;
+  name: Localized<string>;
+  kind: FurnitureKind;
+  set: FurnitureSet;
+  charm: number;
+  /** Coins in the Furniture aisle. */
+  price: number;
+  /** Floor tiles it covers (walls and floors cover none). */
+  w: number;
+  h: number;
+  /** Stands only: batches it can show. */
+  shelves?: number;
+  /** Charm tier at which it goes on sale (0: from the start). */
+  tier: number;
+  sprite: string;
+}
+
+const piece = (
+  id: FurnitureId,
+  vi: string,
+  en: string,
+  kind: FurnitureKind,
+  set: FurnitureSet,
+  charm: number,
+  price: number,
+  more: Partial<Pick<Furniture, "w" | "h" | "shelves" | "tier">> = {},
+): Furniture => ({
+  id,
+  name: { vi, en },
+  kind,
+  set,
+  charm,
+  price,
+  w: kind === "wall" || kind === "floor" ? 0 : 1,
+  h: kind === "wall" || kind === "floor" ? 0 : 1,
+  tier: 0,
+  sprite: `f-${id}`,
+  ...more,
+});
+
+export const FURNITURE: Furniture[] = [
+  piece(
+    "basic-table",
+    "Bàn gỗ tròn",
+    "Round wooden table",
+    "table",
+    "basic",
+    1.5,
+    120,
+  ),
+  piece("basic-chair", "Ghế gỗ", "Wooden chair", "seat", "basic", 0.5, 60),
+  piece("basic-plant", "Chậu cây", "Potted plant", "decor", "basic", 1.5, 80),
+  piece(
+    "basic-stand",
+    "Quầy bánh gỗ",
+    "Wooden cake stand",
+    "stand",
+    "basic",
+    1.5,
+    300,
+    {
+      w: 2,
+      shelves: 2,
+    },
+  ),
+  piece("pink-table", "Bàn khăn ren", "Lace table", "table", "sweet", 4, 320, {
+    tier: 1,
+  }),
+  piece("pink-chair", "Ghế trái tim", "Heart chair", "seat", "sweet", 3, 180, {
+    tier: 1,
+  }),
+  piece("pink-candy", "Hũ kẹo", "Candy jar", "decor", "sweet", 5, 260, {
+    tier: 1,
+  }),
+  piece(
+    "pink-stand",
+    "Quầy bánh hồng",
+    "Pink cake stand",
+    "stand",
+    "sweet",
+    5,
+    650,
+    {
+      w: 2,
+      shelves: 2,
+      tier: 1,
+    },
+  ),
+  piece("wood-shelf", "Kệ bánh mì", "Bread shelf", "stand", "basic", 4, 600, {
+    w: 2,
+    shelves: 3,
+    tier: 1,
+  }),
+  piece("glass-case", "Tủ kính", "Glass case", "stand", "classic", 7, 900, {
+    w: 2,
+    shelves: 3,
+    tier: 2,
+  }),
+  piece("glass-fridge", "Tủ mát", "Cake fridge", "stand", "classic", 6, 1100, {
+    shelves: 4,
+    tier: 2,
+  }),
+  // Vườn hoa: white wrought iron and flowers (Ấm cúng)
+  piece(
+    "garden-table",
+    "Bàn sắt trắng",
+    "Garden table",
+    "table",
+    "garden",
+    4,
+    300,
+    { tier: 1 },
+  ),
+  piece(
+    "garden-chair",
+    "Ghế sắt hoa",
+    "Garden chair",
+    "seat",
+    "garden",
+    3,
+    170,
+    { tier: 1 },
+  ),
+  piece(
+    "garden-flowers",
+    "Chậu hoa lớn",
+    "Flower pot",
+    "decor",
+    "garden",
+    5,
+    250,
+    { tier: 1 },
+  ),
+  piece("garden-easel", "Bảng menu", "Menu board", "decor", "garden", 4, 220, {
+    tier: 1,
+  }),
+  piece("garden-shelf", "Kệ hoa", "Flower shelf", "decor", "garden", 6, 480, {
+    w: 2,
+    tier: 1,
+  }),
+  // Rừng xanh: tree stumps, ivy and wicker (Dễ thương)
+  piece(
+    "forest-table",
+    "Bàn gốc cây",
+    "Stump table",
+    "table",
+    "forest",
+    6,
+    450,
+    { tier: 2 },
+  ),
+  piece(
+    "forest-stool",
+    "Đôn gốc cây",
+    "Stump stool",
+    "seat",
+    "forest",
+    4,
+    220,
+    { tier: 2 },
+  ),
+  piece("forest-chair", "Ghế mây", "Wicker chair", "seat", "forest", 5, 380, {
+    tier: 2,
+  }),
+  piece("forest-lantern", "Đèn lồng", "Lantern", "decor", "forest", 6, 400, {
+    tier: 2,
+  }),
+  piece(
+    "forest-fern",
+    "Giỏ dương xỉ",
+    "Fern basket",
+    "decor",
+    "forest",
+    5,
+    300,
+    { tier: 2 },
+  ),
+  // Cổ điển: walnut, rose velvet and brass (Nổi tiếng)
+  piece(
+    "classic-clock",
+    "Đồng hồ quả lắc",
+    "Grandfather clock",
+    "decor",
+    "classic",
+    10,
+    1200,
+    { tier: 3 },
+  ),
+  piece("classic-lamp", "Đèn cây", "Floor lamp", "decor", "classic", 8, 900, {
+    tier: 3,
+  }),
+  piece(
+    "classic-armchair",
+    "Ghế bành",
+    "Armchair",
+    "seat",
+    "classic",
+    9,
+    1000,
+    { tier: 3 },
+  ),
+  piece("classic-table", "Bàn trà", "Tea table", "table", "classic", 7, 700, {
+    tier: 3,
+  }),
+  // Tiệm hoa: white wood and bouquets (Ấm cúng)
+  piece(
+    "florist-cart",
+    "Xe hoa cẩm tú",
+    "Hydrangea cart",
+    "decor",
+    "florist",
+    5,
+    280,
+    { tier: 1 },
+  ),
+  piece(
+    "florist-bench",
+    "Tủ hoa",
+    "Flower cabinet",
+    "decor",
+    "florist",
+    7,
+    520,
+    { w: 2, tier: 1 },
+  ),
+  piece(
+    "florist-stand",
+    "Kệ chậu hoa",
+    "Plant stand",
+    "decor",
+    "florist",
+    5,
+    300,
+    { tier: 1 },
+  ),
+  piece("florist-vase", "Bình hoa", "Flower vase", "decor", "florist", 3, 150, {
+    tier: 1,
+  }),
+  piece(
+    "florist-chair",
+    "Ghế gấp xanh",
+    "Folding chair",
+    "seat",
+    "florist",
+    3,
+    160,
+    { tier: 1 },
+  ),
+  // Mây: the Cloud Bakery's own clouds (Dễ thương)
+  piece("cloud-rug", "Thảm mây", "Cloud rug", "decor", "cloud", 4, 260, {
+    tier: 2,
+  }),
+  piece("cloud-stool", "Đôn mây", "Cloud stool", "seat", "cloud", 4, 240, {
+    tier: 2,
+  }),
+  piece("cloud-table", "Bàn mây", "Cloud table", "table", "cloud", 5, 380, {
+    tier: 2,
+  }),
+  piece("cloud-sofa", "Sofa mây", "Cloud sofa", "seat", "cloud", 8, 750, {
+    w: 2,
+    tier: 2,
+  }),
+  piece("cloud-lamp", "Đèn mây", "Cloud lamp", "decor", "cloud", 6, 420, {
+    tier: 2,
+  }),
+  // Bánh mì: toast and melon buns (Nổi tiếng)
+  piece(
+    "bread-cabinet",
+    "Tủ bánh mì",
+    "Toast cabinet",
+    "decor",
+    "bread",
+    9,
+    800,
+    { tier: 3 },
+  ),
+  piece(
+    "bread-rug",
+    "Thảm bánh dứa",
+    "Melon-bun rug",
+    "decor",
+    "bread",
+    7,
+    500,
+    { tier: 3 },
+  ),
+  piece("bread-cart", "Xe bánh", "Bread trolley", "decor", "bread", 8, 650, {
+    tier: 3,
+  }),
+  piece("bread-sofa", "Sofa bánh mì", "Toast sofa", "seat", "bread", 11, 1200, {
+    w: 2,
+    tier: 3,
+  }),
+  piece(
+    "bread-ottoman",
+    "Đôn caro",
+    "Argyle ottoman",
+    "seat",
+    "bread",
+    7,
+    550,
+    { tier: 3 },
+  ),
+  // Walls and floors: one of each shows at a time
+  piece("wall-pink", "Tường sọc hồng", "Pink stripes", "wall", "sweet", 3, 300),
+  piece(
+    "wall-mint",
+    "Tường caro bạc hà",
+    "Mint gingham",
+    "wall",
+    "garden",
+    3,
+    300,
+  ),
+  piece(
+    "wall-butter",
+    "Tường hoa nhí",
+    "Tiny flowers",
+    "wall",
+    "florist",
+    4,
+    400,
+    { tier: 1 },
+  ),
+  piece(
+    "wall-stripe",
+    "Tường sọc bơ",
+    "Butter stripes",
+    "wall",
+    "bread",
+    5,
+    550,
+    { tier: 2 },
+  ),
+  piece("floor-wood", "Sàn gỗ", "Wooden floor", "floor", "basic", 3, 300),
+  piece("floor-pink", "Sàn karo hồng", "Pink checks", "floor", "sweet", 3, 300),
+  piece(
+    "floor-mint",
+    "Sàn karo bạc hà",
+    "Mint checks",
+    "floor",
+    "garden",
+    4,
+    400,
+    { tier: 1 },
+  ),
+  piece("floor-flower", "Sàn hoa", "Flower tiles", "floor", "florist", 4, 400, {
+    tier: 1,
+  }),
+  piece(
+    "floor-argyle",
+    "Sàn quả trám",
+    "Argyle floor",
+    "floor",
+    "bread",
+    5,
+    550,
+    { tier: 2 },
+  ),
+  piece(
+    "floor-lemon",
+    "Sàn karo chanh",
+    "Lemon checks",
+    "floor",
+    "lavender",
+    4,
+    450,
+    { tier: 1 },
+  ),
+  // Kẹo tím: lavender and butter sweets (Dễ thương); the cart and counter are stands
+  piece("lavender-cart", "Xe kẹo", "Sweets cart", "stand", "lavender", 6, 700, {
+    w: 2,
+    shelves: 2,
+    tier: 2,
+  }),
+  piece(
+    "lavender-counter",
+    "Quầy kẹo",
+    "Sweets counter",
+    "stand",
+    "lavender",
+    6,
+    750,
+    { w: 2, shelves: 2, tier: 2 },
+  ),
+  piece(
+    "lavender-table",
+    "Bàn caro vàng",
+    "Gingham table",
+    "table",
+    "lavender",
+    5,
+    360,
+    { tier: 2 },
+  ),
+  piece(
+    "lavender-chair",
+    "Ghế tim vàng",
+    "Heart chair",
+    "seat",
+    "lavender",
+    4,
+    220,
+    { tier: 2 },
+  ),
+  piece(
+    "lavender-gumball",
+    "Máy kẹo cầu",
+    "Gumball machine",
+    "decor",
+    "lavender",
+    6,
+    420,
+    { tier: 2 },
+  ),
+  piece(
+    "lavender-balloons",
+    "Chùm bóng bay",
+    "Balloons",
+    "decor",
+    "lavender",
+    4,
+    200,
+    { tier: 2 },
+  ),
+  // The checkout counter: one per shop, two tiles wide with the cashier's
+  // row behind it; customers pay on the tile in front of its left half
+  piece(
+    "till-basic",
+    "Quầy thu ngân",
+    "Checkout counter",
+    "till",
+    "basic",
+    0,
+    0,
+    {
+      w: 2,
+      h: 2,
+    },
+  ),
+  piece(
+    "till-pink",
+    "Quầy thu ngân hồng",
+    "Pink checkout",
+    "till",
+    "sweet",
+    4,
+    600,
+    {
+      w: 2,
+      h: 2,
+      tier: 1,
+    },
+  ),
+  piece("wall-plain", "Tường kem", "Cream wall", "wall", "basic", 0, 0),
+  piece("floor-plain", "Sàn karo", "Checker floor", "floor", "basic", 0, 0),
+];
+
+/** The storefront floor, in tiles. */
+export const GRID_COLS = 6;
+export const GRID_ROWS = 5;
+/** Tiles that never take furniture: inside the door, and the queue at the till. */
+export const DOOR_TILE = { x: 1, y: 0 };
+
+export interface Placed {
+  id: FurnitureId;
+  x: number;
+  y: number;
+  /** Mirrored left-right (a chair facing the other way). */
+  flip: boolean;
+}
+
+/** What every bakery starts with, and where it stands. */
+export const START_LAYOUT: Placed[] = [
+  { id: "basic-plant", x: 0, y: 0, flip: false },
+  { id: "till-basic", x: 3, y: 0, flip: false },
+  { id: "basic-chair", x: 4, y: 3, flip: false },
+  { id: "basic-table", x: 5, y: 3, flip: false },
+  { id: "basic-chair", x: 5, y: 2, flip: true },
+  { id: "basic-stand", x: 0, y: 4, flip: false },
+  { id: "basic-stand", x: 2, y: 4, flip: false },
+];
+export const START_WALL: FurnitureId = "wall-plain";
+export const START_FLOOR: FurnitureId = "floor-plain";
+
+/** Copies of the same piece count less each time: variety beats spamming one. */
+export const CHARM_REPEAT = [1, 0.5, 0.25];
+/** A theme's own charm grows with this many of its pieces placed (basic has none). */
+export const SET_BONUS = [
+  { pieces: 5, bonus: 0.25 },
+  { pieces: 3, bonus: 0.1 },
+];
+/** Customers × (1 + MAX_BOOST × (1 − e^(−charm / SCALE))): never past +50%. */
+export const CHARM_MAX_BOOST = 0.5;
+export const CHARM_SCALE = 30;
+/** Giản dị → Ấm cúng → Dễ thương → Nổi tiếng: charm needed for each. */
+export const CHARM_TIERS = [0, 7.5, 25, 55];
+/** Each tier makes a VIP visit a little likelier. */
+export const VIP_PER_TIER = 0.03;
+/** Each placed seat makes queuers this much more patient, up to SEAT_MAX. */
+export const SEAT_PATIENCE = 0.04;
+export const SEAT_MAX = 0.2;

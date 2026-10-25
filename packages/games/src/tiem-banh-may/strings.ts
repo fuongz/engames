@@ -128,6 +128,7 @@ export interface Strings {
   discountOn: string;
   closeEarly: string;
   give: string;
+  ringUp: string;
   soldOut: string;
   vipWants: string;
   preorderTag: string;
@@ -169,6 +170,7 @@ export interface Strings {
   vipReport: Record<"happy" | "sad" | "missed", string>;
   preorderReport: (done: number, missed: number) => string;
   bailout: (n: number) => string;
+  charmReport: (charm: number, extra: number) => string;
   nextDay: string;
 
   /** Card summary and leaderboard detail. */
@@ -195,7 +197,32 @@ export interface Strings {
   cancel: string;
   restarted: string;
   pauseTitle: string;
-  aisles: Record<"dry" | "cold" | "flavour" | "special" | "records", string>;
+  aisles: Record<
+    "dry" | "cold" | "flavour" | "special" | "records" | "furniture",
+    string
+  >;
+  decor: {
+    /** Giản dị, Ấm cúng, Dễ thương, Nổi tiếng. */
+    tiers: string[];
+    locked: string;
+    unlockAt: (tier: string) => string;
+    owned: (n: number) => string;
+    charmNow: (charm: number, tier: string) => string;
+    charmNext: (charm: number, tier: string, next: number) => string;
+    title: string;
+    cancel: string;
+    done: string;
+    door: string;
+    till: string;
+    storage: string;
+    storageEmpty: string;
+    walls: string;
+    floors: string;
+    problems: Record<
+      "overlap" | "till" | "stand" | "blocked" | "standFront",
+      string
+    >;
+  };
   basket: (n: number) => string;
   basketTitle: string;
   basketEmpty: string;
@@ -241,6 +268,8 @@ export interface Strings {
     replay: string;
   };
   trayHint: string;
+  onStands: string;
+  tapTill: string;
   tile: Record<
     | "revenue"
     | "tips"
@@ -478,6 +507,7 @@ export const STRINGS: Localized<Strings> = {
     discountOn: "Đang giảm giá",
     closeEarly: "Đóng cửa sớm",
     give: "Giao bánh",
+    ringUp: "Tính tiền",
     soldOut: "Hết mất rồi...",
     vipWants: "Chỉ nhận bánh 3★",
     preorderTag: "Đơn đặt trước",
@@ -524,6 +554,8 @@ export const STRINGS: Localized<Strings> = {
     preorderReport: (d, m) =>
       `Đơn đặt trước: ${d} xong${m ? `, ${m} lỡ hẹn` : ""}`,
     bailout: (n) => `Bác hàng xóm cho mượn ${n} xu. Cố lên!`,
+    charmReport: (charm, extra) =>
+      `Cuốn hút ${charm}: tiệm xinh kéo thêm ${extra} khách.`,
     nextDay: "Sang ngày mới",
 
     summary: (d, c) => `Ngày ${d}, ${viNum(c)} xu`,
@@ -555,6 +587,32 @@ export const STRINGS: Localized<Strings> = {
       flavour: "Hương liệu",
       special: "Đặc sản",
       records: "Đĩa nhạc",
+      furniture: "Nội thất",
+    },
+    decor: {
+      tiers: ["Giản dị", "Ấm cúng", "Dễ thương", "Nổi tiếng"],
+      locked: "Tiệm cần cuốn hút hơn để mở món này",
+      unlockAt: (tier) => `Mở ở hạng ${tier}`,
+      owned: (n) => `Có ${n}`,
+      charmNow: (c, tier) => `Cuốn hút ${c} · ${tier}`,
+      charmNext: (c, tier, next) =>
+        `Cuốn hút ${c} · ${tier} (hạng sau: ${next})`,
+      title: "Trang trí",
+      cancel: "Huỷ",
+      done: "Xong",
+      door: "Cửa",
+      till: "Quầy",
+      storage: "Kho đồ",
+      storageEmpty: "Kho trống. Mua thêm đồ ở Siêu thị nhé!",
+      walls: "Tường",
+      floors: "Sàn",
+      problems: {
+        overlap: "Hai món đang chồng lên nhau",
+        till: "Tiệm cần đúng một quầy thu ngân",
+        stand: "Đặt ít nhất một quầy bánh nhé",
+        blocked: "Chừa lối đi từ cửa tới chỗ khách trả tiền nhé",
+        standFront: "Quầy bánh cần một ô trống bên cạnh cho khách",
+      },
     },
     basket: (n) => (n ? `Giỏ: ${n} món` : "Giỏ trống"),
     basketTitle: "Giỏ hàng",
@@ -607,16 +665,18 @@ export const STRINGS: Localized<Strings> = {
       pickCookie: "Làm Bánh quy bơ, món dễ nhất.",
       kitchen:
         "Làm theo thẻ công thức ở trên: chọn đúng nguyên liệu, đong vừa đủ, trộn đủ vòng, nướng đúng nhiệt.",
-      display: "Bánh đã vào tủ kính. Sáng mai bán cho khách nhé.",
+      display: "Bánh đã lên quầy bánh. Sáng mai khách tự tới chọn nhé.",
       bed: "Khuya rồi, đi ngủ cho có sức bán hàng.",
       open: "Trời sáng rồi! Mở cửa đón khách nào.",
       selling:
-        "Khách gọi món trong bong bóng. Chạm bánh trong tủ để đặt lên khay, rồi bấm Giao bánh.",
+        "Khách tự chọn bánh ở quầy rồi xếp hàng. Mây tính tiền ở quầy thu ngân, chạm vào quầy để tính nhanh hơn!",
       done: "Bạn làm tốt lắm! Từ giờ tiệm là của bạn. Chúc buôn may bán đắt!",
       thanks: "Cảm ơn Mây!",
       replay: "Xem lại hướng dẫn",
     },
-    trayHint: "Chạm bánh trong tủ để đặt lên khay",
+    trayHint: "Khách tự chọn ở quầy rồi mang tới đây",
+    onStands: "Trên quầy",
+    tapTill: "Chạm quầy thu ngân để tính nhanh hơn",
     tile: {
       revenue: "Bán bánh",
       tips: "Tiền tip",
@@ -863,6 +923,7 @@ export const STRINGS: Localized<Strings> = {
     discountOn: "On sale",
     closeEarly: "Close early",
     give: "Hand over",
+    ringUp: "Ring up",
     soldOut: "All gone...",
     vipWants: "3★ cakes only",
     preorderTag: "Pre-order",
@@ -909,6 +970,8 @@ export const STRINGS: Localized<Strings> = {
     preorderReport: (d, m) =>
       `Pre-orders: ${d} done${m ? `, ${m} missed` : ""}`,
     bailout: (n) => `Your neighbour lent you ${n} coins. Hang in there!`,
+    charmReport: (charm, extra) =>
+      `Charm ${charm}: the storefront drew ${extra} more ${extra === 1 ? "customer" : "customers"}.`,
     nextDay: "Next day",
 
     summary: (d, c) => `Day ${d}, ${enNum(c)} coins`,
@@ -940,6 +1003,31 @@ export const STRINGS: Localized<Strings> = {
       flavour: "Flavours",
       special: "Specials",
       records: "Records",
+      furniture: "Furniture",
+    },
+    decor: {
+      tiers: ["Plain", "Cosy", "Cute", "Famous"],
+      locked: "The shop needs more charm for this one",
+      unlockAt: (tier) => `Opens at ${tier}`,
+      owned: (n) => `Own ${n}`,
+      charmNow: (c, tier) => `Charm ${c} · ${tier}`,
+      charmNext: (c, tier, next) => `Charm ${c} · ${tier} (next tier: ${next})`,
+      title: "Decorate",
+      cancel: "Cancel",
+      done: "Done",
+      door: "Door",
+      till: "Till",
+      storage: "Storage",
+      storageEmpty: "Nothing stored. Buy more at the market!",
+      walls: "Walls",
+      floors: "Floors",
+      problems: {
+        overlap: "Two pieces overlap",
+        till: "The shop needs exactly one checkout counter",
+        stand: "Place at least one cake stand",
+        blocked: "Keep a way from the door to where customers pay",
+        standFront: "A cake stand needs a free tile beside it",
+      },
     },
     basket: (n) =>
       n ? `Basket: ${n} item${n > 1 ? "s" : ""}` : "Basket empty",
@@ -993,16 +1081,18 @@ export const STRINGS: Localized<Strings> = {
       pickCookie: "Make butter cookies, the easiest one.",
       kitchen:
         "Follow the recipe card above: pick the right ingredient, measure just enough, stir the right turns, bake at the right heat.",
-      display: "The cookies are in the display case, ready for tomorrow.",
+      display: "The cookies are on the stands, ready for tomorrow.",
       bed: "It's late. Sleep, so you have energy to sell.",
       open: "Good morning! Time to open the doors.",
       selling:
-        "Customers order in their bubble. Tap cakes in the case to put them on the tray, then tap Serve.",
+        "Customers pick from the stands and queue. Mây rings them up at the counter: tap it to hurry!",
       done: "Well done! The bakery is yours now. Good luck!",
       thanks: "Thanks, Mây!",
       replay: "Replay the tutorial",
     },
-    trayHint: "Tap a cake in the case to put it here",
+    trayHint: "Customers pick at the stands and bring it here",
+    onStands: "On the stands",
+    tapTill: "Tap the counter to ring up faster",
     tile: {
       revenue: "Sales",
       tips: "Tips",

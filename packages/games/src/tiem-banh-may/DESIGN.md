@@ -94,8 +94,7 @@ slot 0, as before slots, then `backup:<player>:<slot>`).
 
 Decided with the owner on 2026-10-25 (issues #16–#20). The player furnishes
 the storefront like a cosy café; the furniture gives a new stat, **Charm**
-(*Cuốn hút*, heart icon), and Charm brings more customers.
-
+(_Cuốn hút_, heart icon), and Charm brings more customers.
 - **The room** is redrawn in a three-quarter top-down view, straight on (no
   vanishing point, not isometric): the back wall with the arched door at the
   top, a floor of square tiles below that reads as a grid. Wall and floor are
@@ -104,9 +103,19 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
   counter, and the queue in front of the counter, can never take furniture,
   so customers never walk through it. Furniture is drawn sorted by its bottom
   row, then customers, then the counter.
-- **Decor mode** is a *Trang trí* button on the night screen (never while
-  open): drag from the storage drawer, tap to pick up, flip, put back. The
-  charm counter is live while decorating.
+- **Decor mode** is a _Trang trí_ tile on the night screen (never while
+  open), `decor.ts`: the room with a faint grid, the door and till tiles
+  marked; drag a piece (its tiles turn green where it fits, red where it
+  doesn't), drop it on the storage drawer to put it away, drag one up from the
+  drawer; tap a piece for flip ⇄ and store ▾. The charm chip updates live; a
+  layout that blocks the way or a stand's front shows why and "Xong" stays
+  shut until it is fixed. "Huỷ" or ✕ leave without saving.
+- **The storefront while open** (`storefront.ts`, `shop.ts`): the room stands
+  on the counter (its floor ends at the counter's top), furniture and
+  customers are drawn back to front, customers walk the shortest free path
+  from the door to the till and queue back along it, so nobody stands in a
+  piece. Clouds, rain and dusk tint the room; rain falls past the door's and
+  the window's glass. The day report still uses the old painted shop.
 - **Charm** is the sum of placed pieces' charm. A second copy of the same
   piece counts 50%, a third 25%, more nothing; stored pieces count nothing.
   **Set bonus**: 3 placed pieces of one theme +10%, 5 pieces +25%.
@@ -116,21 +125,35 @@ the storefront like a cosy café; the furniture gives a new stat, **Charm**
   (capped), so seating matters beyond charm.
 - **Tiers** Giản dị → Ấm cúng → Dễ thương → Nổi tiếng: each new tier puts a
   new theme on sale and raises the VIP chance a little.
-- **The Furniture aisle** (*Nội thất*) in the market: tables and chairs, decor,
-  walls and floors, each with a +charm chip; same basket and till. The basic
-  set and unlocked themes are always on sale; 2–3 rarer pieces rotate daily.
+- **The Furniture aisle** (_Nội thất_) in the market: one card per piece with
+  its picture, price sticker, a ♥+charm chip and how many are owned; a theme
+  above the storefront's tier is greyed out with the tier that opens it, and
+  the page ends with the current charm and the next tier. Same basket and
+  till. A bought piece stands in the first free spot that keeps the layout
+  valid (storage only when the floor is full), so it counts at once. Daily
+  rotation of rarer pieces waits until there are more themes; walls and floors
+  go on sale with their art.
 - **Starting set** (free, placed in a default layout; old saves get it too):
   two round tables, four wooden chairs, a potted plant, plain wall and floor.
 - **Themes**: Cơ bản (basic), Hồng ngọt (sweet pink), Vườn hoa (flower
   garden), Rừng xanh (forest), Cổ điển (classic). Every piece of a theme shares
   its colours and motifs; every piece of the game shares one camera and scale.
-- The leaderboard worth includes furniture value.
+- The leaderboard worth includes furniture value (what was paid beyond the
+  free starting set).
+- **Numbers** (`config.ts`, logic in `furniture.ts`): a 6×5 grid, the tile
+  inside the door and the two queue tiles at the till kept clear, a walkable
+  way from the door to the till and a free tile in front of every stand. Tiers
+  at charm 0 / 8 / 25 / 55 (the starting set is 6.9; a plant and a table more
+  reach Ấm cúng), `CHARM_SCALE` 30, +3% VIP chance per tier, +4%
+  patience per seat up to +20%. Basic pieces give 0.5–1.5 charm, Hồng ngọt 3–5,
+  the classic glass case and fridge 6–7. Save v5 adds `decor` (owned, placed,
+  wall, floor); v4 saves get the starting layout.
 
 ### Self-serve stands (2026-10-25)
 
 The player no longer picks pieces for each order: customers serve themselves
 and the player works the till.
-- **Cake stands** (*quầy bánh*) are furniture placed on the grid, bought in
+- **Cake stands** (_quầy bánh_) are furniture placed on the grid, bought in
   the Furniture aisle; each holds 2–3 batches, any recipe the player chooses
   in decor/night prep. They replace the display-case screen. Two basic stands
   come with the starting set; more stands mean more variety and add charm.
@@ -142,6 +165,45 @@ and the player works the till.
   and counting the change.
 - **The critic** looks for a 3★ piece on the stands and leaves without one;
   **pre-orders** are taken from the held-back pieces automatically.
+- **Built (2026-10-25)**: each batch stands on a shelf (stands back to front,
+  left to right, one batch a shelf; three pieces drawn on a wide shelf, two in
+  the fridge; batches past the last shelf still sell). The display holds 12
+  pieces per shelf (18 with the big-display upgrade), so the starting two
+  stands hold 48; a layout needs at least one stand. A customer walks to the
+  stand showing what they want (or any with cakes; none at all and they turn
+  round at the door), looks for a moment, takes their pieces (best stars
+  first; the critic only 3★), then queues along the walkway; at the till
+  their pick is on the tray and the player rings it up ("Tính tiền"), boxes
+  4+ and counts change. Walking off with a pick puts it back. The case under
+  the counter now just shows what is left ("Trên quầy").
+- **The checkout counter in the room** (decided 2026-10-25 after the owner's
+  reference): the till is furniture (`till-basic`, free; `till-pink` on sale),
+  exactly one per shop, two tiles wide with the cashier's row behind it. Mây
+  stands behind it; customers pay on the tile in front of its left half and
+  queue back along the walkway to the door. Checkout runs on its own
+  (`CHECKOUT_SECONDS` 3.2 s, a bubble over the counter with the pieces, the
+  total and a progress bar); tapping the counter takes a third off. 4+
+  pieces still open the box choice; change is given automatically. The big
+  counter, glass case and tray at the bottom are gone: the room fills the
+  screen under the bar, with a strip under it showing what is left on the
+  stands and the discount / close-early buttons. Stands can be reached from
+  any free side. Save v6 lays v5 floors out afresh around the counter (pieces
+  bought before wait in storage).
+- **Walls and floors**: one wall and one floor show at a time; buying one puts
+  it up at once, and the decor drawer has Đồ đạc / Tường / Sàn tabs to switch
+  between those owned. Each variant is a full room picture (`room-<id>`,
+  edited from the plain room so the door, window and grid stay put); the game
+  draws the wall from one picture and the floor from another, split on the
+  baseboard. Walls: cream (free), pink stripes, mint gingham, tiny flowers,
+  butter stripes; floors: cream checks (free), wood, pink, mint, flower
+  tiles, argyle, lemon.
+- **More themes** (from the owner's references, described in words, never
+  copied): Tiệm hoa (florist, Ấm cúng), Mây (clouds, Dễ thương), Kẹo tím
+  (lavender sweets with two stands, Dễ thương), Bánh mì (toast and melon
+  buns, Nổi tiếng).
+- **Themes in the aisle** (nine to a page, by tier): Cơ bản, then Hồng ngọt,
+  Vườn hoa, the bread shelf (Ấm cúng); Rừng xanh, glass case and fridge
+  (Dễ thương); Cổ điển clock, lamp, armchair, tea table (Nổi tiếng).
 
 ## Art
 
@@ -159,9 +221,11 @@ Two looks for the world, plus the interface:
   cream, butter, caramel, toasted brown, terracotta, mint, soft pink. It must
   stay 2D: no 3D-render or "AI CGI" look, no gloss, no volumetric light. No
   text or logos inside images.
-- **Customers** (`customer-*.webp`): unchanged from the first art pass, by the
-  owner's choice: flat fills, thin wobbly brown outline, dot eyes. They sit
-  well next to the new items because the outline colour matches.
+- **Customers** (`customer-*.webp`): redrawn on 2026-10-25 with the decor
+  (the owner's call): tiny chubby mochi animals, flat pastel fills, dot eyes
+  and blush, and the decor's thick broken cocoa line (#765e4c), applied by
+  the outline tool in `art-src/.../tools/outline.py` (gitignored with the
+  sources) so every customer has the same line.
 - **Interface** (`art.ts`): light and hand-made, after a reference settings
   screen the owner picked (2026-10-24): thin dark-brown outlines (`LINE`);
   pill buttons on a darker base of their own colour with a broken "stitched"

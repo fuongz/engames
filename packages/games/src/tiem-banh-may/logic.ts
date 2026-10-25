@@ -3,20 +3,21 @@ import {
   BAILOUT,
   BAILOUT_BELOW,
   BAILOUT_EVERY,
-  BIG_DISPLAY_CAP,
+  BIG_SHELF_CAP,
   BOX_COST,
   BOX_SIZES,
   BOX_TIP,
   CLOSE_AT,
   CUSTOMERS,
   type CustomerId,
+  type FurnitureId,
   DEMAND_BASE,
   DEMAND_PER_RECIPE,
   DEMAND_PER_REP,
   DISCOUNT,
   DISCOUNT_FROM,
   DISCOUNT_RUSH,
-  DISPLAY_CAP,
+  SHELF_CAP,
   EXACT_PAY,
   FAST_STARS,
   FAVOURITE_WEIGHT,
@@ -78,6 +79,7 @@ import {
   type Upgrade,
   type UpgradeId,
   VIP_CHANCE,
+  VIP_PER_TIER,
   VIP_FROM,
   VIP_TIP,
   WEATHER,
@@ -87,6 +89,18 @@ import {
   RECORD_MOOD,
   type RecordId,
 } from "./config";
+import {
+  type Decor,
+  charm,
+  forSale,
+  furniture,
+  receive,
+  shelvesOf,
+  charmBoost,
+  charmTier,
+  furnitureWorth,
+  startDecor,
+} from "./furniture";
 
 // The bakery's rules, pure: the save, the market, grading each baking step, the
 // day's customers and the till. game.ts turns taps into calls here; the server
@@ -133,7 +147,7 @@ export interface Job {
 }
 
 export interface SaveData {
-  v: 4;
+  v: 6;
   /** The business day being prepared (the night before) or sold. */
   day: number;
   /** "open": saved at opening, so a reload replays the day from 9:00. */
@@ -166,6 +180,8 @@ export interface SaveData {
   vipDay: number;
   bailoutDay: number;
   stats: { served: number; bestProfit: number };
+  /** The storefront: furniture owned and where it stands. */
+  decor: Decor;
 }
 
 // ---------------------------------------------------------------- lookups
@@ -216,7 +232,7 @@ const between = (r: number, lo: number, hi: number) =>
 
 export function newGame(seed: number): SaveData {
   return {
-    v: 4,
+    v: 6,
     day: 1,
     phase: "prep",
     coins: START_COINS,
@@ -239,14 +255,15 @@ export function newGame(seed: number): SaveData {
     vipDay: -9,
     bailoutDay: -99,
     stats: { served: 0, bestProfit: 0 },
+    decor: startDecor(),
   };
 }
 
-/** Coins plus what the recipes and equipment cost: the leaderboard number. */
+/** Coins plus what the recipes, equipment and furniture cost: the leaderboard number. */
 export function assets(save: SaveData) {
   const recipes = save.recipes.reduce((s, id) => s + recipe(id).cost, 0);
   const kit = save.upgrades.reduce((s, id) => s + upgrade(id).cost, 0);
-  return save.coins + recipes + kit;
+  return save.coins + recipes + kit + furnitureWorth(save.decor);
 }
 
 // ---------------------------------------------------------------- the clock
@@ -397,7 +414,11 @@ const unitCost = (id: IngredientId) =>
 export type Cart = Partial<Record<IngredientId, number>>;
 
 /** What the basket costs: packs of ingredients, plus any records in it. */
-export const cartCost = (cart: Cart, records: RecordId[] = []) =>
+export const cartCost = (
+  cart: Cart,
+  records: RecordId[] = [],
+  pieces: FurnitureId[] = [],
+) =>
   Object.entries(cart).reduce(
     (s, [id, packs]) => s + ingredient(id as IngredientId).price * (packs ?? 0),
     0,
@@ -405,7 +426,8 @@ export const cartCost = (cart: Cart, records: RecordId[] = []) =>
   records.reduce(
     (s, id) => s + (RECORDS.find((r) => r.id === id)?.price ?? 0),
     0,
-  );
+  ) +
+  pieces.reduce((s, id) => s + furniture(id).price, 0);
 
 export type Refusal =
   | "tired"
@@ -414,7 +436,9 @@ export type Refusal =
   | "empty"
   | "ingredients"
   | "display"
-  | "owned";
+  | "owned"
+  | "locked"
+  | "layout";
 export type Outcome =
   | { ok: true; save: SaveData }
   | { ok: false; why: Refusal };
@@ -428,10 +452,27 @@ export function buyIngredients(
   save: SaveData,
   cart: Cart,
   records: RecordId[] = [],
+  pieces: FurnitureId[] = [],
 ): Outcome {
   const fresh = records.filter((id) => !save.records.includes(id));
-  const cost = cartCost(cart, fresh);
+  const cost = cartCost(cart, fresh, pieces);
   if (cost <= 0) return { ok: false, why: "empty" };
+  // Furniture of a theme the storefront hasn't reached yet stays on the shelf
+  const tier = charmTier(charm(save.decor));
+  if (pieces.some((id) => !forSale(id) || furniture(id).tier > tier))
+    return { ok: false, why: "locked" };
+  // Walls and floors are bought once
+  const once = (id: FurnitureId) => {
+    const k = furniture(id).kind;
+    return k === "wall" || k === "floor";
+  };
+  if (
+    pieces.some(
+      (id, i) =>
+        once(id) && (save.decor.owned.includes(id) || pieces.indexOf(id) !== i),
+    )
+  )
+    return { ok: false, why: "owned" };
   if (cost > save.coins) return { ok: false, why: "coins" };
   const why = workable(save, MARKET_TRIP);
   if (why) return { ok: false, why };
@@ -452,6 +493,7 @@ export function buyIngredients(
       pantry,
       records: [...save.records, ...fresh],
       playing: fresh.length ? fresh[fresh.length - 1] : save.playing,
+      decor: pieces.length ? receive(save.decor, pieces) : save.decor,
     },
   };
 }
@@ -527,8 +569,9 @@ export function batchMinutes(save: SaveData, r: Recipe) {
 
 export const stockCount = (stock: StockItem[]) =>
   stock.reduce((s, x) => s + x.count, 0);
+/** Pieces the stands can show: their shelves, each holding a batch. */
 export const displayCap = (save: SaveData) =>
-  has(save, "display") ? BIG_DISPLAY_CAP : DISPLAY_CAP;
+  shelvesOf(save.decor) * (has(save, "display") ? BIG_SHELF_CAP : SHELF_CAP);
 export const mastered = (save: SaveData, id: RecipeId) =>
   (save.mastery[id] ?? 0) >= MASTERY_BAKES;
 
@@ -782,6 +825,9 @@ export interface DayInfo {
   customers: number;
   trend: RecipeId | null;
   vip: boolean;
+  /** The storefront's charm, and the customers it brings on top of the rest. */
+  charm: number;
+  charmCustomers: number;
 }
 
 export function dayInfo(save: SaveData): DayInfo {
@@ -793,18 +839,25 @@ export function dayInfo(save: SaveData): DayInfo {
     save.recipes.length >= 2 && trendRoll < 0.6
       ? save.recipes[Math.floor((trendRoll / 0.6) * save.recipes.length)]
       : null;
+  const c = charm(save.decor);
   const vip =
-    save.day >= VIP_FROM && save.vipDay !== save.day - 1 && r() < VIP_CHANCE;
+    save.day >= VIP_FROM &&
+    save.vipDay !== save.day - 1 &&
+    r() < VIP_CHANCE + charmTier(c) * VIP_PER_TIER;
   const base =
     DEMAND_BASE +
     save.rep * DEMAND_PER_REP +
     save.recipes.length * DEMAND_PER_RECIPE;
+  const plain = base * WEEKDAY_DEMAND[weekday] * w.demand;
+  const customers = Math.round(plain * charmBoost(c));
   return {
     weekday,
     weather: w.id,
-    customers: Math.round(base * WEEKDAY_DEMAND[weekday] * w.demand),
+    customers,
     trend,
     vip,
+    charm: c,
+    charmCustomers: customers - Math.round(plain),
   };
 }
 
@@ -1119,6 +1172,9 @@ export interface DayReport {
   tomorrow: Preorder[];
   /** The day's weather, for the closing scene. */
   weather: Weather;
+  /** The storefront's charm, and how many customers it drew. */
+  charm: number;
+  charmCustomers: number;
 }
 
 /** Can't bake anything and can't afford a fresh start: the neighbour helps out. */
@@ -1212,6 +1268,8 @@ export function closeDay(
       bailout,
       tomorrow: next.preorders,
       weather: info.weather,
+      charm: info.charm,
+      charmCustomers: info.charmCustomers,
     },
     next,
   };
