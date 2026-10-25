@@ -158,7 +158,7 @@ export function drawSettings(
     return;
   }
 
-  const m = { x: 40, y: 250, w: W - 80, h: 470 };
+  const m = { x: 40, y: 220, w: W - 80, h: 560 };
   const paper = sheet(app, m, tr.settings);
   close(app, m, back);
   const audio = app.rt.game.audio;
@@ -198,8 +198,19 @@ export function drawSettings(
   });
   btn(
     app,
-    "restart",
+    "tour-replay",
     row(3),
+    tr.tour.replay,
+    () => {
+      app.setTour(0);
+      app.go({ kind: "hub" });
+    },
+    { fill: "#fff0bf", size: 21 },
+  );
+  btn(
+    app,
+    "restart",
+    row(4),
     tr.restart,
     () => app.go({ kind: "settings", confirm: 1 }),
     { fill: "#f2c4bc", size: 22 },

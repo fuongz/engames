@@ -83,6 +83,9 @@ import {
   WEATHER,
   WEEKDAY_DEMAND,
   type Weather,
+  RECORDS,
+  RECORD_MOOD,
+  type RecordId,
 } from "./config";
 
 // The bakery's rules, pure: the save, the market, grading each baking step, the
@@ -130,7 +133,7 @@ export interface Job {
 }
 
 export interface SaveData {
-  v: 3;
+  v: 4;
   /** The business day being prepared (the night before) or sold. */
   day: number;
   /** "open": saved at opening, so a reload replays the day from 9:00. */
@@ -148,6 +151,9 @@ export interface SaveData {
   /** Batches in the oven, proofing or cooling while the baker does something else. */
   jobs: Job[];
   recipes: RecipeId[];
+  /** Records for the music box, and the one on it (null: the box is quiet). */
+  records: RecordId[];
+  playing: RecordId | null;
   /** Successful hand-made batches per recipe. */
   mastery: Partial<Record<RecipeId, number>>;
   upgrades: UpgradeId[];
@@ -210,7 +216,7 @@ const between = (r: number, lo: number, hi: number) =>
 
 export function newGame(seed: number): SaveData {
   return {
-    v: 3,
+    v: 4,
     day: 1,
     phase: "prep",
     coins: START_COINS,
@@ -221,6 +227,8 @@ export function newGame(seed: number): SaveData {
     caffeine: 0,
     jobs: [],
     recipes: RECIPES.filter((r) => r.cost === 0).map((r) => r.id),
+    records: ["sheep"],
+    playing: "sheep",
     mastery: {},
     upgrades: [],
     pantry: {},
@@ -388,9 +396,14 @@ const unitCost = (id: IngredientId) =>
 
 export type Cart = Partial<Record<IngredientId, number>>;
 
-export const cartCost = (cart: Cart) =>
+/** What the basket costs: packs of ingredients, plus any records in it. */
+export const cartCost = (cart: Cart, records: RecordId[] = []) =>
   Object.entries(cart).reduce(
     (s, [id, packs]) => s + ingredient(id as IngredientId).price * (packs ?? 0),
+    0,
+  ) +
+  records.reduce(
+    (s, id) => s + (RECORDS.find((r) => r.id === id)?.price ?? 0),
     0,
   );
 
@@ -407,8 +420,17 @@ export type Outcome =
   | { ok: false; why: Refusal };
 
 /** One trip to the market: pay for the cart and spend MARKET_TRIP minutes. */
-export function buyIngredients(save: SaveData, cart: Cart): Outcome {
-  const cost = cartCost(cart);
+/**
+ * Pay for the basket at the supermarket's till: ingredients go to the pantry,
+ * records to the music box (the last one goes straight on).
+ */
+export function buyIngredients(
+  save: SaveData,
+  cart: Cart,
+  records: RecordId[] = [],
+): Outcome {
+  const fresh = records.filter((id) => !save.records.includes(id));
+  const cost = cartCost(cart, fresh);
   if (cost <= 0) return { ok: false, why: "empty" };
   if (cost > save.coins) return { ok: false, why: "coins" };
   const why = workable(save, MARKET_TRIP);
@@ -424,7 +446,13 @@ export function buyIngredients(save: SaveData, cart: Cart): Outcome {
   }
   return {
     ok: true,
-    save: { ...spend(save, MARKET_TRIP), coins: save.coins - cost, pantry },
+    save: {
+      ...spend(save, MARKET_TRIP),
+      coins: save.coins - cost,
+      pantry,
+      records: [...save.records, ...fresh],
+      playing: fresh.length ? fresh[fresh.length - 1] : save.playing,
+    },
   };
 }
 
@@ -1144,7 +1172,11 @@ export function closeDay(
     caffeine: 0,
     jobs: [],
     energy: clamp(save.energy - SELL_ENERGY, 0, 100),
-    mood: clamp(save.mood + moodDelta, 0, 100),
+    mood: clamp(
+      save.mood + moodDelta + (save.playing ? RECORD_MOOD : 0),
+      0,
+      100,
+    ),
     pantry,
     stock: [],
     dayCost: 0,
@@ -1206,4 +1238,32 @@ function preordersFor(save: SaveData): Preorder[] {
       at: 11 * 60 + Math.floor(r() * 8) * 30,
     },
   ];
+}
+
+// ---------------------------------------------------------------- records
+
+/** Buy a record at the market. */
+export function buyRecord(
+  save: SaveData,
+  id: RecordId,
+): { ok: true; save: SaveData } | { ok: false; why: "owned" | "coins" } {
+  const r = RECORDS.find((x) => x.id === id);
+  if (!r || save.records.includes(id)) return { ok: false, why: "owned" };
+  if (save.coins < r.price) return { ok: false, why: "coins" };
+  return {
+    ok: true,
+    save: {
+      ...save,
+      coins: save.coins - r.price,
+      records: [...save.records, id],
+      // A new record goes straight on
+      playing: id,
+    },
+  };
+}
+
+/** Put an owned record on the box, or take it off (null). */
+export function playRecord(save: SaveData, id: RecordId | null): SaveData {
+  if (id !== null && !save.records.includes(id)) return save;
+  return { ...save, playing: id };
 }

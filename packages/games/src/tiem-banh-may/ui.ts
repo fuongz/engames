@@ -41,6 +41,13 @@ export class Ui {
     this.regions.push({ rect, tap });
   }
 
+  /** Where the region registered under `key` this frame is (the guided tour points at it). */
+  find(key: string): Rect | undefined {
+    for (let i = this.regions.length - 1; i >= 0; i--)
+      if (this.regions[i].key === key) return this.regions[i].rect;
+    return undefined;
+  }
+
   isPressed(key: string) {
     return this.pressed === key;
   }

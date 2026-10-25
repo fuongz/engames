@@ -18,6 +18,7 @@ import {
   type RecipeId,
   START_COINS,
   VIP_TIP,
+  RECORD_MOOD,
 } from "./config";
 import {
   type Cart,
@@ -68,6 +69,8 @@ import {
   settle,
   startBatch,
   stockCount,
+  buyRecord,
+  playRecord,
 } from "./logic";
 import { parseSave, plausible } from "./save";
 
@@ -259,7 +262,8 @@ describe("sleep, energy and mood", () => {
     const { next } = closeDay(s, { ...emptyLedger(), walked: 20 }, []);
     expect(next.rep).toBe(s.rep + 2);
     expect(next.energy).toBe(50 - SELL_ENERGY);
-    expect(next.mood).toBe(100 + 4 - 8);
+    // (+ a little for the record playing on the music box)
+    expect(next.mood).toBe(100 + 4 - 8 + RECORD_MOOD);
     expect(next.night).toBe(0);
     expect(finishBatch(s, "cookie", { fail: "burnt" }, 10, true).mood).toBe(96);
   });
@@ -551,7 +555,8 @@ describe("saves", () => {
     void caffeine;
     const up = parseSave(v1);
     expect(up).toMatchObject({
-      v: 3,
+      v: 4,
+      records: ["sheep"],
       night: WAKE + 40,
       energy: 80,
       mood: 60,
@@ -561,8 +566,8 @@ describe("saves", () => {
     // and a version-2 save just gains an empty job list
     const { jobs, ...v2 } = { ...s, v: 2 } as Record<string, unknown>;
     void jobs;
-    expect(parseSave(v2)).toMatchObject({ v: 3, jobs: [] });
-    expect(parseSave({ ...s, recipes: ["cookie", "macaron"] })).toBeNull();
+    expect(parseSave(v2)).toMatchObject({ v: 4, jobs: [], playing: "sheep" });
+    expect(parseSave({ ...s, recipes: ["cookie", "baguette"] })).toBeNull();
     expect(parseSave({ ...s, coins: 1.5 })).toBeNull();
     expect(plausible(s, { ...s, day: 2, coins: s.coins + 500 })).toBe(true);
     expect(plausible(s, { ...s, coins: 999_999 })).toBe(false);
@@ -682,5 +687,42 @@ describe("balance", () => {
     expect(firstBuy, days).toBeLessThanOrEqual(7);
     expect(s.recipes.length, days).toBeGreaterThanOrEqual(5);
     expect(assets(s), days).toBeGreaterThan(3000);
+  });
+});
+
+describe("records", () => {
+  it("buys a record once, plays it, and refuses one it cannot pay for", () => {
+    const s = { ...newGame(1), coins: 500 };
+    const r = buyRecord(s, "cuddle");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.save).toMatchObject({ coins: 350, playing: "cuddle" });
+    expect(r.save.records).toEqual(["sheep", "cuddle"]);
+    expect(buyRecord(r.save, "cuddle")).toEqual({ ok: false, why: "owned" });
+    expect(buyRecord({ ...r.save, coins: 10 }, "golden")).toEqual({
+      ok: false,
+      why: "coins",
+    });
+    // Only an owned record goes on; null turns the box off
+    expect(playRecord(r.save, "golden").playing).toBe("cuddle");
+    expect(playRecord(r.save, null).playing).toBeNull();
+    expect(parseSave({ ...r.save, playing: "golden" })).toBeNull();
+    expect(parseSave(r.save)).not.toBeNull();
+  });
+
+  it("pays for records with the rest of the basket at the till", () => {
+    const s = { ...newGame(1), coins: 500 };
+    const r = buyIngredients(s, { flour: 1 }, ["cuddle", "golden"]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.save.coins).toBe(500 - 12 - 150 - 300);
+    expect(r.save.records).toEqual(["sheep", "cuddle", "golden"]);
+    expect(r.save.playing).toBe("golden");
+    // Records alone are a basket too; too dear is refused
+    expect(buyIngredients(s, {}, ["cuddle"]).ok).toBe(true);
+    expect(buyIngredients({ ...s, coins: 100 }, {}, ["golden"])).toMatchObject({
+      ok: false,
+      why: "coins",
+    });
   });
 });

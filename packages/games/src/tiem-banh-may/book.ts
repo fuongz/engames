@@ -20,7 +20,6 @@ import {
   framed,
   pageArrow,
   panel,
-  paperHeading,
   sprite,
   stars,
   text,
@@ -52,13 +51,22 @@ import {
 } from "./logic";
 import type { IngredientId, Step } from "./config";
 import { startBake } from "./kitchen";
-import { dialogButtons, K } from "./kit";
+import { dialogButtons, K, tabs } from "./kit";
 
-// The recipe book: a dialog menu with pages (recipes, then upgrades) turned
-// with the side arrows; cream cards are for sale, mint sunburst ones are owned.
+/** Recipe cards on one page of the book. */
+const PER_PAGE = 6;
+
+// The recipe book: a dialog menu with two tabs (recipes, upgrades); recipes
+// run over several pages turned with the side arrows. Cream cards are for
+// sale, mint sunburst ones are owned.
 // Also a recipe's card, and the "what shall I bake" sheet.
 
-export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
+export function drawBook(
+  app: App,
+  tab: 0 | 1,
+  detail: RecipeId | null,
+  page: number,
+) {
   const { ctx, save } = app;
   const tr = app.tr();
   const locale = app.rt.locale();
@@ -68,42 +76,61 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
   const y0 = hud(app, formatClock(clockAt(save.night)));
   const board = { x: 14, y: y0 + 58, w: W - 28, h: H - 28 - y0 - 58 };
   const paper = dialog(ctx, board, tr.book);
-  const top = paperHeading(
-    ctx,
-    paper,
-    tab === 0 ? tr.recipesTab : tr.upgradesTab,
-    `${tab + 1}/2`,
-  );
   close(app, board, () => app.go({ kind: "hub" }));
-  // Page arrows on the board's edges
-  ([-1, 1] as const).forEach((dir) => {
-    const to = tab + dir;
-    const cx = dir < 0 ? board.x + 4 : board.x + board.w - 4;
-    const cy = paper.y + paper.h / 2;
-    const key = `page${dir}`;
-    pageArrow(ctx, cx, cy, dir, app.ui.isPressed(key), to < 0 || to > 1);
-    if (to < 0 || to > 1) return;
-    app.ui.add({
-      rect: { x: cx - 30, y: cy - 44, w: 60, h: 88 },
-      key,
-      tap: () => {
-        app.sfx.tap();
-        app.go({ kind: "book", tab: to as 0 | 1, detail: null });
+  // Recipes or upgrades, as tabs
+  tabs(
+    app,
+    { x: paper.x + 16, y: paper.y + 4, w: paper.w - 32, h: 38 },
+    [tr.recipesTab, tr.upgradesTab],
+    tab,
+    (i) => app.go({ kind: "book", tab: i as 0 | 1, detail: null }),
+  );
+  // Recipes six to a page, cheapest first; the side arrows turn the pages
+  const sorted = [...RECIPES].sort((a, b) => a.cost - b.cost);
+  const pages = tab === 0 ? Math.ceil(sorted.length / PER_PAGE) : 1;
+  const at = Math.max(0, Math.min(pages - 1, page));
+  const top = paper.y + 56;
+  if (pages > 1) {
+    text(
+      ctx,
+      `${at + 1}/${pages}`,
+      paper.x + paper.w / 2,
+      paper.y + paper.h - 14,
+      {
+        size: 14,
+        fill: C.muted,
       },
+    );
+    ([-1, 1] as const).forEach((dir) => {
+      const to = at + dir;
+      const cx = dir < 0 ? board.x + 4 : board.x + board.w - 4;
+      const cy = paper.y + paper.h / 2;
+      const key = `page${dir}`;
+      const off = to < 0 || to >= pages;
+      pageArrow(ctx, cx, cy, dir, app.ui.isPressed(key), off);
+      if (off) return;
+      app.ui.add({
+        rect: { x: cx - 30, y: cy - 44, w: 60, h: 88 },
+        key,
+        tap: () => {
+          app.sfx.tap();
+          app.go({ kind: "book", tab, detail: null, page: to });
+        },
+      });
     });
-  });
+  }
   const inner = {
     x: paper.x + 24,
     y: top,
     w: paper.w - 48,
-    h: paper.y + paper.h - 40 - top,
+    h: paper.y + paper.h - 34 - top,
   };
   if (tab === 0) {
     const cols = 2;
     const gap = 12;
     const cw = (inner.w - gap * (cols - 1)) / cols;
     const ch = (inner.h - gap * 2) / 3;
-    RECIPES.forEach((r, i) => {
+    sorted.slice(at * PER_PAGE, at * PER_PAGE + PER_PAGE).forEach((r, i) => {
       const rect = {
         x: inner.x + (i % cols) * (cw + gap),
         y: inner.y + Math.floor(i / cols) * (ch + gap),
@@ -159,7 +186,7 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
         key,
         tap: () => {
           app.sfx.tap();
-          app.go({ kind: "book", tab, detail: r.id });
+          app.go({ kind: "book", tab, detail: r.id, page: at });
         },
       });
     });
@@ -238,15 +265,15 @@ export function drawBook(app: App, tab: 0 | 1, detail: RecipeId | null) {
       }
     });
   }
-  if (detail) drawRecipeCard(app, detail, tab);
+  if (detail) drawRecipeCard(app, detail, tab, at);
 }
 
-function drawRecipeCard(app: App, id: RecipeId, tab: 0 | 1) {
+function drawRecipeCard(app: App, id: RecipeId, tab: 0 | 1, page: number) {
   const { ctx, save } = app;
   const tr = app.tr();
   const locale = app.rt.locale();
   const r = recipe(id);
-  const back = () => app.go({ kind: "book", tab, detail: null });
+  const back = () => app.go({ kind: "book", tab, detail: null, page });
   shade(app, back);
   // Pictures first, words last: the name is the title, everything else is
   // icons with a number. Blocks: the dish and its numbers, the ingredients,
@@ -257,8 +284,8 @@ function drawRecipeCard(app: App, id: RecipeId, tab: 0 | 1) {
   const stepCols = 5;
   const stepRows = Math.ceil(r.steps.length / stepCols);
   const heroH = 150;
-  const ingH = 34 + ingRows * 74;
-  const stepH = 34 + stepRows * 86;
+  const ingH = 34 + ingRows * 84;
+  const stepH = 34 + stepRows * 98;
   const h = 44 + heroH + 10 + ingH + 10 + stepH + 24 + K.button + K.inset + 24;
   const m = { x: 20, y: Math.max(56, (H - h) / 2), w: W - 40, h };
   const paper = sheet(app, m, r.name[locale]);
@@ -286,37 +313,44 @@ function drawRecipeCard(app: App, id: RecipeId, tab: 0 | 1) {
     1,
     Math.round(piecePrice({ recipe: id, stars: 3, cost: 0 }, false, false)),
   );
+  // Each fact: an icon and a short phrase, so the picture never stands alone
   const facts: {
     icon: string;
     value: string;
     draw?: (cx: number, cy: number) => void;
   }[] = [
-    { icon: "timer", value: `${batchMinutes(save, r)}'` },
-    { icon: "pieces", value: `×${r.yield}` },
-    { icon: "tag", value: `${price}` },
+    { icon: "timer", value: tr.fact.time(batchMinutes(save, r)) },
+    { icon: "pieces", value: tr.fact.pieces(r.yield) },
+    { icon: "tag", value: tr.fact.price(price) },
     {
       icon: "",
-      value: `${price * r.yield}`,
-      draw: (cx, cy) => coin(ctx, cx, cy, 13),
+      value: tr.fact.batch(price * r.yield),
+      draw: (cx, cy) => coin(ctx, cx, cy, 12),
     },
   ];
-  const fx = hero.x + 190;
-  const fw = (hero.x + hero.w - 12 - fx) / 2;
+  const fx = hero.x + 186;
+  const fw = hero.x + hero.w - 12 - fx;
   facts.forEach((f, i) => {
-    const cx = fx + (i % 2) * fw;
-    const cy = hero.y + 34 + Math.floor(i / 2) * 44;
-    if (f.draw) f.draw(cx + 14, cy);
-    else icon(app, f.icon, cx + 14, cy, 30, () => undefined);
-    text(ctx, f.value, cx + 36, cy + 1, { size: 21, align: "left" });
+    const cy = hero.y + 22 + i * 26;
+    if (f.draw) f.draw(fx + 12, cy);
+    else icon(app, f.icon, fx + 12, cy, 24, () => undefined);
+    text(ctx, f.value, fx + 32, cy + 1, {
+      size: 17,
+      align: "left",
+      maxWidth: fw - 34,
+    });
   });
   // Mastery: a chef's hat and one dot per batch towards it
   const owned = save.recipes.includes(id);
   const done = Math.min(MASTERY_BAKES, save.mastery[id] ?? 0);
-  const my = hero.y + hero.h - 28;
-  icon(app, "chef", fx + 14, my, 30, () => undefined);
+  const my = hero.y + hero.h - 24;
+  icon(app, "chef", fx + 12, my, 26, () => undefined);
+  ctx.font = `700 15px ${FONT}`;
+  const mw = ctx.measureText(tr.fact.mastery).width;
+  text(ctx, tr.fact.mastery, fx + 32, my + 1, { size: 15, align: "left" });
   for (let i = 0; i < MASTERY_BAKES; i++) {
     ctx.beginPath();
-    ctx.arc(fx + 44 + i * 22, my, 7, 0, Math.PI * 2);
+    ctx.arc(fx + 32 + mw + 14 + i * 20, my, 7, 0, Math.PI * 2);
     ctx.fillStyle = i < done ? C.good : "#efe3d3";
     ctx.fill();
     ctx.lineWidth = 2;
@@ -332,39 +366,36 @@ function drawRecipeCard(app: App, id: RecipeId, tab: 0 | 1) {
   const iw = w / ingCols;
   list.forEach(([ing, amount], i) => {
     const cx = x + iw * ((i % ingCols) + 0.5);
-    const cy = y + Math.floor(i / ingCols) * 74;
+    const cy = y + Math.floor(i / ingCols) * 84;
     const def = ingredient(ing);
     const enough = pantryQty(save, ing) >= amount;
     panel(
       ctx,
-      { x: cx - iw / 2 + 4, y: cy, w: iw - 8, h: 66 },
-      {
-        fill: enough ? "#eef8e8" : "#fdeeea",
-        radius: 14,
-        line: 2,
-      },
+      { x: cx - iw / 2 + 4, y: cy, w: iw - 8, h: 76 },
+      { fill: enough ? "#eef8e8" : "#fdeeea", radius: 14, line: 2 },
     );
-    sprite(ctx, app.sprites.get(def.sprite), cx, cy + 24, 40, 36);
+    sprite(ctx, app.sprites.get(def.sprite), cx, cy + 22, 38, 32);
+    text(ctx, def.name[locale], cx, cy + 48, { size: 12, maxWidth: iw - 14 });
     text(
       ctx,
       tr.amount(amount, def.unit, def.measure === "spoon"),
       cx,
-      cy + 54,
+      cy + 64,
       {
-        size: 13,
+        size: 12,
         fill: enough ? C.good : C.bad,
         maxWidth: iw - 14,
       },
     );
   });
-  y += ingRows * 74 + 10;
+  y += ingRows * 84 + 10;
 
   // ---- the steps, as pictures
   y = blockTitle(app, x, y, w, tr.stepsTitle);
   const sw = w / stepCols;
   r.steps.forEach((step, i) => {
     const cx = x + sw * ((i % stepCols) + 0.5);
-    const top = y + Math.floor(i / stepCols) * 86;
+    const top = y + Math.floor(i / stepCols) * 98;
     stepTile(app, step, i, cx, top, sw - 8);
   });
 
@@ -391,7 +422,7 @@ function drawRecipeCard(app: App, id: RecipeId, tab: 0 | 1) {
         if (!res.ok) return;
         app.sfx.coin();
         app.commit(res.save, { now: true });
-        app.go({ kind: "learned", recipe: id, tab, at: app.time });
+        app.go({ kind: "learned", recipe: id, tab, page, at: app.time });
       },
       {
         size: 26,
@@ -435,46 +466,53 @@ function stepTile(
 ) {
   const { ctx } = app;
   const tr = app.tr();
-  const tile = { x: cx - w / 2, y: top, w, h: 78 };
+  const tile = { x: cx - w / 2, y: top, w, h: 90 };
   panel(ctx, tile, { fill: C.white, radius: 14, line: 2 });
+  // A picture, what to do in two or three words, and its one figure
+  const locale = app.rt.locale();
   let art = "";
-  let caption = "";
+  let label = "";
+  let figure = "";
   switch (step.kind) {
     case "add": {
       const d = ingredient(step.ing);
       art = d.sprite;
-      caption = tr.amount(step.amount, d.unit, d.measure === "spoon");
+      label = d.name[locale];
+      figure = tr.amount(step.amount, d.unit, d.measure === "spoon");
       break;
     }
     case "mix":
       art = "tool-whisk";
-      caption = `×${step.turns}`;
+      label = tr.stepTag.mix[step.mode];
+      figure = tr.turns(step.turns);
       break;
     case "stove":
       art = step.mode === "fry" ? "raw-donut" : "tool-saucepan";
+      label = tr.stepTag.stove[step.mode];
       break;
     case "wait":
       art = step.mode === "proof" ? "dough-proofed" : "sponge-cooling";
-      caption = `${step.minutes}'`;
+      label = tr.stepTag.wait[step.mode];
+      figure = tr.fact.time(step.minutes);
       break;
     case "oven":
       art = "tool-oven";
-      caption = `${step.temp}° ${step.minutes}'`;
+      label = tr.stepTag.oven;
+      figure = `${step.temp}°, ${tr.fact.time(step.minutes)}`;
       break;
     case "pipe":
       art = "tool-piping-bag";
+      label = tr.stepTag.pipe[step.mode];
       break;
   }
-  sprite(
-    ctx,
-    app.sprites.get(art),
-    cx,
-    tile.y + (caption ? 32 : 40),
-    w - 22,
-    caption ? 42 : 52,
-  );
-  if (caption)
-    text(ctx, caption, cx, tile.y + 64, { size: 12, maxWidth: w - 8 });
+  sprite(ctx, app.sprites.get(art), cx, tile.y + 30, w - 26, 40);
+  text(ctx, label, cx, tile.y + 62, { size: 12, maxWidth: w - 8 });
+  if (figure)
+    text(ctx, figure, cx, tile.y + 78, {
+      size: 11,
+      fill: C.muted,
+      maxWidth: w - 8,
+    });
   // The step's number, top left
   ctx.beginPath();
   ctx.arc(tile.x + 11, tile.y + 11, 10, 0, Math.PI * 2);
@@ -487,29 +525,76 @@ function stepTile(
 }
 
 /** "What shall I bake?" over the kitchen: every owned recipe, and why one can't be made now. */
-export function drawPicker(app: App) {
+export function drawPicker(app: App, page: number) {
   const { ctx, save } = app;
   const tr = app.tr();
   const locale = app.rt.locale();
   shade(app, () => app.go({ kind: "hub" }));
-  const owned = RECIPES.filter((r) => save.recipes.includes(r.id));
+  const all = RECIPES.filter((r) => save.recipes.includes(r.id));
+  // Five to a page; the side arrows turn pages when there are more
+  const perPage = 5;
+  const pages = Math.max(1, Math.ceil(all.length / perPage));
+  const at = Math.max(0, Math.min(pages - 1, page));
+  const owned = all.slice(at * perPage, at * perPage + perPage);
   const rowH = 100;
-  const h = 96 + owned.length * (rowH + 8) + 90;
+  const gap = 10;
+  const rows = pages > 1 ? perPage : owned.length;
+  // Title band, the rows, the page count, then the button row with its inset
+  const h =
+    44 +
+    14 +
+    rows * (rowH + gap) +
+    (pages > 1 ? 24 : 0) +
+    K.button +
+    K.inset +
+    24 +
+    10;
   const m = {
     x: 16,
     y: Math.max(app.rt.stage.view.y + 70, (H - h) / 2),
     w: W - 32,
     h,
   };
-  sheet(app, m, tr.bake);
+  const paper = sheet(app, m, tr.bake);
+  if (pages > 1) {
+    text(
+      ctx,
+      `${at + 1}/${pages}`,
+      W / 2,
+      paper.y + 14 + rows * (rowH + gap) + 6,
+      {
+        size: 14,
+        fill: C.muted,
+      },
+    );
+    ([-1, 1] as const).forEach((dir) => {
+      const to = at + dir;
+      const cx = dir < 0 ? m.x + 4 : m.x + m.w - 4;
+      const cy = m.y + m.h / 2;
+      const key = `pick-page${dir}`;
+      const off = to < 0 || to >= pages;
+      pageArrow(ctx, cx, cy, dir, app.ui.isPressed(key), off);
+      if (off) return;
+      app.ui.add({
+        rect: { x: cx - 30, y: cy - 44, w: 60, h: 88 },
+        key,
+        tap: () => {
+          app.sfx.tap();
+          app.go({ kind: "pick", page: to });
+        },
+      });
+    });
+  }
   owned.forEach((r, i) => {
+    // Inside the page's stitched border
     const row = {
-      x: m.x + 14,
-      y: m.y + 76 + i * (rowH + 8),
-      w: m.w - 28,
+      x: paper.x + 4,
+      y: paper.y + 10 + i * (rowH + gap),
+      w: paper.w - 8,
       h: rowH,
     };
     framed(ctx, row, C.card, 20);
+    const bw0 = mastered(save, r.id) ? 100 : 120;
     sprite(
       ctx,
       app.sprites.get(r.sprite),
@@ -521,7 +606,7 @@ export function drawPicker(app: App) {
     text(ctx, r.name[locale], row.x + 100, row.y + 26, {
       size: 19,
       align: "left",
-      maxWidth: 190,
+      maxWidth: row.w - 100 - bw0 - K.inset - 10,
     });
     const why = canBake(save, r.id);
     let line = `${tr.makes(r.yield)}, ${tr.minutes(batchMinutes(save, r))}`;
@@ -545,7 +630,7 @@ export function drawPicker(app: App) {
       weight: 700,
       align: "left",
       fill: color,
-      maxWidth: 200,
+      maxWidth: row.w - 100 - bw0 - K.inset - 10,
     });
     stars(
       ctx,
@@ -556,11 +641,12 @@ export function drawPicker(app: App) {
     );
     const fast = mastered(save, r.id);
     const bw = fast ? 100 : 120;
+    // The button sits a full inset inside the row's frame
     const make = {
-      x: row.x + row.w - bw - 12,
-      y: row.y + (fast ? 8 : 22),
+      x: row.x + row.w - bw - K.inset,
+      y: row.y + (fast ? 10 : (rowH - 6 - 56) / 2),
       w: bw,
-      h: fast ? 46 : 56,
+      h: fast ? 44 : 56,
     };
     btn(app, `make-${r.id}`, make, tr.make, () => startBake(app, r.id), {
       fill: C.green,
@@ -569,7 +655,7 @@ export function drawPicker(app: App) {
       onDisabled: () => app.toast(line, row.x + row.w / 2, row.y, C.bad),
     });
     if (fast) {
-      const quick = { x: make.x - 8, y: row.y + 54, w: bw + 8, h: 42 };
+      const quick = { x: make.x, y: row.y + 52, w: bw, h: 38 };
       button(ctx, quick, tr.makeFast.replace(`${FAST_STARS}★`, "").trim(), {
         size: 14,
         pressed: app.ui.isPressed(`fast-${r.id}`),

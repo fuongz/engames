@@ -1,7 +1,14 @@
 import type { Rect } from "@web-games/core";
 import { type App, H, W, btn, close, viewRect } from "./app";
 import { C, cover, nine, panel, rr, sprite, text } from "./art";
-import { INGREDIENTS, type IngredientId, MARKET_TRIP } from "./config";
+import {
+  INGREDIENTS,
+  type IngredientId,
+  MARKET_TRIP,
+  RECORDS,
+  type RecordId,
+} from "./config";
+import { playable } from "./musicbox";
 import { hud } from "./hud";
 import { K, pillWidth, priceSticker, tabs } from "./kit";
 import {
@@ -15,18 +22,37 @@ import {
 } from "./logic";
 
 // The market is a little grocery with one page per aisle (dry goods, a chilled
-// case, flavours and fruit) and the coffee by the till. Each product wears a
+// case, flavours and fruit, Vietnamese specials) and the coffee by the till. Each product wears a
 // round price sticker; the tag clipped to the shelf below it says what it is,
 // the pack size and what is already in the pantry, so price and amounts never
 // share a line. Tap a product to put a pack in the basket, pay once; the trip
 // costs MARKET_TRIP minutes of the night however much is bought.
 
-type Aisle = "dry" | "cold" | "flavour";
+type Aisle = "dry" | "cold" | "flavour" | "special" | "records";
 
 const AISLES: { id: Aisle; items: IngredientId[] }[] = [
-  { id: "dry", items: ["flour", "sugar", "bakingPowder", "yeast"] },
-  { id: "cold", items: ["milk", "cream", "butter", "eggs"] },
-  { id: "flavour", items: ["vanilla", "chocolate", "oil", "strawberry"] },
+  {
+    id: "dry",
+    items: [
+      "flour",
+      "sugar",
+      "bakingPowder",
+      "yeast",
+      "riceFlour",
+      "almondFlour",
+    ],
+  },
+  {
+    id: "cold",
+    items: ["milk", "cream", "butter", "eggs", "mascarpone", "coconutMilk"],
+  },
+  {
+    id: "flavour",
+    items: ["vanilla", "chocolate", "cocoa", "oil", "strawberry", "banana"],
+  },
+  { id: "special", items: ["saltedEgg", "porkFloss"] },
+  // Records for the music box: bought at once, not through the basket
+  { id: "records", items: [] },
 ];
 
 const ing = (id: IngredientId) => {
@@ -39,7 +65,12 @@ const ing = (id: IngredientId) => {
 const TAG = { big: 70, small: 50 };
 const PLANK_H = 16;
 
-export function drawMarket(app: App, cart: Cart, open: number) {
+export function drawMarket(
+  app: App,
+  cart: Cart,
+  open: number,
+  records: RecordId[] = [],
+) {
   const { ctx, save } = app;
   const tr = app.tr();
   const v = viewRect(app);
@@ -64,18 +95,15 @@ export function drawMarket(app: App, cart: Cart, open: number) {
     { x: 14, y: y0 + 52, w: W - 28, h: 40 },
     AISLES.map((a) => tr.aisles[a.id]),
     AISLES.indexOf(aisle),
-    (i) => app.go({ kind: "market", cart, aisle: i }),
+    (i) => app.go({ kind: "market", cart, aisle: i, records }),
   );
-  drawAisle(app, cart, aisle, {
-    x: 10,
-    y: y0 + 102,
-    w: W - 20,
-    h: H - 184 - (y0 + 102),
-  });
-  drawTill(app, cart);
+  const area = { x: 10, y: y0 + 102, w: W - 20, h: H - 184 - (y0 + 102) };
+  if (aisle.id === "records") drawRecords(app, area, records);
+  else drawAisle(app, cart, aisle, area);
+  drawTill(app, cart, records);
 }
 
-/** An aisle page: two shelves of two products. */
+/** An aisle page: up to two shelves of three products. */
 function drawAisle(
   app: App,
   cart: Cart,
@@ -83,9 +111,10 @@ function drawAisle(
   r: Rect,
 ) {
   const { ctx } = app;
-  const rows = 2;
-  const perRow = Math.ceil(aisle.items.length / rows);
-  const rowH = r.h / rows;
+  // Three to a shelf, two shelves to a page (a short aisle keeps the same size)
+  const perRow = Math.min(3, aisle.items.length);
+  const rows = Math.ceil(aisle.items.length / perRow);
+  const rowH = r.h / 2;
   if (aisle.id === "cold") {
     // The chilled case behind the dairy
     const box = { x: r.x, y: r.y, w: r.w, h: r.h - TAG.big + 8 };
@@ -168,7 +197,7 @@ function drawItem(
   );
 
   // Price on the product, top left
-  const sr = big ? 30 : 22;
+  const sr = big ? 24 : 20;
   priceSticker(app, cx - artW / 2 + sr * 0.4, at.top + sr, it.price, sr);
   if (it.fresh) {
     // Keeps only a few days
@@ -265,6 +294,66 @@ function drawItem(
   }
 }
 
+/** The record shelf: sleeves standing in a crate, bought with one tap. */
+function drawRecords(app: App, r: Rect, basket: RecordId[]) {
+  const { ctx, save } = app;
+  const tr = app.tr();
+  const list = RECORDS.filter((x) => x.price > 0 && playable(x));
+  const cols = 3;
+  const cw = r.w / cols;
+  const ch = 150;
+  list.forEach((rec, i) => {
+    const cx = r.x + cw * ((i % cols) + 0.5);
+    const top = r.y + Math.floor(i / cols) * ch;
+    const owned = save.records.includes(rec.id);
+    const picked = basket.includes(rec.id);
+    const key = `buy-${rec.id}`;
+    const sink = app.ui.isPressed(key) && !owned ? 3 : 0;
+    panel(
+      ctx,
+      { x: cx - cw / 2 + 5, y: top + sink, w: cw - 10, h: ch - 10 },
+      {
+        fill: owned ? "#f1ece4" : picked ? "#eaf7e1" : C.white,
+        radius: 16,
+        line: picked ? 3 : 2,
+      },
+    );
+    sprite(ctx, app.sprites.get(rec.sprite), cx, top + 62 + sink, cw - 40, 92);
+    text(ctx, rec.title, cx, top + 124 + sink, { size: 12, maxWidth: cw - 22 });
+    if (owned)
+      text(ctx, tr.musicBox.owned, cx, top + 144, { size: 13, fill: C.good });
+    else {
+      priceSticker(app, cx - cw / 2 + 26, top + 22, rec.price, 18);
+      // In the basket: a green tick
+      if (picked) {
+        ctx.beginPath();
+        ctx.arc(cx + cw / 2 - 22, top + 20, 14, 0, Math.PI * 2);
+        ctx.fillStyle = C.good;
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = C.ink;
+        ctx.stroke();
+        text(ctx, "✓", cx + cw / 2 - 22, top + 20, { size: 16, fill: C.white });
+      }
+    }
+    app.ui.add({
+      rect: { x: cx - cw / 2 + 5, y: top, w: cw - 10, h: ch - 10 },
+      key,
+      tap: () => {
+        if (owned) return;
+        app.sfx.tap();
+        // Into the basket, or back on the shelf
+        app.go({
+          ...currentMarket(app),
+          records: picked
+            ? basket.filter((id) => id !== rec.id)
+            : [...basket, rec.id],
+        });
+      },
+    });
+  });
+}
+
 /** The market screen as it stands (keeps the open aisle when the cart changes). */
 function currentMarket(app: App) {
   const s = app.screen;
@@ -272,7 +361,7 @@ function currentMarket(app: App) {
 }
 
 /** The till: coffee by the counter, the basket with its total, and pay. */
-function drawTill(app: App, cart: Cart) {
+function drawTill(app: App, cart: Cart, records: RecordId[]) {
   const { ctx, save } = app;
   const tr = app.tr();
   const counter = { x: 10, y: H - 170, w: W - 20, h: 156 };
@@ -288,8 +377,9 @@ function drawTill(app: App, cart: Cart) {
   });
 
   // The basket and what it all costs
-  const items = Object.values(cart).reduce((n, q) => n + (q ?? 0), 0);
-  const cost = cartCost(cart);
+  const items =
+    Object.values(cart).reduce((n, q) => n + (q ?? 0), 0) + records.length;
+  const cost = cartCost(cart, records);
   const bx = counter.x + 186;
   sprite(ctx, app.sprites.get("basket"), bx, counter.y + 48, 84, 70);
   text(ctx, tr.basket(items), bx, counter.y + 98, { size: 15, maxWidth: 140 });
@@ -305,7 +395,7 @@ function drawTill(app: App, cart: Cart) {
     { x: counter.x + 268, y: counter.y + 40, w: counter.w - 282, h: 76 },
     tr.checkout(MARKET_TRIP),
     () => {
-      const res = buyIngredients(save, cart);
+      const res = buyIngredients(save, cart, records);
       if (!res.ok) {
         app.sfx.bad();
         app.toast(

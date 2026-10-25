@@ -30,6 +30,7 @@ import {
   baked,
   plainSprite,
   rawSprite,
+  waitArt,
   reveal,
   stepFx,
 } from "./bakeart";
@@ -366,7 +367,8 @@ function shelf(app: App, b: BakeState): IngredientId[] {
   );
   return INGREDIENTS.filter(
     (i) =>
-      i.id !== "coffee" &&
+      // Coffee is a drink, unless the recipe calls for it (tiramisu)
+      (i.id !== "coffee" || inRecipe.has(i.id)) &&
       (inRecipe.has(i.id) || pantryQty(app.save, i.id) > 0),
   ).map((i) => i.id);
 }
@@ -938,20 +940,29 @@ function drawStove(
   ctx.scale(1, 0.28);
   ctx.beginPath();
   ctx.arc(0, 0, 54, 0, Math.PI * 2);
-  ctx.fillStyle = step.mode === "fry" ? "#f6d77a" : stoveColor(step.mode, k);
+  ctx.fillStyle =
+    step.mode === "fry"
+      ? "#f6d77a"
+      : step.mode === "steam"
+        ? "#eaf4f6"
+        : stoveColor(step.mode, k);
   ctx.fill();
   ctx.restore();
-  if (step.mode === "fry") {
-    // The donut goes golden in the oil, then too dark
-    const bob = p.on ? Math.sin(app.time * 8) * 2 : 0;
+  if (step.mode === "fry" || step.mode === "steam") {
+    // Donuts go golden in the oil; rice cakes set in the steamer, barely
+    // colouring. Both darken when left too long.
+    const steam = step.mode === "steam";
+    const bob = p.on ? Math.sin(app.time * (steam ? 3 : 8)) * 2 : 0;
     baked(
       ctx,
-      app.sprites.get("raw-donut"),
+      app.sprites.get(steam ? rawSprite(b.recipe) : "raw-donut"),
       k,
       mouth.x,
       mouth.y - 6 + bob,
       84,
       52,
+      "center",
+      steam ? 0.12 : 0.5,
     );
     if (k > 1) {
       ctx.save();
@@ -1276,7 +1287,7 @@ function drawWait(
       "bottom",
     );
   } else {
-    sprite(ctx, app.sprites.get("sponge-cooling"), cx, cy, 300, 260);
+    sprite(ctx, app.sprites.get(waitArt(b.recipe, "cool")), cx, cy, 300, 260);
   }
   clockIcon(ctx, cx + 120, cy - 120, 34, started ? done * 12 : 0);
   text(

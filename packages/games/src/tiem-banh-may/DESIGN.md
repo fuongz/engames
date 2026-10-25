@@ -123,9 +123,9 @@ attempt looked like two games; the owner then moved everything but the
 customers to the cosy hand-drawn style above, first with a terracotta
 clipboard UI, then the lighter stitched dialogs.
 
-### The market
+### The market ("Siêu thị")
 
-A little grocery with one page per aisle, picked with tabs: dry goods, a
+A little supermarket: shop first, pay once at the till. A little grocery with one page per aisle, picked with tabs: dry goods, a
 chilled case (milk, cream, butter, eggs), flavours and fruit. Each page is two
 shelves of two products under the shop's awning, and the coffee waits by the
 till on every page. Price and amounts never share a line: the price is a round
@@ -172,10 +172,51 @@ the picture's bottom is the bowl's foot; the bowl stands on the counter with a
 shadow in every step. Prices show on a yellow sticker in the market and on each
 batch in the display case; the coin carries a little fish.
 
+### Mây, the mascot
+
+Mây is the bakery's white kitten baker (pink apron with a cupcake pocket, puffy
+chef hat, cloud-puff tail), drawn in the customers' style with the game's
+broken outline. Turnaround sheet and poses in `art-src/.../png-mascot2/`;
+in game: `mascot-wave`, `mascot-point`, `mascot-happy`, `mascot-avatar`.
+
+### First-day tour
+
+`tour.ts`: on day 1 Mây walks a new baker through the market, the first batch
+of cookies, the display, bed and the first customers. Each step darkens the
+screen except the button it points at (a Ui region key, found with
+`ui.find`), with a bobbing hand and Mây's speech bubble; only that button
+takes taps. A step ends when the game reaches its goal, so running ahead
+skips steps. Skippable on the first bubble, replayable from Settings; progress
+is kept per bakery on the device (`tour:<player>:<slot>`).
+
+### Music box and records
+
+The music box on the kitchen shelf plays the record on it (tap it to choose);
+records go in the supermarket basket from its "Đĩa nhạc" aisle (a green tick; tap again to put one back) and are paid with everything else at the till; the last one bought goes straight on. Each record is a track
+from the owner's licensed Cozy Tunes pack, converted to
+`audio/music-<record>.mp3` (gitignored, like Sheep): a record whose file is
+missing is not offered. A record playing at closing adds `RECORD_MOOD` mood.
+Save v4 adds `records` and `playing` (older saves get Sheep, playing).
+
+To restore the tracks on a deploying machine, run the ffmpeg command under
+Music for each: sheep, cuddle (Cuddle Clouds), clouds (What Clouds Are Made
+Of), floating (Floating Dream), sunlight (Sunlight Through Leaves), breeze
+(Gentle Breeze), golden (Golden Gleam), evening (Evening Harmony), wildflowers
+(Wildflowers By The River).
+
+### More recipes
+
+Thirteen recipes: the first six, plus sweet milk bread, banana bread, bánh bò
+(steamed: a new stove mode), croissants, salted-egg sponge, macarons and
+tiramisu (coffee joins the shelf for it), with eight new ingredients (rice
+and almond flour, cocoa, bananas, coconut milk, mascarpone, salted eggs, pork
+floss) in a new "Đặc sản" aisle and the others. The book shows recipes six to
+a page, cheapest first, with Recipes/Upgrades tabs.
+
 ### UI kit
 
 `kit.ts` is the bakery's component set: `pill`, `roundButton` (settings,
-pause), `infoCard`, `weatherCard`, `calendar`, `toolbar`, `tabs`, `dialogButtons`, sized by one table `K` (pill
+pause), `infoCard`, `weatherCard`, `calendar`, `toolbar`, `tabs`, `statTile`, `priceSticker`, `dialogButtons`, sized by one table `K` (pill
 height, stroke, icon slot, gaps, dialog inset). `hud.ts` builds the top bar
 from it. New UI should start from the kit; screens move onto it over time.
 

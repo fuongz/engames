@@ -1,11 +1,13 @@
-import { type App, H, W, btn, viewRect } from "./app";
+import { type App, H, W, btn, icon, viewRect } from "./app";
+import { coin, C, cover, dialog, heart, panel, sprite, text } from "./art";
 import { pick, shopBackdrop } from "./bakeart";
-import { C, cover, dialog, framed, heart, sprite, text } from "./art";
 import type { RecipeId } from "./config";
+import { statTile } from "./kit";
 import { type DayReport, customer, formatClock, recipe } from "./logic";
 
-// 16:30: the day's books. Money first (what came in, what the night cost),
-// then what to learn from it: what ran out, what was binned, who walked off.
+// 16:30: the day's books, as pictures with a word each. The result first, big;
+// then where the money came from and went; then how the day went; then the
+// few things worth a sentence (the critic, pre-orders, a loan, tomorrow).
 
 export function drawReport(app: App, r: DayReport) {
   const { ctx } = app;
@@ -21,137 +23,185 @@ export function drawReport(app: App, r: DayReport) {
   ctx.fillStyle = "rgba(246, 231, 205, 0.86)";
   ctx.fillRect(v.x, v.y, v.w, v.h);
 
+  // As tall as what it holds: the result, two rows of tiles, what ran out,
+  // and a line per note
+  const soldCount = Object.values(r.soldOut).filter((n) => (n ?? 0) > 0).length;
+  const noteCount =
+    (r.vip !== "none" ? 1 : 0) +
+    (r.preorders.done || r.preorders.missed ? 1 : 0) +
+    (r.overChange ? 1 : 0) +
+    (r.bailout ? 1 : 0) +
+    r.tomorrow.length;
+  const content = 4 + 94 + 106 * 2 + (soldCount ? 84 : 0) + noteCount * 34 + 8;
   const y0 = Math.max(v.y + 16, 20) + 50;
-  const m = { x: 16, y: y0, w: W - 32, h: H - 132 - y0 };
-  dialog(ctx, m, tr.reportTitle(r.day));
+  const room = H - 132 - y0;
+  const h = Math.min(room, content + 72);
+  const m = { x: 16, y: y0 + (room - h) / 2, w: W - 32, h };
+  const paper = dialog(ctx, m, tr.reportTitle(r.day));
+  let y = paper.y + 4;
 
-  // ---- money
-  const money = { x: m.x + 28, y: m.y + 56, w: m.w - 56, h: 0 };
-  const rows: [string, number][] = [
-    [tr.revenue, r.revenue],
-    [tr.tips, r.tips],
-    ...(r.boxes ? [[tr.boxes, -r.boxes] as [string, number]] : []),
-    [tr.ingredients, -r.ingredients],
-  ];
-  money.h = 30 + rows.length * 34 + 70;
-  framed(ctx, money, C.card, 22);
-  rows.forEach(([label, value], i) => {
-    const y = money.y + 30 + i * 34;
-    text(ctx, label, money.x + 20, y, { size: 19, weight: 700, align: "left" });
-    text(
-      ctx,
-      `${value >= 0 ? "+" : "−"}${tr.num(Math.abs(value))}`,
-      money.x + money.w - 20,
-      y,
-      { size: 20, align: "right", fill: value >= 0 ? C.good : C.bad },
-    );
-  });
-  const ly = money.y + 30 + rows.length * 34 - 8;
-  ctx.strokeStyle = C.cardBorder;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(money.x + 16, ly);
-  ctx.lineTo(money.x + money.w - 16, ly);
-  ctx.stroke();
+  // ---- the result
   const gain = r.profit >= 0;
-  text(ctx, gain ? tr.profit : tr.loss, money.x + 20, ly + 34, {
-    size: 26,
+  const hero = { x: paper.x, y, w: paper.w, h: 84 };
+  panel(ctx, hero, {
+    fill: gain ? "#eaf7e1" : "#fdeeea",
+    radius: 20,
+    line: 2.5,
+  });
+  coin(ctx, hero.x + 50, hero.y + hero.h / 2, 26);
+  text(ctx, gain ? tr.profit : tr.loss, hero.x + 92, hero.y + 26, {
+    size: 16,
     align: "left",
+    fill: C.muted,
   });
   text(
     ctx,
     `${gain ? "+" : "−"}${tr.coins(Math.abs(r.profit))}`,
-    money.x + money.w - 20,
-    ly + 34,
-    { size: 30, align: "right", fill: gain ? C.good : C.bad },
+    hero.x + 92,
+    hero.y + 56,
+    { size: 32, align: "left", fill: gain ? C.good : C.bad },
   );
+  y += hero.h + 10;
 
-  // ---- what happened
-  const notes: { text: string; color?: string; icon?: () => void }[] = [];
-  notes.push({
-    text: tr.served(r.served),
-  });
-  if (r.walked) notes.push({ text: tr.walkedOff(r.walked), color: C.bad });
+  // ---- money in and out
+  const signed = (n: number) => `${n >= 0 ? "+" : "−"}${tr.num(Math.abs(n))}`;
+  const money: Parameters<typeof statTile>[2][] = [
+    {
+      picture: "cake-cupcake",
+      label: tr.tile.revenue,
+      value: signed(r.revenue),
+      color: C.good,
+    },
+    {
+      picture: "heart",
+      label: tr.tile.tips,
+      value: signed(r.tips),
+      color: r.tips ? C.good : C.muted,
+    },
+    ...(r.boxes
+      ? [
+          {
+            picture: "cake-box",
+            label: tr.tile.boxes,
+            value: signed(-r.boxes),
+            color: C.bad,
+          },
+        ]
+      : []),
+    {
+      picture: "basket",
+      label: tr.tile.ingredients,
+      value: signed(-r.ingredients),
+      color: r.ingredients ? C.bad : C.muted,
+    },
+  ];
+  y = tileRow(app, paper.x, y, paper.w, money);
+
+  // ---- how the day went
+  const repDelta = r.rep.after - r.rep.before;
+  const day: Parameters<typeof statTile>[2][] = [
+    {
+      picture: "heart",
+      label: tr.tile.rep,
+      value: `${r.rep.before}→${r.rep.after}`,
+      color: repDelta > 0 ? C.good : repDelta < 0 ? C.bad : C.text,
+    },
+    { picture: "customer-bear", label: tr.tile.served, value: `${r.served}` },
+  ];
+  if (r.walked)
+    day.push({
+      picture: "customer-bunny",
+      label: tr.tile.walked,
+      value: `${r.walked}`,
+      color: C.bad,
+      faded: true,
+    });
   if (r.wasted.pieces)
-    notes.push({
-      text: `${tr.wasted(r.wasted.pieces)}: −${tr.num(r.wasted.cost)}`,
+    day.push({
+      picture: "fail-flat",
+      label: tr.tile.wasted,
+      value: `${r.wasted.pieces}`,
       color: C.bad,
     });
-  if (r.spoiled > 0.5)
-    notes.push({ text: `${tr.spoiled}: −${tr.num(r.spoiled)}`, color: C.bad });
-  if (r.overChange)
-    notes.push({ text: tr.overGiven(r.overChange), color: C.warn });
+  else if (r.spoiled > 0.5)
+    day.push({
+      picture: "fail-raw",
+      label: tr.tile.spoiled,
+      value: signed(-r.spoiled),
+      color: C.bad,
+    });
+  y = tileRow(app, paper.x, y, paper.w, day);
+
+  // ---- what ran out: the cakes people asked for
+  const sold = Object.entries(r.soldOut).filter(([, n]) => (n ?? 0) > 0) as [
+    RecipeId,
+    number,
+  ][];
+  if (sold.length) {
+    text(ctx, tr.soldOutLine, paper.x + 8, y + 12, {
+      size: 15,
+      align: "left",
+      fill: C.warn,
+    });
+    sold.slice(0, 6).forEach(([id, n], i) => {
+      const x = paper.x + 34 + i * 72;
+      sprite(ctx, app.sprites.get(recipe(id).sprite), x, y + 48, 50, 44);
+      text(ctx, `×${n}`, x + 24, y + 62, { size: 15, outline: C.white });
+    });
+    y += 84;
+  }
+
+  // ---- the few things that need a sentence, each with its picture
+  const notes: { picture: string; text: string; color?: string }[] = [];
   if (r.vip !== "none")
     notes.push({
+      picture: "customer-owl-critic",
       text: tr.vipReport[r.vip],
       color: r.vip === "happy" ? C.good : C.bad,
     });
   if (r.preorders.done || r.preorders.missed)
     notes.push({
+      picture: "cake-box",
       text: tr.preorderReport(r.preorders.done, r.preorders.missed),
       color: r.preorders.missed ? C.bad : C.good,
     });
-  if (r.bailout) notes.push({ text: tr.bailout(r.bailout), color: C.warn });
-  for (const p of r.tomorrow) {
+  if (r.overChange)
     notes.push({
+      picture: "tag",
+      text: tr.overGiven(r.overChange),
+      color: C.warn,
+    });
+  if (r.bailout)
+    notes.push({
+      picture: "heart",
+      text: tr.bailout(r.bailout),
+      color: C.warn,
+    });
+  for (const p of r.tomorrow) {
+    const c = customer(p.customer);
+    notes.push({
+      picture: c.sprite,
       text: tr.preorder(
-        customer(p.customer).name[locale],
+        c.name[locale],
         p.qty,
         recipe(p.recipe).name[locale].toLowerCase(),
         formatClock(p.at),
       ),
-      color: C.text,
     });
   }
-
-  const info = {
-    x: m.x + 28,
-    y: money.y + money.h + 12,
-    w: m.w - 56,
-    h: m.y + m.h - money.y - money.h - 40,
-  };
-  framed(ctx, info, C.card, 22);
-  // Reputation
-  heart(ctx, info.x + 30, info.y + 30, 11);
-  text(ctx, tr.rep(r.rep.before, r.rep.after), info.x + 50, info.y + 30, {
-    size: 19,
-    align: "left",
-    fill:
-      r.rep.after > r.rep.before
-        ? C.good
-        : r.rep.after < r.rep.before
-          ? C.bad
-          : C.text,
-  });
-  let y = info.y + 64;
+  const bottom = paper.y + paper.h - 8;
   for (const n of notes) {
-    text(ctx, n.text, info.x + 20, y, {
-      size: 17,
-      weight: 700,
+    if (y + 34 > bottom) break;
+    icon(app, n.picture, paper.x + 22, y + 16, 30, () =>
+      heart(ctx, paper.x + 22, y + 16, 10),
+    );
+    text(ctx, n.text, paper.x + 46, y + 17, {
+      size: 15,
       align: "left",
       fill: n.color ?? C.text,
-      maxWidth: info.w - 36,
-    });
-    y += 30;
-  }
-  // What ran out, as pictures
-  const sold = Object.entries(r.soldOut).filter(([, n]) => (n ?? 0) > 0) as [
-    RecipeId,
-    number,
-  ][];
-  if (sold.length && y < info.y + info.h - 60) {
-    text(ctx, tr.soldOutLine, info.x + 20, y, {
-      size: 17,
-      weight: 700,
-      align: "left",
-      fill: C.warn,
+      maxWidth: paper.w - 54,
     });
     y += 34;
-    sold.slice(0, 6).forEach(([id, n], i) => {
-      const x = info.x + 44 + i * 76;
-      sprite(ctx, app.sprites.get(recipe(id).sprite), x, y, 44, 40);
-      text(ctx, `×${n}`, x + 26, y + 14, { size: 16, outline: C.white });
-    });
   }
 
   btn(
@@ -162,4 +212,20 @@ export function drawReport(app: App, r: DayReport) {
     () => app.go({ kind: "hub" }),
     { fill: C.green, size: 28 },
   );
+}
+
+/** A row of equal tiles across `w`; returns the y under it. */
+function tileRow(
+  app: App,
+  x: number,
+  y: number,
+  w: number,
+  tiles: Parameters<typeof statTile>[2][],
+) {
+  const gap = 8;
+  const tw = (w - gap * (tiles.length - 1)) / tiles.length;
+  tiles.forEach((t, i) => {
+    statTile(app, { x: x + i * (tw + gap), y, w: tw, h: 96 }, t);
+  });
+  return y + 96 + 10;
 }

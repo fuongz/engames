@@ -13,6 +13,8 @@ import {
   sprite,
   stars,
   text,
+  FONT,
+  nine,
 } from "./art";
 import {
   BOX_FROM,
@@ -57,8 +59,9 @@ import {
   settle,
   shake,
   slept,
+  piecePrice,
 } from "./logic";
-import { dialogButtons } from "./kit";
+import { dialogButtons, priceSticker } from "./kit";
 
 // Opening hours, in real time: customers walk in, queue, say what they want;
 // the player picks it from the display, boxes big orders and counts the change.
@@ -579,13 +582,21 @@ function drawCounter(app: App, s: ShopState) {
   ctx.moveTo(v.x, COUNTER_Y + 34);
   ctx.lineTo(v.x + v.w, COUNTER_Y + 34);
   ctx.stroke();
+  // The glass case: a honey-wood frame round icy glass, with its name on top
   const glass = { x: 14, y: COUNTER_Y + 46, w: W - 28, h: 262 };
-  panel(ctx, glass, {
-    fill: "rgba(232, 247, 255, 0.92)",
-    stroke: C.ink,
-    radius: 18,
-    line: 4,
-  });
+  panel(
+    ctx,
+    { x: glass.x - 6, y: glass.y - 6, w: glass.w + 12, h: glass.h + 12 },
+    { fill: "#e2b47e", stroke: C.ink, radius: 22, line: 3.5 },
+  );
+  if (!nine(ctx, app.sprites.get("fridge-back"), glass, 60, 18))
+    panel(ctx, glass, {
+      fill: "rgba(232, 247, 255, 0.92)",
+      stroke: C.ink,
+      radius: 18,
+      line: 4,
+    });
+  sectionLabel(app, glass.x + 12, glass.y - 18, tr.displayTitle);
   const slots = displaySlots(s);
   const cols = 4;
   const rows = 3;
@@ -593,10 +604,18 @@ function drawCounter(app: App, s: ShopState) {
   const ch = (glass.h - 16) / rows;
   const f = front(s);
   const serving = f?.lines && !f.leaving && s.closing === null && !s.checkout;
+  // Glass shelves between the rows
+  const plank = app.sprites.get("shelf-fridge");
   for (let r = 1; r < rows; r++) {
-    ctx.fillStyle = "rgba(201, 225, 240, 0.9)";
-    ctx.fillRect(glass.x + 6, glass.y + 8 + r * ch - 2, glass.w - 12, 4);
+    const sy = glass.y + 8 + r * ch - 8;
+    if (plank?.naturalWidth)
+      ctx.drawImage(plank, glass.x + 4, sy, glass.w - 8, 16);
+    else {
+      ctx.fillStyle = "rgba(201, 225, 240, 0.9)";
+      ctx.fillRect(glass.x + 6, sy + 6, glass.w - 12, 4);
+    }
   }
+
   slots.slice(0, cols * rows).forEach((slot, i) => {
     const rect = {
       x: glass.x + 8 + (i % cols) * cw,
@@ -623,6 +642,12 @@ function drawCounter(app: App, s: ShopState) {
       rect.h - 30,
     );
     stars(ctx, rect.x + rect.w / 2, rect.y + rect.h - 13, slot.stars, 8);
+    // What one piece sells for
+    const price = Math.max(
+      1,
+      Math.round(piecePrice({ ...slot, cost: 0 }, !!s.discount, false)),
+    );
+    priceSticker(app, rect.x + 18, rect.y + 18, price, 14);
     text(ctx, `×${slot.count}`, rect.x + rect.w - 22, rect.y + 16, {
       size: 17,
       fill: C.text,
@@ -683,6 +708,15 @@ function drawCounter(app: App, s: ShopState) {
       weight: 700,
       fill: C.muted,
     });
+}
+
+/** A little name tag sitting on the top edge of a panel. */
+function sectionLabel(app: App, x: number, y: number, label: string) {
+  const { ctx } = app;
+  ctx.font = `700 14px ${FONT}`;
+  const w = ctx.measureText(label).width + 24;
+  panel(ctx, { x, y, w, h: 26 }, { fill: C.cream, radius: 13, line: 2.5 });
+  text(ctx, label, x + w / 2, y + 13, { size: 14 });
 }
 
 function displaySlots(s: ShopState): Slot[] {
@@ -767,10 +801,19 @@ function drawTray(app: App, s: ShopState, f: Walker | undefined) {
   const ty = H - 108;
   const tray = { x: 14, y: ty, w: 300, h: 92 };
   panel(ctx, tray, { fill: "#f4d3a1", stroke: C.ink, radius: 20, line: 4 });
-  const size = Math.min(52, (tray.w - 20) / Math.max(5, s.tray.length));
+  // Cakes line up to the right of the tray's name tag
+  const start = 74;
+  sectionLabel(app, tray.x + 10, tray.y + tray.h / 2 - 13, tr.trayLabel);
+  if (!s.tray.length)
+    text(ctx, tr.trayHint, tray.x + (start + tray.w) / 2, tray.y + tray.h / 2, {
+      size: 13,
+      fill: C.muted,
+      maxWidth: tray.w - start - 14,
+    });
+  const size = Math.min(52, (tray.w - start - 10) / Math.max(4, s.tray.length));
   s.tray.forEach((p, i) => {
     const rect = {
-      x: tray.x + 10 + i * size,
+      x: tray.x + start + i * size,
       y: tray.y + 12,
       w: size,
       h: tray.h - 24,

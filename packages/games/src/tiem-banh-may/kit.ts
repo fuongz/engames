@@ -494,3 +494,39 @@ export function priceSticker(
     maxWidth: r * 1.5,
   });
 }
+
+/**
+ * A small tinted tile: a picture on top, a short label, and a value. The
+ * building block for summaries (the day's report, a recipe's facts).
+ */
+export function statTile(
+  app: App,
+  r: Rect,
+  tile: {
+    /** A sprite name (or an icon-* name). */
+    picture: string;
+    label: string;
+    value: string;
+    color?: string;
+    tint?: string;
+    /** Draw the picture greyed out (something that went wrong). */
+    faded?: boolean;
+  },
+) {
+  const { ctx } = app;
+  panel(ctx, r, { fill: tile.tint ?? C.white, radius: 16, line: 2 });
+  ctx.save();
+  if (tile.faded) ctx.globalAlpha *= 0.55;
+  icon(app, tile.picture, r.x + r.w / 2, r.y + 26, 36, () => undefined);
+  ctx.restore();
+  text(ctx, tile.label, r.x + r.w / 2, r.y + 54, {
+    size: 12,
+    fill: C.muted,
+    maxWidth: r.w - 10,
+  });
+  text(ctx, tile.value, r.x + r.w / 2, r.y + r.h - 16, {
+    size: 18,
+    fill: tile.color ?? C.text,
+    maxWidth: r.w - 10,
+  });
+}

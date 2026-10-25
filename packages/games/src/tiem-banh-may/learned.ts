@@ -85,7 +85,7 @@ export function drawLearned(
     tap: () => {
       if (t < 0.4) return;
       app.sfx.tap();
-      app.go({ kind: "book", tab: s.tab, detail: s.recipe });
+      app.go({ kind: "book", tab: s.tab, detail: s.recipe, page: s.page });
     },
   });
 }

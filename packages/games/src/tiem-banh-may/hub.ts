@@ -54,7 +54,7 @@ import {
   stockCount,
   timeLeft,
 } from "./logic";
-import { baked, ovenWindow, rawSprite } from "./bakeart";
+import { baked, ovenWindow, rawSprite, waitArt } from "./bakeart";
 import { resumeJob } from "./kitchen";
 import { openShop } from "./shop";
 
@@ -197,7 +197,13 @@ export function drawHub(app: App) {
       app,
       waits[0],
       { x: 104, y: worktop + 8, w: 150, h: 120 },
-      waits[0].recipe === "shortcake" ? "sponge-cooling" : "dough-proofed",
+      (() => {
+        const step = recipe(waits[0].recipe).steps[waits[0].step];
+        return waitArt(
+          waits[0].recipe,
+          step?.kind === "wait" ? step.mode : "proof",
+        );
+      })(),
     );
   } else {
     onTable(ctx, app.sprites.get("tool-bowl"), 104, worktop + 8, 140, 110);
@@ -205,6 +211,37 @@ export function drawHub(app: App) {
   if (ovens(save) > 1) ovenSpot(app, inOvens[1], 250, worktop + 8, 150, 140);
   else onTable(ctx, app.sprites.get("tool-scale"), 232, worktop + 8, 100, 100);
   ovenSpot(app, inOvens[0], 418, worktop + 8, 190, 180);
+  // The music box on the shelf above the counter: tap to pick a record
+  {
+    const mx = 300;
+    const my = worktop - 150;
+    const playing = !!save.playing;
+    const sway = playing ? Math.sin(app.time * 3) * 0.04 : 0;
+    ctx.save();
+    ctx.translate(mx, my);
+    ctx.rotate(sway);
+    onTable(ctx, app.sprites.get("music-box"), 0, 0, 86, 86);
+    ctx.restore();
+    if (playing)
+      for (let i = 0; i < 2; i++) {
+        const t = (app.time * 0.6 + i * 0.5) % 1;
+        ctx.save();
+        ctx.globalAlpha = 1 - t;
+        text(ctx, i ? "♫" : "♪", mx + 26 + i * 12, my - 70 - t * 40, {
+          size: 20,
+          fill: "#c46a8a",
+        });
+        ctx.restore();
+      }
+    app.ui.add({
+      rect: { x: mx - 46, y: my - 90, w: 92, h: 96 },
+      key: "musicbox",
+      tap: () => {
+        app.sfx.tap();
+        app.go({ kind: "music" });
+      },
+    });
+  }
   if (save.recipes.length && stockCount(save.stock) > 0) {
     const top = save.stock[0];
     sprite(
