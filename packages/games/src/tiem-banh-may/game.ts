@@ -69,7 +69,7 @@ const SAVE_EVERY = 15;
 function view(s: Screen): string {
   switch (s.kind) {
     case "market":
-      return `market:${s.aisle ?? 0}:${s.basket ?? ""}`;
+      return `market:${s.aisle ?? 0}:${s.basket ?? ""}:${s.fpage ?? 0}`;
     case "book":
       return `book:${s.tab}:${s.detail ?? ""}:${s.page ?? 0}`;
     case "pick":

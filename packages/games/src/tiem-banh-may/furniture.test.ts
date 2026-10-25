@@ -16,11 +16,19 @@ import {
   layoutOk,
   receive,
   seatPatience,
+  shelvesOf,
   startDecor,
   stored,
   walkPath,
 } from "./furniture";
-import { assets, closeDay, dayInfo, emptyLedger, newGame } from "./logic";
+import {
+  assets,
+  closeDay,
+  dayInfo,
+  displayCap,
+  emptyLedger,
+  newGame,
+} from "./logic";
 import { parseSave } from "./save";
 
 const decor = (placed: Placed[], owned = placed.map((p) => p.id)): Decor => ({
@@ -150,6 +158,18 @@ describe("the storefront grid", () => {
         at("basic-table", 5, 1),
       ]),
     ).toBe(false);
+  });
+});
+
+describe("self-serve stands", () => {
+  it("sizes the display by the shelves on the floor, and needs a stand to open", () => {
+    const s = newGame(1);
+    // Two basic stands, two shelves each
+    expect(shelvesOf(s.decor)).toBe(4);
+    expect(displayCap(s)).toBe(48);
+    expect(displayCap({ ...s, upgrades: ["display"] })).toBe(72);
+    const noStands = s.decor.placed.filter((p) => p.id !== "basic-stand");
+    expect(layoutOk(noStands)).toBe(false);
   });
 });
 

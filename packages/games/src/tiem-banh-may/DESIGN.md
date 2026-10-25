@@ -165,6 +165,20 @@ and the player works the till.
   and counting the change.
 - **The critic** looks for a 3★ piece on the stands and leaves without one;
   **pre-orders** are taken from the held-back pieces automatically.
+- **Built (2026-10-25)**: each batch stands on a shelf (stands back to front,
+  left to right, one batch a shelf; three pieces drawn on a wide shelf, two in
+  the fridge; batches past the last shelf still sell). The display holds 12
+  pieces per shelf (18 with the big-display upgrade), so the starting two
+  stands hold 48; a layout needs at least one stand. A customer walks to the
+  stand showing what they want (or any with cakes; none at all and they turn
+  round at the door), looks for a moment, takes their pieces (best stars
+  first; the critic only 3★), then queues along the walkway; at the till
+  their pick is on the tray and the player rings it up ("Tính tiền"), boxes
+  4+ and counts change. Walking off with a pick puts it back. The case under
+  the counter now just shows what is left ("Trên quầy").
+- **Themes in the aisle** (nine to a page, by tier): Cơ bản, then Hồng ngọt,
+  Vườn hoa, the bread shelf (Ấm cúng); Rừng xanh, glass case and fridge
+  (Dễ thương); Cổ điển clock, lamp, armchair, tea table (Nổi tiếng).
 
 ## Art
 

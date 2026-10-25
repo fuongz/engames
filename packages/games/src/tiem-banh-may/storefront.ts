@@ -146,3 +146,94 @@ export const pieceDepth = (f: Floor, p: Placed) => {
   const def = furniture(p.id);
   return f.y0 + (p.y + def.h) * f.th;
 };
+
+/**
+ * Where cakes stand on each stand's picture: per shelf, the shelf's top as a
+ * fraction of the picture's height and its usable width (measured on the art).
+ */
+const SHELF_ART: Partial<
+  Record<FurnitureId, { y: number; x0: number; x1: number }[]>
+> = {
+  "basic-stand": [
+    { y: 0.36, x0: 0.09, x1: 0.91 },
+    { y: 0.65, x0: 0.06, x1: 0.94 },
+  ],
+  "pink-stand": [
+    { y: 0.47, x0: 0.09, x1: 0.91 },
+    { y: 0.73, x0: 0.06, x1: 0.94 },
+  ],
+  "wood-shelf": [
+    { y: 0.27, x0: 0.08, x1: 0.92 },
+    { y: 0.5, x0: 0.06, x1: 0.94 },
+    { y: 0.78, x0: 0.07, x1: 0.93 },
+  ],
+  "glass-case": [
+    { y: 0.3, x0: 0.13, x1: 0.88 },
+    { y: 0.49, x0: 0.11, x1: 0.9 },
+    { y: 0.67, x0: 0.09, x1: 0.93 },
+  ],
+  "glass-fridge": [
+    { y: 0.31, x0: 0.08, x1: 0.92 },
+    { y: 0.48, x0: 0.08, x1: 0.92 },
+    { y: 0.64, x0: 0.08, x1: 0.92 },
+    { y: 0.81, x0: 0.08, x1: 0.92 },
+  ],
+};
+
+export interface ShelfSpot<T> {
+  stand: Placed;
+  shelf: number;
+  item: T;
+}
+
+/**
+ * Batches onto shelves: stands back to front, left to right, each shelf top
+ * down, one batch a shelf. Batches past the last shelf aren't shown (they
+ * still sell).
+ */
+export function shelve<T>(placed: Placed[], items: T[]): ShelfSpot<T>[] {
+  const stands = placed
+    .filter((p) => furniture(p.id).kind === "stand")
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  const out: ShelfSpot<T>[] = [];
+  let i = 0;
+  for (const stand of stands)
+    for (let shelf = 0; shelf < (furniture(stand.id).shelves ?? 0); shelf++) {
+      if (i >= items.length) return out;
+      out.push({ stand, shelf, item: items[i++] });
+    }
+  return out;
+}
+
+/** The cakes on one shelf: up to three pieces (two in a narrow fridge). */
+export function drawShelf(
+  app: App,
+  f: Floor,
+  stand: Placed,
+  shelf: number,
+  cake: string,
+  count: number,
+) {
+  const def = furniture(stand.id);
+  const art = SHELF_ART[stand.id]?.[shelf];
+  const img = app.sprites.get(def.sprite);
+  const pic = app.sprites.get(cake);
+  if (!art || !img?.naturalWidth || !pic?.naturalWidth) return;
+  const { ctx } = app;
+  const foot = tileRect(f, stand.x, stand.y, def.w, def.h);
+  const w = img.naturalWidth * SPRITE_SCALE;
+  const h = img.naturalHeight * SPRITE_SCALE;
+  const left = foot.x + foot.w / 2 - w / 2;
+  const top = foot.y + foot.h - LIFT - h;
+  const per = def.w > 1 ? 3 : 2;
+  const n = Math.min(per, count);
+  const span = (art.x1 - art.x0) * w;
+  const cw = (span / per) * 0.86;
+  for (let i = 0; i < n; i++) {
+    // Mirrored stands keep their shelves; cakes sit centred in thirds
+    const x = left + art.x0 * w + (span * (2 * i + 1 + (per - n))) / (2 * per);
+    ctx.save();
+    sprite(ctx, pic, x, top + art.y * h, cw, cw * 0.95, "bottom");
+    ctx.restore();
+  }
+}

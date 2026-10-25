@@ -88,6 +88,9 @@ const ing = (id: IngredientId) => {
   return found;
 };
 
+/** Furniture cards on one page of the aisle. */
+const PER_FURNITURE_PAGE = 9;
+
 /** Tag height under a shelf item (big on the aisles, small at the till). */
 const TAG = { big: 70, small: 50 };
 const PLANK_H = 16;
@@ -814,11 +817,20 @@ function drawFurniture(app: App, r: Rect, pieces: FurnitureId[]) {
   const tr = app.tr();
   const locale = app.rt.locale();
   const tier = charmTier(charm(save.decor));
-  const list = FURNITURE.filter((f) => forSale(f.id));
+  // Cheapest themes first, nine to a page
+  const all = FURNITURE.filter((f) => forSale(f.id)).sort(
+    (a, b) => a.tier - b.tier,
+  );
+  const pages = Math.ceil(all.length / PER_FURNITURE_PAGE);
+  const page = Math.min(currentMarket(app).fpage ?? 0, pages - 1);
+  const list = all.slice(
+    page * PER_FURNITURE_PAGE,
+    (page + 1) * PER_FURNITURE_PAGE,
+  );
   const cols = 3;
-  const rows = Math.ceil(list.length / cols);
+  const rows = 3;
   const cw = r.w / cols;
-  const ch = Math.min(200, r.h / rows);
+  const ch = Math.min(196, (r.h - 30) / rows);
   list.forEach((f, i) => {
     const cx = r.x + cw * ((i % cols) + 0.5);
     const top = r.y + Math.floor(i / cols) * ch;
@@ -897,16 +909,25 @@ function drawFurniture(app: App, r: Rect, pieces: FurnitureId[]) {
       },
     });
   });
-  // Where the storefront stands, so the locks make sense
+  // Where the storefront stands, so the locks make sense, and the pages
   const c = charm(save.decor);
   const next = CHARM_TIERS[tier + 1];
+  const fy = r.y + rows * ch + 12;
   text(
     ctx,
     next === undefined
       ? tr.decor.charmNow(c, tr.decor.tiers[tier])
       : tr.decor.charmNext(c, tr.decor.tiers[tier], next),
     W / 2,
-    r.y + rows * ch + 6,
-    { size: 13, fill: C.muted, maxWidth: r.w - 20 },
+    fy,
+    { size: 13, fill: C.muted, maxWidth: r.w - 120 },
   );
+  if (page > 0)
+    stepper(app, "furniture-prev", r.x + 26, fy, "‹", () =>
+      app.go({ ...currentMarket(app), fpage: page - 1 }),
+    );
+  if (page < pages - 1)
+    stepper(app, "furniture-next", r.x + r.w - 26, fy, "›", () =>
+      app.go({ ...currentMarket(app), fpage: page + 1 }),
+    );
 }

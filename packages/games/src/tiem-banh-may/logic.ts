@@ -3,7 +3,7 @@ import {
   BAILOUT,
   BAILOUT_BELOW,
   BAILOUT_EVERY,
-  BIG_DISPLAY_CAP,
+  BIG_SHELF_CAP,
   BOX_COST,
   BOX_SIZES,
   BOX_TIP,
@@ -17,7 +17,7 @@ import {
   DISCOUNT,
   DISCOUNT_FROM,
   DISCOUNT_RUSH,
-  DISPLAY_CAP,
+  SHELF_CAP,
   EXACT_PAY,
   FAST_STARS,
   FAVOURITE_WEIGHT,
@@ -95,6 +95,7 @@ import {
   forSale,
   furniture,
   receive,
+  shelvesOf,
   charmBoost,
   charmTier,
   furnitureWorth,
@@ -556,8 +557,9 @@ export function batchMinutes(save: SaveData, r: Recipe) {
 
 export const stockCount = (stock: StockItem[]) =>
   stock.reduce((s, x) => s + x.count, 0);
+/** Pieces the stands can show: their shelves, each holding a batch. */
 export const displayCap = (save: SaveData) =>
-  has(save, "display") ? BIG_DISPLAY_CAP : DISPLAY_CAP;
+  shelvesOf(save.decor) * (has(save, "display") ? BIG_SHELF_CAP : SHELF_CAP);
 export const mastered = (save: SaveData, id: RecipeId) =>
   (save.mastery[id] ?? 0) >= MASTERY_BAKES;
 

@@ -116,13 +116,18 @@ function reachable(taken: Set<number>) {
   return seen;
 }
 
-/** The shortest walk over free tiles from the door to the till, or null. */
-export function walkPath(placed: Placed[]) {
+type Tile = { x: number; y: number };
+
+/** The shortest walk over free tiles (door → till unless told otherwise), or null. */
+export function walkPath(
+  placed: Placed[],
+  start: Tile = DOOR_TILE,
+  goal: Tile = TILL_TILES[0],
+) {
   const taken = occupied(placed);
   if (!taken) return null;
-  const goal = TILL_TILES[0];
-  const from = new Map<number, number>([[key(DOOR_TILE.x, DOOR_TILE.y), -1]]);
-  const queue = [DOOR_TILE];
+  const from = new Map<number, number>([[key(start.x, start.y), -1]]);
+  const queue = [start];
   while (queue.length) {
     const t = queue.shift() as { x: number; y: number };
     if (t.x === goal.x && t.y === goal.y) {
@@ -157,6 +162,8 @@ export function walkPath(placed: Placed[]) {
 export function layoutOk(placed: Placed[]) {
   const taken = occupied(placed);
   if (!taken) return false;
+  // Customers serve themselves: at least one cake stand
+  if (!placed.some((p) => furniture(p.id).kind === "stand")) return false;
   const walk = reachable(taken);
   if (!TILL_TILES.every((t) => walk.has(key(t.x, t.y)))) return false;
   return placed.every((p) => {
@@ -207,6 +214,22 @@ export function charmTier(c: number) {
 /** How much charm multiplies the day's customers (saturating, at most +50%). */
 export const charmBoost = (c: number) =>
   1 + CHARM_MAX_BOOST * (1 - Math.exp(-c / CHARM_SCALE));
+
+/** Cake-stand shelves on the floor (each shows one batch). */
+export const shelvesOf = (decor: Decor) =>
+  decor.placed.reduce((n, p) => n + (furniture(p.id).shelves ?? 0), 0);
+
+/** The free tile a customer stands on to take from a stand, or null. */
+export function standFront(placed: Placed[], p: Placed): Tile | null {
+  const def = furniture(p.id);
+  const taken = occupied(placed);
+  if (!taken) return null;
+  const walk = reachable(taken);
+  const y = p.y + def.h;
+  for (let dx = 0; dx < def.w; dx++)
+    if (walk.has(key(p.x + dx, y))) return { x: p.x + dx, y };
+  return null;
+}
 
 /** Extra patience from the seats on the floor. */
 export function seatPatience(decor: Decor) {

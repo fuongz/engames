@@ -128,6 +128,7 @@ export interface Strings {
   discountOn: string;
   closeEarly: string;
   give: string;
+  ringUp: string;
   soldOut: string;
   vipWants: string;
   preorderTag: string;
@@ -263,6 +264,7 @@ export interface Strings {
     replay: string;
   };
   trayHint: string;
+  onStands: string;
   tile: Record<
     | "revenue"
     | "tips"
@@ -500,6 +502,7 @@ export const STRINGS: Localized<Strings> = {
     discountOn: "Đang giảm giá",
     closeEarly: "Đóng cửa sớm",
     give: "Giao bánh",
+    ringUp: "Tính tiền",
     soldOut: "Hết mất rồi...",
     vipWants: "Chỉ nhận bánh 3★",
     preorderTag: "Đơn đặt trước",
@@ -659,7 +662,8 @@ export const STRINGS: Localized<Strings> = {
       thanks: "Cảm ơn Mây!",
       replay: "Xem lại hướng dẫn",
     },
-    trayHint: "Chạm bánh trong tủ để đặt lên khay",
+    trayHint: "Khách tự chọn ở quầy rồi mang tới đây",
+    onStands: "Trên quầy",
     tile: {
       revenue: "Bán bánh",
       tips: "Tiền tip",
@@ -906,6 +910,7 @@ export const STRINGS: Localized<Strings> = {
     discountOn: "On sale",
     closeEarly: "Close early",
     give: "Hand over",
+    ringUp: "Ring up",
     soldOut: "All gone...",
     vipWants: "3★ cakes only",
     preorderTag: "Pre-order",
@@ -1065,7 +1070,8 @@ export const STRINGS: Localized<Strings> = {
       thanks: "Thanks, Mây!",
       replay: "Replay the tutorial",
     },
-    trayHint: "Tap a cake in the case to put it here",
+    trayHint: "Customers pick at the stands and bring it here",
+    onStands: "On the stands",
     tile: {
       revenue: "Sales",
       tips: "Tips",

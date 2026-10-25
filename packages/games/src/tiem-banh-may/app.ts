@@ -39,6 +39,8 @@ export type Screen =
       basket?: number;
       /** Furniture in the basket (a piece twice is listed twice). */
       furniture?: FurnitureId[];
+      /** Which page of the Furniture aisle is open. */
+      fpage?: number;
     }
   | {
       kind: "book";

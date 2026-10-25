@@ -78,8 +78,9 @@ export const START_REP = 50;
 export const MAX_REP = 100;
 export const FRESH_DAYS = 3;
 export const FRIDGE_DAYS = 5;
-export const DISPLAY_CAP = 50;
-export const BIG_DISPLAY_CAP = 90;
+/** Pieces one cake-stand shelf holds (more with the big-display upgrade). */
+export const SHELF_CAP = 12;
+export const BIG_SHELF_CAP = 18;
 export const MASTERY_BAKES = 3;
 export const FAST_STARS = 2;
 export const STAR_PRICE: Record<1 | 2 | 3, number> = { 1: 0.8, 2: 1, 3: 1.25 };
@@ -1012,6 +1013,20 @@ export type FurnitureId =
   | "wood-shelf"
   | "glass-case"
   | "glass-fridge"
+  | "garden-table"
+  | "garden-chair"
+  | "garden-flowers"
+  | "garden-easel"
+  | "garden-shelf"
+  | "forest-table"
+  | "forest-stool"
+  | "forest-chair"
+  | "forest-lantern"
+  | "forest-fern"
+  | "classic-clock"
+  | "classic-lamp"
+  | "classic-armchair"
+  | "classic-table"
   | "wall-plain"
   | "floor-plain";
 
@@ -1023,7 +1038,7 @@ export type FurnitureKind =
   | "wall"
   | "floor";
 /** A theme: pieces of one set share colours, and placing several gives a bonus. */
-export type FurnitureSet = "basic" | "sweet" | "classic";
+export type FurnitureSet = "basic" | "sweet" | "garden" | "forest" | "classic";
 
 export interface Furniture {
   id: FurnitureId;
@@ -1127,6 +1142,108 @@ export const FURNITURE: Furniture[] = [
   piece("glass-fridge", "Tủ mát", "Cake fridge", "stand", "classic", 6, 1100, {
     shelves: 4,
     tier: 2,
+  }),
+  // Vườn hoa: white wrought iron and flowers (Ấm cúng)
+  piece(
+    "garden-table",
+    "Bàn sắt trắng",
+    "Garden table",
+    "table",
+    "garden",
+    4,
+    300,
+    { tier: 1 },
+  ),
+  piece(
+    "garden-chair",
+    "Ghế sắt hoa",
+    "Garden chair",
+    "seat",
+    "garden",
+    3,
+    170,
+    { tier: 1 },
+  ),
+  piece(
+    "garden-flowers",
+    "Chậu hoa lớn",
+    "Flower pot",
+    "decor",
+    "garden",
+    5,
+    250,
+    { tier: 1 },
+  ),
+  piece("garden-easel", "Bảng menu", "Menu board", "decor", "garden", 4, 220, {
+    tier: 1,
+  }),
+  piece("garden-shelf", "Kệ hoa", "Flower shelf", "decor", "garden", 6, 480, {
+    w: 2,
+    tier: 1,
+  }),
+  // Rừng xanh: tree stumps, ivy and wicker (Dễ thương)
+  piece(
+    "forest-table",
+    "Bàn gốc cây",
+    "Stump table",
+    "table",
+    "forest",
+    6,
+    450,
+    { tier: 2 },
+  ),
+  piece(
+    "forest-stool",
+    "Đôn gốc cây",
+    "Stump stool",
+    "seat",
+    "forest",
+    4,
+    220,
+    { tier: 2 },
+  ),
+  piece("forest-chair", "Ghế mây", "Wicker chair", "seat", "forest", 5, 380, {
+    tier: 2,
+  }),
+  piece("forest-lantern", "Đèn lồng", "Lantern", "decor", "forest", 6, 400, {
+    tier: 2,
+  }),
+  piece(
+    "forest-fern",
+    "Giỏ dương xỉ",
+    "Fern basket",
+    "decor",
+    "forest",
+    5,
+    300,
+    { tier: 2 },
+  ),
+  // Cổ điển: walnut, rose velvet and brass (Nổi tiếng)
+  piece(
+    "classic-clock",
+    "Đồng hồ quả lắc",
+    "Grandfather clock",
+    "decor",
+    "classic",
+    10,
+    1200,
+    { tier: 3 },
+  ),
+  piece("classic-lamp", "Đèn cây", "Floor lamp", "decor", "classic", 8, 900, {
+    tier: 3,
+  }),
+  piece(
+    "classic-armchair",
+    "Ghế bành",
+    "Armchair",
+    "seat",
+    "classic",
+    9,
+    1000,
+    { tier: 3 },
+  ),
+  piece("classic-table", "Bàn trà", "Tea table", "table", "classic", 7, 700, {
+    tier: 3,
   }),
   piece("wall-plain", "Tường kem", "Cream wall", "wall", "basic", 0, 0),
   piece("floor-plain", "Sàn karo", "Checker floor", "floor", "basic", 0, 0),
