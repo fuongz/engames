@@ -1,8 +1,8 @@
-// The bakery's bitmap art (img/*.webp, generated in the customers' hand-drawn
-// style). Vite gives each file a hashed /assets URL, which the service worker
+// The bakery's art (img/*.svg, traced from the hand-drawn bitmaps at the
+// same pixel size, so source rects and 9-slices still line up). Vite gives each file a hashed /assets URL, which the service worker
 // keeps once fetched, so a played day works offline next time.
 
-const URLS = import.meta.glob<string>("./img/*.webp", {
+const URLS = import.meta.glob<string>("./img/*.svg", {
   eager: true,
   import: "default",
 });
@@ -19,7 +19,7 @@ export function loadSprites(): Sprites {
   const entries = Object.entries(URLS);
   let settled = 0;
   for (const [path, url] of entries) {
-    const name = path.slice(path.lastIndexOf("/") + 1, -".webp".length);
+    const name = path.slice(path.lastIndexOf("/") + 1, -".svg".length);
     const img = new Image();
     img.decoding = "async";
     img.src = url;
