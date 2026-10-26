@@ -21,6 +21,8 @@ export const OPEN = 24 * 60 + OPEN_AT - CLOSE_AT;
 /** Game minutes per real second outside opening hours, and with fast-forward on. */
 export const NIGHT_SPEED = 1;
 export const FAST_SPEED = 8;
+/** Night minutes per real second at ×1, ×2 and ×3. */
+export const NIGHT_SPEEDS = { 1: NIGHT_SPEED, 2: 4, 3: FAST_SPEED } as const;
 /** The shop opens by itself this long after 9:00 if nobody opens it. */
 export const AUTO_OPEN = 30;
 /** Hours of a full night's sleep (22:00 → 5:30). */
@@ -79,8 +81,8 @@ export const MAX_REP = 100;
 export const FRESH_DAYS = 3;
 export const FRIDGE_DAYS = 5;
 /** Pieces one cake-stand shelf holds (more with the big-display upgrade). */
-export const SHELF_CAP = 12;
-export const BIG_SHELF_CAP = 18;
+export const SHELF_CAP = 6;
+export const BIG_SHELF_CAP = 9;
 export const MASTERY_BAKES = 3;
 export const FAST_STARS = 2;
 export const STAR_PRICE: Record<1 | 2 | 3, number> = { 1: 0.8, 2: 1, 3: 1.25 };
@@ -767,7 +769,7 @@ export const UPGRADES: Upgrade[] = [
   },
   {
     id: "display",
-    name: { vi: "Tủ kính lớn", en: "Big display case" },
+    name: { vi: "Kệ bánh rộng", en: "Deeper stand shelves" },
     cost: 900,
     sprite: "cake-box",
   },
@@ -1030,6 +1032,8 @@ export type FurnitureId =
   | "wall-plain"
   | "floor-plain"
   | "till-basic"
+  | "counter-2"
+  | "counter-3"
   | "till-pink"
   | "florist-cart"
   | "florist-bench"
@@ -1146,7 +1150,7 @@ export const FURNITURE: Furniture[] = [
     300,
     {
       w: 2,
-      shelves: 2,
+      shelves: 4,
     },
   ),
   piece("pink-table", "Bàn khăn ren", "Lace table", "table", "sweet", 4, 320, {
@@ -1168,18 +1172,18 @@ export const FURNITURE: Furniture[] = [
     650,
     {
       w: 2,
-      shelves: 2,
+      shelves: 4,
       tier: 1,
     },
   ),
   piece("wood-shelf", "Kệ bánh mì", "Bread shelf", "stand", "basic", 4, 600, {
     w: 2,
-    shelves: 3,
+    shelves: 6,
     tier: 1,
   }),
   piece("glass-case", "Tủ kính", "Glass case", "stand", "classic", 7, 900, {
     w: 2,
-    shelves: 3,
+    shelves: 6,
     tier: 2,
   }),
   piece("glass-fridge", "Tủ mát", "Cake fridge", "stand", "classic", 6, 1100, {
@@ -1456,7 +1460,7 @@ export const FURNITURE: Furniture[] = [
   // Kẹo tím: lavender and butter sweets (Dễ thương); the cart and counter are stands
   piece("lavender-cart", "Xe kẹo", "Sweets cart", "stand", "lavender", 6, 700, {
     w: 2,
-    shelves: 2,
+    shelves: 4,
     tier: 2,
   }),
   piece(
@@ -1467,7 +1471,7 @@ export const FURNITURE: Furniture[] = [
     "lavender",
     6,
     750,
-    { w: 2, shelves: 2, tier: 2 },
+    { w: 2, shelves: 4, tier: 2 },
   ),
   piece(
     "lavender-table",
@@ -1509,6 +1513,33 @@ export const FURNITURE: Furniture[] = [
     200,
     { tier: 2 },
   ),
+  // Tray counters: a row of trays, one batch each (2 and 3 tiles wide)
+  piece(
+    "counter-2",
+    "Quầy khay nhỏ",
+    "Tray counter",
+    "stand",
+    "basic",
+    2,
+    350,
+    {
+      w: 2,
+      shelves: 4,
+    },
+  ),
+  piece(
+    "counter-3",
+    "Quầy khay dài",
+    "Long tray counter",
+    "stand",
+    "basic",
+    3,
+    600,
+    {
+      w: 3,
+      shelves: 6,
+    },
+  ),
   // The checkout counter: one per shop, two tiles wide with the cashier's
   // row behind it; customers pay on the tile in front of its left half
   piece(
@@ -1543,8 +1574,8 @@ export const FURNITURE: Furniture[] = [
 ];
 
 /** The storefront floor, in tiles. */
-export const GRID_COLS = 6;
-export const GRID_ROWS = 5;
+export const GRID_COLS = 8;
+export const GRID_ROWS = 12;
 /** Tiles that never take furniture: inside the door, and the queue at the till. */
 export const DOOR_TILE = { x: 1, y: 0 };
 
@@ -1558,13 +1589,13 @@ export interface Placed {
 
 /** What every bakery starts with, and where it stands. */
 export const START_LAYOUT: Placed[] = [
-  { id: "basic-plant", x: 0, y: 0, flip: false },
-  { id: "till-basic", x: 3, y: 0, flip: false },
-  { id: "basic-chair", x: 4, y: 3, flip: false },
-  { id: "basic-table", x: 5, y: 3, flip: false },
-  { id: "basic-chair", x: 5, y: 2, flip: true },
-  { id: "basic-stand", x: 0, y: 4, flip: false },
-  { id: "basic-stand", x: 2, y: 4, flip: false },
+  { id: "basic-plant", x: 6, y: 0, flip: false },
+  { id: "till-basic", x: 3, y: 1, flip: false },
+  { id: "basic-chair", x: 4, y: 6, flip: false },
+  { id: "basic-table", x: 5, y: 6, flip: false },
+  { id: "basic-chair", x: 6, y: 6, flip: true },
+  { id: "basic-stand", x: 1, y: 10, flip: false },
+  { id: "basic-stand", x: 4, y: 10, flip: false },
 ];
 export const START_WALL: FurnitureId = "wall-plain";
 export const START_FLOOR: FurnitureId = "floor-plain";
@@ -1586,3 +1617,12 @@ export const VIP_PER_TIER = 0.03;
 /** Each placed seat makes queuers this much more patient, up to SEAT_MAX. */
 export const SEAT_PATIENCE = 0.04;
 export const SEAT_MAX = 0.2;
+
+/** Longest bakery name the sign and the server accept. */
+export const NAME_MAX = 24;
+
+/** A character the sign can't show: line breaks, tabs and the like. */
+export const isControl = (c: string) => {
+  const n = c.charCodeAt(0);
+  return n < 32 || n === 127;
+};

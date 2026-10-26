@@ -74,11 +74,19 @@ export function pill(
     minWidth?: number;
     /** Label colour (a warning, say). */
     color?: string;
+    /** Stand off the screen like a button: a lip and a soft shadow. */
+    raised?: boolean;
   } = {},
 ): Rect {
   const w = Math.max(opts.minWidth ?? 0, pillWidth(app, label, !!opts.icon));
   const r = { x: opts.align === "right" ? x - w : x, y, w, h: K.pill };
-  panel(app.ctx, r, { fill: C.cream, radius: K.pill / 2, line: K.line });
+  if (opts.raised) raise(app.ctx, r, K.pill / 2);
+  panel(app.ctx, r, {
+    fill: C.cream,
+    radius: K.pill / 2,
+    line: K.line,
+    lip: opts.raised ? 4 : 0,
+  });
   let tx = r.x + K.pad;
   if (opts.icon) {
     drawIcon(app, opts.icon, tx + K.icon / 2 - 2, r.y + K.pill / 2);
@@ -423,14 +431,31 @@ export function calendar(
   y: number,
   weekday: string,
   day: string,
+  extra: {
+    /** The time of day, under the date. */
+    time?: string;
+    /** A picture on the left of the page (tomorrow's weather). */
+    badge?: (cx: number, cy: number) => void;
+    /** Stand off the screen like a button: a lip and a soft shadow. */
+    raised?: boolean;
+  } = {},
 ): Rect {
   const { ctx } = app;
+  const pic = extra.badge ? 34 : 0;
   ctx.font = `700 13px ${FONT}`;
   const ww = ctx.measureText(weekday).width;
-  ctx.font = `700 21px ${FONT}`;
+  ctx.font = `700 ${extra.time ? 18 : 21}px ${FONT}`;
   const dw = ctx.measureText(day).width;
-  const w = Math.max(92, ww + 28, dw + 28);
-  const r = { x: right - w, y, w, h: 54 };
+  const w = Math.max(92, ww + 28, dw + 28 + pic);
+  const r = { x: right - w, y, w, h: extra.time ? 72 : 54 };
+  if (extra.raised) {
+    raise(ctx, r, 12);
+    panel(
+      ctx,
+      { ...r, y: r.y + 4 },
+      { fill: "#d9c6a8", radius: 12, line: K.line },
+    );
+  }
   panel(ctx, r, { fill: C.cream, radius: 12, line: K.line });
   // The band, clipped to the card's rounded top
   ctx.save();
@@ -459,7 +484,14 @@ export function calendar(
     fill: C.white,
     maxWidth: r.w - 10,
   });
-  text(ctx, day, r.x + r.w / 2, r.y + 38, { size: 21, maxWidth: r.w - 10 });
+  // The page: the picture on the left, the date (and the time) beside it
+  const body = r.y + 22 + (r.h - 22) / 2;
+  if (extra.badge) extra.badge(r.x + 8 + pic / 2, body);
+  const tx = r.x + pic + (r.w - pic) / 2;
+  if (extra.time) {
+    text(ctx, day, tx, body - 11, { size: 18, maxWidth: r.w - pic - 10 });
+    text(ctx, extra.time, tx, body + 12, { size: 17, fill: C.muted });
+  } else text(ctx, day, tx, r.y + 38, { size: 21, maxWidth: r.w - pic - 10 });
   return r;
 }
 
@@ -621,4 +653,16 @@ export function menuButton(
       onTap();
     },
   });
+}
+
+/** A soft shadow under a shape that stands off the screen (drawn before it). */
+export function raise(ctx: CanvasRenderingContext2D, r: Rect, radius: number) {
+  ctx.save();
+  ctx.shadowColor = "rgba(74, 44, 30, 0.35)";
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 5;
+  rr(ctx, r.x, r.y + 4, r.w, r.h, radius);
+  ctx.fillStyle = "#d9c6a8";
+  ctx.fill();
+  ctx.restore();
 }

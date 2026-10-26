@@ -1,36 +1,40 @@
 import { newDecor } from "./decor";
-import { type App, H, W, btn, icon, shade, sheet, viewRect } from "./app";
-import { hud } from "./hud";
+import { DOOR_TILE, GRID_ROWS } from "./config";
+import { furniture } from "./furniture";
+import { shopName } from "./name";
+import {
+  type Floor,
+  drawRoom,
+  drawStorefront,
+  floorAt,
+  tileRect,
+} from "./storefront";
+import { type App, H, W, btn, icon, shade, sheet, top, viewRect } from "./app";
+import { SIDE_STEP, SIDE_X, hud, sideIcon, sideTop } from "./hud";
 import { DUR, easeOut } from "./motion";
 import {
   dialogButtons,
   dialogHeight,
   dialogPage,
-  toolbar,
+  raise,
   weatherCard,
 } from "./kit";
 import {
   C,
   FONT,
-  card,
-  framed,
-  clockIcon,
-  cover,
   dot,
+  framed,
   panel,
   sprite,
   text,
   weatherIcon,
   wrap,
-  coverY,
-  onTable,
 } from "./art";
 import {
   BEDTIME,
   INGREDIENTS,
   LATEST_BED,
   MARKET_TRIP,
-  NAP_MINUTES,
   RECIPES,
 } from "./config";
 import {
@@ -38,46 +42,331 @@ import {
   clockAt,
   drinkCoffee,
   goToBed,
-  nap,
   type Job,
   canOpen,
   elapsed,
   mustOpen,
-  ovens,
   ovensBusy,
   pastBedtime,
   slept,
   customer,
   dayInfo,
-  displayCap,
   formatClock,
   pantryQty,
   recipe,
   stockCount,
   timeLeft,
 } from "./logic";
-import { baked, ovenWindow, rawSprite, waitArt } from "./bakeart";
 import { resumeJob } from "./kitchen";
 import { openShop } from "./shop";
 
-// The kitchen at night: tomorrow's forecast, the hours left, what is on the
-// display, and the way to the market, the recipe book, the oven and the door.
+// The bakery at night, closed: the storefront the player has furnished (dim,
+// a "closed" sign on the door, last night's batches on the stands) with the
+// HUD over it. Round buttons run down the sides (the record, the night's
+// speed and coffee on the left; pause and settings on the right), the four
+// places to go stand lower on each side (market and recipes left, baking and
+// decor right), and the big bed / open button sits at the bottom. Batches in
+// the oven show as chips above it.
+
+/** Whether the forecast card is open over the shop. */
+let forecastOpen = false;
 
 export function drawHub(app: App) {
   const { ctx, save } = app;
   const tr = app.tr();
   const v = viewRect(app);
-  cover(ctx, app.sprites.get("bg-kitchen"), v, 0.45);
-  const y0 = hud(app, formatClock(clockAt(save.night)), {
+  const locale = app.rt.locale();
+  ctx.fillStyle = "#f3dfc0";
+  ctx.fillRect(v.x, v.y, v.w, v.h);
+  // The HUD's height is fixed: lay the room out under it, draw the room, then
+  // the HUD over its top
+  const y0 = top(app) + 90;
+
+  // ---- the shop, closed for the night
+  // The grid starts under the HUD; the floor carries on up behind it and
+  // down to the bottom of the screen (those tiles are decoration)
+  const f = floorAt(y0 + 2);
+  const sideAt = f.top + 10;
+  const by = Math.max(H - 94, v.y + v.h - 98);
+  const rows = Math.max(GRID_ROWS, Math.ceil((v.y + v.h - f.y0) / f.th));
+  const from = -Math.ceil((f.y0 - v.y) / f.th);
+  drawRoom(app, f, v, save.decor, rows, from);
+  // The name sign hangs just under the HUD, where it shows
+  drawStorefront(
+    app,
+    f,
+    save.decor,
+    save.stock,
+    shopName(save, locale),
+    [],
+    top(app) + 70,
+  );
+  // Daylight until evening; after dark the lamps give the room a warm glow
+  const dark = darkness(clockAt(save.night));
+  if (dark > 0) {
+    ctx.save();
+    ctx.globalAlpha = dark;
+    ctx.fillStyle = "rgba(255, 176, 72, 0.2)";
+    ctx.fillRect(v.x, v.y, v.w, v.h);
+    // Pools of lamplight under the wall
+    const g = ctx.createRadialGradient(
+      W / 2,
+      f.top + 80,
+      20,
+      W / 2,
+      f.top + 80,
+      420,
+    );
+    g.addColorStop(0, "rgba(255, 214, 140, 0.28)");
+    g.addColorStop(1, "rgba(120, 70, 40, 0.16)");
+    ctx.fillStyle = g;
+    ctx.fillRect(v.x, v.y, v.w, v.h);
+    ctx.restore();
+  }
+  closedSign(app, f);
+  // Tomorrow's weather sits on the calendar; tap it for the forecast
+  const info = dayInfo(save);
+  hud(app, formatClock(clockAt(save.night)), {
     settings: () => app.go({ kind: "settings", confirm: 0 }),
     pause: true,
     music: () => app.go({ kind: "music" }),
+    side: sideAt,
+    forecast: {
+      weather: info.weather,
+      dot: info.vip || save.preorders.length > 0,
+      onTap: () => {
+        forecastOpen = true;
+      },
+    },
+  });
+  // The stands open the display (what is out for tomorrow)
+  for (const p of save.decor.placed.filter(
+    (x) => furniture(x.id).kind === "stand",
+  )) {
+    const def = furniture(p.id);
+    const r = tileRect(f, p.x, p.y, def.w, def.h);
+    app.ui.add({
+      rect: { x: r.x, y: r.y - f.th, w: r.w, h: r.h + f.th },
+      key: "display",
+      tap: () => {
+        app.sfx.tap();
+        app.go({ kind: "display" });
+      },
+    });
+  }
+
+  // ---- the night: time to the next wall, under the stats
+  const left = timeLeft(save);
+  const timeLine = slept(save)
+    ? canOpen(save)
+      ? tr.openNow
+      : tr.beforeOpen(left)
+    : pastBedtime(save)
+      ? tr.lateNight(left)
+      : tr.beforeBed(left - (LATEST_BED - BEDTIME));
+  text(ctx, timeLine, 16, top(app) + 74, {
+    size: 14,
+    align: "left",
+    fill: pastBedtime(save) ? C.warn : C.text,
+    outline: C.cream,
+    maxWidth: 160,
   });
 
-  // ---- tomorrow
-  const info = dayInfo(save);
+  // ---- down the left side, under the record: the night's speed and coffee
+  const sy = sideTop(sideAt);
+  const lx = SIDE_X.left;
+  sideIcon(
+    app,
+    "speed",
+    lx,
+    sy + SIDE_STEP,
+    "icon-speed",
+    (cx, cy) => text(ctx, "▶▶", cx, cy, { size: 15, fill: C.good }),
+    () => {
+      app.speed = app.speed === 3 ? 1 : ((app.speed + 1) as 2 | 3);
+    },
+    { tag: app.speed > 1 ? `×${app.speed}` : undefined },
+  );
+  const cups = pantryQty(save, "coffee");
+  sideIcon(
+    app,
+    "coffee",
+    lx,
+    sy + SIDE_STEP * 2,
+    "icon-coffee",
+    (cx, cy) => sprite(ctx, app.sprites.get("ing-coffee"), cx, cy, 26, 26),
+    () => {
+      const r = drinkCoffee(save);
+      if (!r.ok) {
+        app.sfx.bad();
+        app.toast(tr.noCoffee, W / 2, sy + SIDE_STEP * 2, C.bad, 18);
+        return;
+      }
+      app.sfx.good();
+      app.commit(r.save);
+      app.toast("+⚡", lx + 40, sy + SIDE_STEP * 2, C.good, 22);
+    },
+    { count: cups },
+  );
+
+  // ---- the bottom: the four places to go on the sides, bed / open between
+  const affordable = RECIPES.some(
+    (r) => !save.recipes.includes(r.id) && r.cost <= save.coins,
+  );
+  const nav = [
+    {
+      key: "market",
+      label: tr.market,
+      img: "ing-strawberry",
+      go: () => app.go({ kind: "market", cart: {} }),
+    },
+    {
+      key: "book",
+      label: tr.bookShort,
+      img: "cake-shortcake",
+      go: () => app.go({ kind: "book", tab: 0, detail: null }),
+      badge: affordable,
+    },
+    {
+      key: "bake",
+      label: tr.bake,
+      img: "tool-bowl",
+      go: () => app.go({ kind: "pick" }),
+    },
+    {
+      key: "decor",
+      label: tr.decor.title,
+      img: "f-pink-chair",
+      go: () => app.go({ kind: "decor", decor: newDecor(save.decor) }),
+    },
+  ];
+  // A bottom bar of square tiles with names, like a shop's shelf: market and
+  // recipes on the left, baking and decor on the right, bed / open between
+  const navIcon = ["icon-market", "icon-recipes", "icon-bake", "icon-decor"];
+  const TW = 80;
+  const TH = 84;
+  const mid = { x: 14 + 2 * (TW + 6), w: W - 2 * (14 + 2 * (TW + 6)) };
+  // The bar's shelf behind the tiles
+  panel(
+    ctx,
+    { x: 6, y: by + 16, w: W - 12, h: TH - 8 },
+    {
+      fill: "#e9b48f",
+      radius: 16,
+      line: 3,
+      lip: 5,
+    },
+  );
+  nav.forEach((t, i) => {
+    const right = i >= 2;
+    const slot = right ? i - 2 : i;
+    const x = right
+      ? mid.x + mid.w + 6 + slot * (TW + 6)
+      : 14 + slot * (TW + 6);
+    const pressed = app.ui.isPressed(t.key);
+    const r = { x, y: by + (pressed ? 3 : 0), w: TW, h: TH };
+    raise(ctx, r, 16);
+    panel(ctx, r, {
+      fill: "#fff6e8",
+      radius: 16,
+      line: 3,
+      lip: pressed ? 0 : 4,
+    });
+    const img = app.sprites.get(navIcon[i]);
+    if (img?.naturalWidth) sprite(ctx, img, r.x + TW / 2, r.y + 32, 50, 46);
+    else sprite(ctx, app.sprites.get(t.img), r.x + TW / 2, r.y + 32, 44, 40);
+    text(ctx, t.label, r.x + TW / 2, r.y + TH - 14, {
+      size: 14,
+      fill: C.white,
+      outline: C.ink,
+      maxWidth: TW - 6,
+    });
+    if (t.badge) dot(ctx, r.x + TW - 6, r.y + 6);
+    app.ui.add({
+      rect: r,
+      key: t.key,
+      tap: () => {
+        app.sfx.tap();
+        t.go();
+      },
+    });
+  });
+  const jobs = jobChips(app, by - 10);
+  hintToast(app, nextHint(app), jobs - 8);
+
+  const pulse =
+    left < Math.min(MARKET_TRIP, 37) || nextHint(app) === tr.hintOpen;
+  const awake = !slept(save);
+  if (mustOpen(save)) {
+    app.toast(tr.autoOpened, W / 2, 330, C.text, 20);
+    openShop(app);
+    return;
+  }
+  const big = { x: mid.x, y: by + 2, w: mid.w, h: TH };
+  if (awake) {
+    btn(app, "bed", big, tr.sleep, () => sleepNow(app), {
+      fill: "#c9cdea",
+      size: 26,
+    });
+  } else {
+    const open = canOpen(save);
+    btn(
+      app,
+      "open",
+      big,
+      open ? `${tr.open} ▶` : tr.openAt,
+      () => openShop(app),
+      {
+        fill: pulse && Math.sin(app.time * 5) > 0 ? "#c9f0a6" : C.green,
+        size: open ? 26 : 19,
+        disabled: !open,
+      },
+    );
+  }
+
+  if (forecastOpen) drawForecast(app);
+  // 22:00: ask once a night; 1:00: bed, no choice
+  if (awake && left <= 0) {
+    bedtimeSheet(app, tr.mustSleep, false);
+  } else if (awake && pastBedtime(save) && askedDay !== save.day) {
+    bedtimeSheet(app, tr.bedtimeAsk, true);
+  }
+  drawSleep(app);
+}
+
+/** A little "closed" board standing on the door tile (always kept clear). */
+function closedSign(app: App, f: Floor) {
+  const { ctx } = app;
+  const tr = app.tr();
+  const t = tileRect(f, DOOR_TILE.x, 0);
+  ctx.font = `700 13px ${FONT}`;
+  const w = Math.max(64, ctx.measureText(tr.closedSign).width + 18);
+  const r = { x: t.x + t.w / 2 - w / 2, y: t.y + t.h - 46, w, h: 26 };
+  // Two little legs
+  ctx.save();
+  ctx.strokeStyle = C.ink;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(r.x + 12, r.y + r.h);
+  ctx.lineTo(r.x + 8, t.y + t.h - 8);
+  ctx.moveTo(r.x + w - 12, r.y + r.h);
+  ctx.lineTo(r.x + w - 8, t.y + t.h - 8);
+  ctx.stroke();
+  ctx.restore();
+  panel(ctx, r, { fill: "#f6b7a8", radius: 8, line: 2.5 });
+  text(ctx, tr.closedSign, r.x + w / 2, r.y + r.h / 2 + 1, { size: 13 });
+}
+
+/** Tomorrow in full, over the shop. */
+function drawForecast(app: App) {
+  const { ctx, save } = app;
+  const tr = app.tr();
   const locale = app.rt.locale();
-  // The weekday is on the calendar above; the card leads with the weather
+  const shut = () => {
+    forecastOpen = false;
+  };
+  shade(app, shut);
+  const info = dayInfo(save);
   const lines: { text: string; color: string }[] = [
     { text: tr.crowd(info.customers), color: C.text },
   ];
@@ -99,7 +388,7 @@ export function drawHub(app: App) {
       color: C.good,
     });
   }
-  const fc = weatherCard(app, 18, y0 + 4, W - 36, {
+  const card = weatherCard(app, 18, 230, W - 36, {
     title: tr.forecast(save.day),
     headline: tr.weather[info.weather],
     icon: {
@@ -115,279 +404,37 @@ export function drawHub(app: App) {
           : "#d9e8f6",
     lines,
   });
+  app.ui.add({ rect: card, tap: shut });
+}
 
-  // ---- the night: time to the next wall, and ways to get some energy back
-  const left = timeLeft(save);
-  const wy = fc.y + fc.h + 12;
-  const timeLine = slept(save)
-    ? canOpen(save)
-      ? tr.openNow
-      : tr.beforeOpen(left)
-    : pastBedtime(save)
-      ? tr.lateNight(left)
-      : tr.beforeBed(left - (LATEST_BED - BEDTIME));
-  const cups = pantryQty(save, "coffee");
-  const noTime = () => app.toast(tr.noTime, W / 2, wy - 10, C.bad, 18);
-  toolbar(app, 18, wy, W - 36, [
-    {
-      kind: "info",
-      icon: {
-        name: "clock",
-        fallback: (cx, cy, s) =>
-          clockIcon(ctx, cx, cy, s * 0.45, clockAt(save.night)),
-      },
-      text: timeLine,
-      color: pastBedtime(save) ? C.warn : C.text,
-    },
-    {
-      kind: "button",
-      key: "ff",
-      w: 58,
-      active: app.fast,
-      icon: {
-        name: "fastforward",
-        fallback: (cx, cy) => text(ctx, "▶▶", cx, cy, { size: 16 }),
-      },
-      onTap: () => {
-        app.fast = !app.fast;
-      },
-    },
-    {
-      kind: "button",
-      key: "nap",
-      w: 100,
-      label: tr.napLabel,
-      disabled: left < NAP_MINUTES,
-      onDisabled: noTime,
-      onTap: () => {
-        const r = nap(save);
-        if (!r.ok) return noTime();
-        app.commit(r.save);
-        app.toast("+⚡", W - 170, wy - 6, C.good, 22);
-      },
-    },
-    {
-      kind: "button",
-      key: "coffee",
-      w: 84,
-      icon: {
-        name: "ing-coffee",
-        sprite: true,
-        fallback: () => undefined,
-      },
-      count: cups,
-      disabled: cups < 1,
-      onDisabled: () => app.toast(tr.noCoffee, W / 2, wy - 10, C.bad, 18),
-      onTap: () => {
-        const r = drinkCoffee(save);
-        if (!r.ok) return;
-        app.sfx.good();
-        app.commit(r.save);
-        app.toast("+⚡", W - 70, wy - 6, C.good, 22);
-      },
-    },
-  ]);
-
-  // ---- the worktop: pinned to the counter painted in bg-kitchen (its top
-  // surface sits at 56% of the picture), so it never drifts on other screens
-  const worktop = coverY(app.sprites.get("bg-kitchen"), v, 0.555, 0.45);
-  const bob = Math.sin(app.time * 2) * 2;
-  // Batches left proofing or cooling sit on the worktop; ovens show what bakes
-  const waits = save.jobs.filter((j) => j.kind === "wait");
-  const inOvens = save.jobs.filter((j) => j.kind === "oven");
-  if (waits[0]) {
-    jobSpot(
-      app,
-      waits[0],
-      { x: 104, y: worktop + 8, w: 150, h: 120 },
-      (() => {
-        const step = recipe(waits[0].recipe).steps[waits[0].step];
-        return waitArt(
-          waits[0].recipe,
-          step?.kind === "wait" ? step.mode : "proof",
-        );
-      })(),
-    );
-  } else {
-    onTable(ctx, app.sprites.get("tool-bowl"), 104, worktop + 8, 140, 110);
-  }
-  if (ovens(save) > 1) ovenSpot(app, inOvens[1], 250, worktop + 8, 150, 140);
-  else onTable(ctx, app.sprites.get("tool-scale"), 232, worktop + 8, 100, 100);
-  ovenSpot(app, inOvens[0], 418, worktop + 8, 190, 180);
-  if (save.recipes.length && stockCount(save.stock) > 0) {
-    const top = save.stock[0];
+/** Batches baking or resting, as chips above the bar; tap one to tend it. Returns the top. */
+function jobChips(app: App, bottom: number) {
+  const { ctx, save } = app;
+  if (!save.jobs.length) return bottom;
+  const y = bottom - 44;
+  save.jobs.slice(0, 3).forEach((job, i) => {
+    const r = { x: 80 + i * 130, y, w: 122, h: 44 };
+    const k = progress(app, job);
+    const ready = k >= 1;
+    framed(ctx, r, ready ? "#d6ecb0" : C.cream, 22, 3);
     sprite(
       ctx,
-      app.sprites.get(recipe(top.recipe).sprite),
-      104,
-      worktop - 50 + bob,
-      70,
-      70,
+      app.sprites.get(recipe(job.recipe).sprite),
+      r.x + 24,
+      r.y + r.h / 2,
+      34,
+      34,
     );
-  }
-
-  // ---- the display case: a button to its own screen, with a peek inside
-  const dy = H - 330;
-  const pressed = app.ui.isPressed("display");
-  const dp = { x: 18, y: dy + (pressed ? 3 : 0), w: W - 36, h: 112 };
-  framed(ctx, dp, "#fff8eb", 24, pressed ? 2 : 5);
-  const count = stockCount(save.stock);
-  const caseImg = app.sprites.get("display-case");
-  if (caseImg?.naturalWidth)
-    sprite(ctx, caseImg, dp.x + 52, dp.y + dp.h / 2 + 2, 70, 88);
-  text(ctx, tr.display(count, displayCap(save)), dp.x + 98, dp.y + 28, {
-    size: 19,
-    align: "left",
-  });
-  if (!save.stock.length) {
-    text(ctx, tr.emptyDisplay, dp.x + 98, dp.y + 68, {
-      size: 17,
-      align: "left",
-      fill: C.muted,
-    });
-  } else {
-    const peek = save.stock.slice(0, 5);
-    peek.forEach((g, i) => {
-      const cx = dp.x + 122 + i * 66;
-      sprite(
-        ctx,
-        app.sprites.get(recipe(g.recipe).sprite),
-        cx,
-        dp.y + 70,
-        48,
-        42,
-      );
-      text(ctx, `×${g.count}`, cx + 22, dp.y + 50, { size: 13, fill: C.text });
-    });
-  }
-  // A chevron: this opens
-  text(ctx, "›", dp.x + dp.w - 26, dp.y + dp.h / 2, {
-    size: 40,
-    fill: C.muted,
-  });
-  app.ui.add({
-    rect: dp,
-    key: "display",
-    tap: () => {
-      app.sfx.tap();
-      app.go({ kind: "display" });
-    },
-  });
-
-  // ---- a hint for what to do next, as a toast Mây says (tap to skip it)
-  hintToast(app, nextHint(app), dy - 12);
-
-  // ---- where to go
-  const ty = H - 206;
-  const tw = (W - 36 - 30) / 4;
-  const affordable = RECIPES.some(
-    (r) => !save.recipes.includes(r.id) && r.cost <= save.coins,
-  );
-  const tiles: {
-    key: string;
-    label: string;
-    img: string;
-    go: () => void;
-    badge?: boolean;
-  }[] = [
-    {
-      key: "market",
-      label: tr.market,
-      img: "ing-strawberry",
-      go: () => app.go({ kind: "market", cart: {} }),
-    },
-    {
-      key: "book",
-      label: tr.book,
-      img: "cake-shortcake",
-      go: () => app.go({ kind: "book", tab: 0, detail: null }),
-      badge: affordable,
-    },
-    {
-      key: "bake",
-      label: tr.bake,
-      img: "tool-bowl",
-      go: () => app.go({ kind: "pick" }),
-    },
-    {
-      key: "decor",
-      label: tr.decor.title,
-      img: "f-pink-chair",
-      go: () => app.go({ kind: "decor", decor: newDecor(save.decor) }),
-    },
-  ];
-  tiles.forEach((t, i) => {
-    const r = { x: 18 + i * (tw + 10), y: ty, w: tw, h: 112 };
-    const pressed = app.ui.isPressed(t.key);
-    const tile = card(ctx, r, "pink", pressed);
-    sprite(
-      ctx,
-      app.sprites.get(t.img),
-      tile.x + tile.w / 2,
-      tile.y + 34 + (pressed ? 2 : 0),
-      tile.w - 40,
-      52,
-    );
-    text(ctx, t.label, r.x + r.w / 2, r.y + r.h - 22 + (pressed ? 2 : 0), {
-      size: 17,
-      maxWidth: r.w - 16,
-    });
-    if (t.badge) dot(ctx, r.x + r.w - 8, r.y + 8);
+    timerChip(app, job, r.x + 80, r.y + 37);
     app.ui.add({
       rect: r,
-      key: t.key,
       tap: () => {
         app.sfx.tap();
-        t.go();
+        resumeJob(app, job);
       },
     });
   });
-
-  const pulse =
-    left < Math.min(MARKET_TRIP, 37) || nextHint(app) === tr.hintOpen;
-  const cy = H - 82;
-  const awake = !slept(save);
-  if (awake) {
-    btn(
-      app,
-      "bed",
-      { x: 18, y: cy, w: 190, h: 70 },
-      `${tr.sleep}`,
-      () => sleepNow(app),
-      {
-        fill: "#c9cdea",
-        size: 24,
-      },
-    );
-  }
-  if (mustOpen(save)) {
-    app.toast(tr.autoOpened, W / 2, 330, C.text, 20);
-    openShop(app);
-    return;
-  }
-  const open = canOpen(save);
-  btn(
-    app,
-    "open",
-    awake
-      ? { x: 220, y: cy, w: W - 238, h: 70 }
-      : { x: 18, y: cy, w: W - 36, h: 70 },
-    open ? `${tr.open}  ▶` : tr.openAt,
-    () => openShop(app),
-    {
-      fill: pulse && Math.sin(app.time * 5) > 0 ? "#c9f0a6" : C.green,
-      size: open ? 28 : 22,
-      disabled: !open,
-    },
-  );
-
-  // 22:00: ask once a night; 1:00: bed, no choice
-  if (awake && left <= 0) {
-    bedtimeSheet(app, tr.mustSleep, false);
-  } else if (awake && pastBedtime(save) && askedDay !== save.day) {
-    bedtimeSheet(app, tr.bedtimeAsk, true);
-  }
-  drawSleep(app);
+  return y;
 }
 
 let askedDay = -1;
@@ -510,8 +557,8 @@ function hintToast(app: App, hint: string | null, bottom: number) {
   if (leave >= 1) return;
   const k = enter * (1 - leave);
 
-  const x = 24;
-  const w = W - 48;
+  const x = 100;
+  const w = W - 200;
   const lines = wrap(ctx, hint, w - 128, 17);
   const h = Math.max(64, 22 + lines.length * 23);
   const y = bottom - h;
@@ -572,75 +619,6 @@ function nextHint(app: App) {
     : tr.hintMarket;
 }
 
-/** One oven on the worktop: dark when empty, glowing with a countdown while it bakes. Tap to tend it. */
-function ovenSpot(
-  app: App,
-  job: Job | undefined,
-  cx: number,
-  bottom: number,
-  w: number,
-  h: number,
-) {
-  const { ctx } = app;
-  const img = app.sprites.get("tool-oven");
-  onTable(ctx, img, cx, bottom, w, h);
-  const win = ovenWindow(img, cx, bottom, w, h);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(win.x, win.y, win.w, win.h);
-  ctx.clip();
-  if (!job) {
-    ctx.fillStyle = "#4a2c20";
-    ctx.fillRect(win.x, win.y, win.w, win.h);
-    ctx.restore();
-    return;
-  }
-  ctx.fillStyle = `rgba(255, ${150 + Math.sin(app.time * 6) * 20}, 60, 0.85)`;
-  ctx.fillRect(win.x, win.y, win.w, win.h);
-  const k = progress(app, job);
-  baked(
-    ctx,
-    app.sprites.get(rawSprite(job.recipe)),
-    k,
-    win.x + win.w / 2,
-    win.y + win.h - 2,
-    win.w * 0.7,
-    win.h * 0.8,
-    "bottom",
-  );
-  if (k > 1) {
-    ctx.fillStyle = `rgba(40, 20, 10, ${Math.min(0.75, (k - 1) * 0.9)})`;
-    ctx.fillRect(win.x, win.y, win.w, win.h);
-  }
-  ctx.restore();
-  timerChip(app, job, cx, win.y - 14);
-  app.ui.add({
-    rect: { x: cx - w / 2, y: bottom - h, w, h },
-    tap: () => {
-      app.sfx.tap();
-      resumeJob(app, job);
-    },
-  });
-}
-
-/** A proofing / cooling batch on the worktop. */
-function jobSpot(
-  app: App,
-  job: Job,
-  r: { x: number; y: number; w: number; h: number },
-  art: string,
-) {
-  onTable(app.ctx, app.sprites.get(art), r.x, r.y, r.w, r.h);
-  timerChip(app, job, r.x, r.y - r.h - 6);
-  app.ui.add({
-    rect: { x: r.x - r.w / 2, y: r.y - r.h, w: r.w, h: r.h },
-    tap: () => {
-      app.sfx.tap();
-      resumeJob(app, job);
-    },
-  });
-}
-
 /** 0 → 1 as the timed step runs (past 1: overdone). */
 function progress(app: App, job: Job) {
   const step = recipe(job.recipe).steps[job.step];
@@ -677,4 +655,13 @@ function timerChip(app: App, job: Job, cx: number, y: number) {
     },
   );
   text(app.ctx, label, cx, y - 15 - bounce, { size: 18 });
+}
+
+/** 0 in daylight, 1 at night: fades in 17:30–18:30 and out 5:30–6:30. */
+function darkness(clock: number) {
+  const t = ((clock % 1440) + 1440) % 1440;
+  const ramp = (a: number, b: number) =>
+    Math.min(1, Math.max(0, (t - a) / (b - a)));
+  if (t >= 12 * 60) return ramp(17.5 * 60, 18.5 * 60);
+  return 1 - ramp(5.5 * 60, 6.5 * 60);
 }

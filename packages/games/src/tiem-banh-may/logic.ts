@@ -147,7 +147,9 @@ export interface Job {
 }
 
 export interface SaveData {
-  v: 6;
+  v: 7;
+  /** What the player called the bakery ("" until they name it). */
+  name: string;
   /** The business day being prepared (the night before) or sold. */
   day: number;
   /** "open": saved at opening, so a reload replays the day from 9:00. */
@@ -232,7 +234,8 @@ const between = (r: number, lo: number, hi: number) =>
 
 export function newGame(seed: number): SaveData {
   return {
-    v: 6,
+    v: 7,
+    name: "",
     day: 1,
     phase: "prep",
     coins: START_COINS,

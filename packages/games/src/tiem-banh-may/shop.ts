@@ -22,6 +22,7 @@ import {
   CLOSE_AT,
   DISCOUNT_FROM,
   DOOR_TILE,
+  GRID_ROWS,
   OPEN,
   type Placed,
   OPEN_AT,
@@ -29,7 +30,6 @@ import {
   PREORDER_PATIENCE,
   QUEUE_MAX,
   REP,
-  RECIPES,
   type RecipeId,
   SELL_SECONDS,
   VIP_PATIENCE,
@@ -67,19 +67,20 @@ import {
   walkPath,
 } from "./furniture";
 import {
-  ROOM,
+  ROOM_H,
   drawLight,
-  drawPiece,
   drawRoom,
   floorAt,
   glassRects,
-  pieceDepth,
-  drawShelf,
+  CUSTOMER_S,
+  drawStorefront,
+  standSlots,
   feet,
   shelve,
   tileRect,
 } from "./storefront";
-import { dialogButtons } from "./kit";
+import { dialogButtons, raise } from "./kit";
+import { shopName } from "./name";
 
 // Opening hours, in real time: customers walk in, take what they want from the
 // cake stands and queue at the checkout counter in the room, where Mây rings
@@ -155,9 +156,12 @@ export interface ShopState {
 
 /** The room fills the screen under the bar; the stock strip sits under it. */
 /** Room top below the top of the screen, clear of the status bar. */
-const ROOM_BELOW_TOP = 128;
+const ROOM_BELOW_TOP = 112;
 let FLOOR = floorAt(ROOM_BELOW_TOP);
-const stripY = () => FLOOR.top + ROOM.size + 22;
+/** Under the room: the stock board on the left, the shop's buttons on the right. */
+const below = () => FLOOR.top + ROOM_H + 14;
+const BTN_X = 330;
+const BTN_W = W - 14 - BTN_X;
 
 /** Fit the room under the status bar on this screen (taller phones show more). */
 function fitRoom(app: App) {
@@ -167,8 +171,6 @@ function fitRoom(app: App) {
 /** Seconds Mây takes to ring someone up; a tap on the counter takes off a third. */
 const CHECKOUT_SECONDS = 3.2;
 const TAP_RING = 0.34;
-/** Customers' size in the room (their sprites are drawn 250 × this tall). */
-const CUSTOMER_S = 0.46;
 /** The light turns golden between these minutes of the day. */
 const DUSK_FROM = 14 * 60 + 30;
 const DUSK_TO = 16 * 60;
@@ -626,15 +628,20 @@ export function drawShop(app: App, s: ShopState) {
     Math.max(0, (s.clock - DUSK_FROM) / (DUSK_TO - DUSK_FROM)),
   );
   fitRoom(app);
-  // Under the room: the shop's own floor colour, then the room on top
-  ctx.fillStyle = "#f3dfc0";
-  ctx.fillRect(
-    v.x,
-    FLOOR.top + ROOM.size - 2,
-    v.w,
-    v.y + v.h - FLOOR.top - ROOM.size + 2,
+  // The floor runs on to the bottom of the screen (rows past the grid are
+  // decoration); the stock board and the buttons stand on it
+  const rows = Math.max(
+    GRID_ROWS,
+    Math.ceil((v.y + v.h - FLOOR.y0) / FLOOR.th),
   );
-  drawRoom(app, FLOOR, v, s.opened.decor);
+  drawRoom(
+    app,
+    FLOOR,
+    v,
+    s.opened.decor,
+    rows,
+    -Math.ceil((FLOOR.y0 - v.y) / FLOOR.th),
+  );
   if (weather === "rainy") drawRain(app, glassRects(FLOOR));
   drawLight(app, FLOOR, weather, dusk);
   // The till counts up as the day goes
@@ -642,13 +649,14 @@ export function drawShop(app: App, s: ShopState) {
   hud(app, formatClock(Math.min(s.clock, CLOSE_AT)), {
     coins: s.opened.coins + L.revenue + L.tips - L.boxes,
     pause: true,
+    side: FLOOR.top + 6,
   });
 
   // Day progress under the clock, then the shop's two switches
   const top = app.rt.stage.view.y + 14;
   bar(
     ctx,
-    { x: W - 150, y: top + 104, w: 136, h: 14 },
+    { x: 14, y: top + 64, w: W - 28 - 132, h: 12 },
     (s.clock - OPEN_AT) / (CLOSE_AT - OPEN_AT),
     "#ffc46b",
   );
@@ -658,7 +666,7 @@ export function drawShop(app: App, s: ShopState) {
       btn(
         app,
         "discount",
-        { x: W - 190, y: stripY() + 92, w: 176, h: 56 },
+        { x: BTN_X, y: below(), w: BTN_W, h: 64 },
         s.discount ? tr.discountOn : tr.discount,
         () => (s.discount = true),
         {
@@ -672,7 +680,12 @@ export function drawShop(app: App, s: ShopState) {
       btn(
         app,
         "close-early",
-        { x: 14, y: stripY() + 92, w: 220, h: 56 },
+        {
+          x: BTN_X,
+          y: s.clock >= DISCOUNT_FROM ? below() + 74 : below(),
+          w: BTN_W,
+          h: 64,
+        },
         tr.closeEarly,
         () => close(app, s),
         { fill: C.green, size: 19 },
@@ -680,39 +693,16 @@ export function drawShop(app: App, s: ShopState) {
     }
   }
 
-  // Furniture (stands showing their cakes) and customers, back to front, then
-  // the counter in front of them
-  const shelves = shelve(s.opened.decor.placed, displaySlots(s));
-  const scene: { y: number; draw: () => void }[] = [
-    ...s.opened.decor.placed.map((p) => ({
-      y: pieceDepth(FLOOR, p),
-      draw: () => {
-        drawPiece(app, FLOOR, p);
-        for (const spot of shelves)
-          if (spot.stand === p)
-            drawShelf(
-              app,
-              FLOOR,
-              p,
-              spot.shelf,
-              recipe(spot.item.recipe).sprite,
-              spot.item.count,
-            );
-      },
-    })),
-    ...s.walkers.map((w) => ({
-      y: w.y + 1,
-      draw: () => drawWalker(app, s, w),
-    })),
-  ];
-  // Mây behind the checkout counter
+  // The room with its furniture, Mây and the customers, back to front
+  drawStorefront(
+    app,
+    FLOOR,
+    s.opened.decor,
+    s.stock,
+    shopName(s.opened, app.rt.locale()),
+    s.walkers.map((w) => ({ y: w.y + 1, draw: () => drawWalker(app, s, w) })),
+  );
   const till = tillOf(s.opened.decor.placed);
-  if (till)
-    scene.push({
-      y: FLOOR.y0 + (till.y + 1) * FLOOR.th - 1,
-      draw: () => drawCashier(app, till),
-    });
-  for (const d of scene.sort((a, b) => a.y - b.y)) d.draw();
   if (till) drawTill(app, s, till, f);
   drawStrip(app, s);
 
@@ -779,33 +769,9 @@ function sectionLabel(app: App, x: number, y: number, label: string) {
   text(ctx, label, x + w / 2, y + 13, { size: 14 });
 }
 
-function displaySlots(s: ShopState): Slot[] {
-  const order = RECIPES.map((r) => r.id);
-  return s.stock
-    .filter((x) => x.count > 0)
-    .map((x) => ({ recipe: x.recipe, stars: x.stars, count: x.count }))
-    .sort(
-      (a, b) =>
-        order.indexOf(a.recipe) - order.indexOf(b.recipe) || b.stars - a.stars,
-    );
-}
+const displaySlots = (s: ShopState): Slot[] => standSlots(s.stock);
 
 /** Mây at work behind the counter, a little bob while someone is paying. */
-function drawCashier(app: App, till: Placed) {
-  const def = furniture(till.id);
-  const r = tileRect(FLOOR, till.x, till.y, def.w, 1);
-  const h = 250 * CUSTOMER_S * 1.05;
-  const bob = Math.abs(Math.sin(app.time * 3)) * 2;
-  sprite(
-    app.ctx,
-    app.sprites.get("mascot-happy"),
-    r.x + r.w / 2,
-    r.y + r.h - 2 - bob,
-    h,
-    h,
-    "bottom",
-  );
-}
 
 /**
  * Over the counter: what the front customer brings, the checkout's progress
@@ -881,37 +847,34 @@ function drawTill(app: App, s: ShopState, till: Placed, f: Walker | undefined) {
 function drawStrip(app: App, s: ShopState) {
   const { ctx } = app;
   const tr = app.tr();
-  const strip = { x: 14, y: stripY(), w: W - 28, h: 78 };
-  panel(ctx, strip, { fill: "#fff8eb", radius: 20, line: 2.5 });
-  sectionLabel(app, strip.x + 12, strip.y - 13, tr.onStands);
-  const slots = displaySlots(s).slice(0, 6);
+  // A little board under the room: what is left on the stands
+  const board = { x: 14, y: below(), w: BTN_X - 26, h: 64 };
+  raise(ctx, board, 16);
+  panel(ctx, board, { fill: "#fff8eb", radius: 16, line: 2.5, lip: 4 });
+  sectionLabel(app, board.x + 10, board.y - 12, tr.onStands);
+  const slots = displaySlots(s).slice(0, 4);
   if (!slots.length)
-    text(ctx, tr.emptyDisplay, W / 2, strip.y + strip.h / 2, {
-      size: 16,
+    text(ctx, tr.emptyDisplay, board.x + board.w / 2, board.y + board.h / 2, {
+      size: 13,
       fill: C.muted,
+      maxWidth: board.w - 16,
     });
   slots.forEach((slot, i) => {
-    const cx = strip.x + 40 + i * 78;
+    const cx = board.x + 34 + i * 72;
     sprite(
       ctx,
       app.sprites.get(recipe(slot.recipe).sprite),
       cx,
-      strip.y + 38,
-      50,
-      46,
+      board.y + 30,
+      40,
+      36,
     );
-    text(ctx, `×${slot.count}`, cx + 26, strip.y + 22, {
-      size: 14,
+    text(ctx, `×${slot.count}`, cx + 18, board.y + 16, {
+      size: 12,
       outline: C.white,
     });
-    stars(ctx, cx, strip.y + 66, slot.stars, 6);
+    stars(ctx, cx, board.y + 54, slot.stars, 5);
   });
-  if (front(s) && !s.checkout && s.closing === null)
-    text(ctx, tr.tapTill, W / 2, stripY() + 168, {
-      size: 14,
-      fill: C.muted,
-      outline: C.white,
-    });
 }
 
 function drawBoxes(app: App, s: ShopState, w: Walker) {
