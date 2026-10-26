@@ -301,7 +301,7 @@ export function priceLabel(
   ctx.restore();
 }
 
-/** A UI icon from img/icon-*.webp, or the code-drawn fallback while it is missing. */
+/** A UI icon from img/icon-*.svg, or the code-drawn fallback while it is missing. */
 export function icon(
   app: App,
   name: string,
@@ -310,7 +310,7 @@ export function icon(
   size: number,
   fallback: () => void,
 ) {
-  // Icons live in img/icon-*.webp; a full sprite name works too
+  // Icons live in img/icon-*.svg; a full sprite name works too
   const img =
     app.sprites.get(name.startsWith("icon-") ? name : `icon-${name}`) ??
     app.sprites.get(name);

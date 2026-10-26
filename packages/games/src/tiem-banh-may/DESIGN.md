@@ -245,7 +245,7 @@ Two looks for the world, plus the interface:
   broken brown line below, but plump bouncy shapes, oversized toppings, a rosy
   blush on the edges, plated sweets on a cream plate with a mint rim. Anchors:
   `art-src/.../anchors-v3/`.
-- **Tools, rooms, key art** (bitmaps in `img/`): cosy
+- **Tools, rooms, key art** (`img/`, SVG since 2026-10-26): cosy
   hand-drawn 2D, after a reference bakery game the owner picked (2026-10-24).
   Dark warm-brown hand-drawn outline that **breaks where the light hits** (a gap
   on the lit edge with a small cream highlight stroke inside); soft
@@ -253,7 +253,7 @@ Two looks for the world, plus the interface:
   cream, butter, caramel, toasted brown, terracotta, mint, soft pink. It must
   stay 2D: no 3D-render or "AI CGI" look, no gloss, no volumetric light. No
   text or logos inside images.
-- **Customers** (`customer-*.webp`): redrawn on 2026-10-25 with the decor
+- **Customers** (`customer-*.svg`): redrawn on 2026-10-25 with the decor
   (the owner's call): tiny chubby mochi animals, flat pastel fills, dot eyes
   and blush, and the decor's thick broken cocoa line (#765e4c), applied by
   the outline tool in `art-src/.../tools/outline.py` (gitignored with the
@@ -389,7 +389,7 @@ from it. New UI should start from the kit; screens move onto it over time.
 `toggle` (an on/off switch whose knob slides) and `menuButton` (a wide button
 with an icon in a white circle before its label) build the settings, whose
 line icons (speaker, notes, shop, restart) are drawn in `art.ts` and give way
-to `img/icon-<name>.webp` if one is ever added.
+to `img/icon-<name>.svg` if one is ever added.
 
 ### Motion
 
@@ -479,7 +479,13 @@ magick in.png -trim +repage -bordercolor none -border 6 -resize 256x256 \
 magick bg.png -resize 768x1152 -quality 82 -define webp:method=6 img/bg-name.webp
 ```
 
-`sprites.ts` picks up every `img/*.webp` by file name; nothing else to register.
+Since 2026-10-26 the game ships **SVG**: every sprite in `img/` is a vector
+trace of its bitmap at the **same pixel size** (`width`/`height` on the `<svg>`
+equal the bitmap's), so `nine()` corners and every draw size keep working. A
+new sprite is made as above, then traced to `img/<name>.svg` at the size the
+`magick` step gives it; the `.webp` is only an intermediate.
+
+`sprites.ts` picks up every `img/*.svg` by file name; nothing else to register.
 `poster-art.webp` / `banner-art.webp` (key art, not loaded by the game) feed
 `cover.ts`; `bun run art` builds the posters, banner and share card.
 

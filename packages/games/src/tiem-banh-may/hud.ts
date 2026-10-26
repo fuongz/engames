@@ -32,7 +32,7 @@ export const sideTop = (top: number) => top + 34;
 const SIDE_ICON = 58;
 
 /**
- * A side button: the sticker icon `name` (img/<name>.webp) with a hard drop
+ * A side button: the sticker icon `name` (img/<name>.svg) with a hard drop
  * shadow, or a cream disc with `fallback` drawn in it until the art loads.
  * Extras: a small tag under it (×2), a count on its corner, a red dot.
  */
