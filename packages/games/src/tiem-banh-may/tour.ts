@@ -133,7 +133,9 @@ export function drawTour(app: App) {
   // Skip every step whose goal is already reached
   let i = app.tour;
   while (i < STEPS.length && STEPS[i].done?.(app)) i++;
-  if (i !== app.tour) app.setTour(i < STEPS.length ? i : null);
+  // Past the last step (finished, or an index saved by an older, longer tour)
+  if (i !== app.tour || i >= STEPS.length)
+    app.setTour(i < STEPS.length ? i : null);
   if (app.tour === null) return;
   const step = STEPS[app.tour];
   if (!step.on(app)) return;
@@ -141,7 +143,10 @@ export function drawTour(app: App) {
   const key = step.target?.(app);
   const target = key ? app.ui.find(key) : undefined;
   if (key && !target) return;
-  const next = () => app.setTour(app.tour === null ? null : app.tour + 1);
+  const next = () =>
+    app.setTour(
+      app.tour === null || app.tour + 1 >= STEPS.length ? null : app.tour + 1,
+    );
 
   if (!step.hint) {
     app.held = true;
