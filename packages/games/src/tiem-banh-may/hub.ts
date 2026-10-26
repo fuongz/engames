@@ -87,7 +87,9 @@ export function drawHub(app: App) {
   // down to the bottom of the screen (those tiles are decoration)
   const f = floorAt(y0 + 2);
   const sideAt = f.top + 10;
-  const by = Math.max(H - 94, v.y + v.h - 98);
+  // Inside the logical area: the bleed below it can sit under the home
+  // indicator / browser chrome, where taps never land
+  const by = H - 94;
   const rows = Math.max(GRID_ROWS, Math.ceil((v.y + v.h - f.y0) / f.th));
   const from = -Math.ceil((f.y0 - v.y) / f.th);
   drawRoom(app, f, v, save.decor, rows, from);

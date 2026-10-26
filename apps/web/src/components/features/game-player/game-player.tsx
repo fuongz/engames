@@ -313,13 +313,14 @@ export function GamePlayer({
         </div>
       </div>
 
-      {/* The game draws into the letterbox itself (stage bleed), so the canvas can
-          run under the home indicator; its logical area stays centred above it. */}
+      {/* The game draws into the letterbox itself (stage bleed); its logical
+          area stays centred in the canvas. */}
       <div className={cn("relative min-h-0 flex-1 bg-black", landscape && "lg:aspect-video lg:flex-none")}>
-        {/* Landscape phones: keep the canvas clear of the notch / camera cutout */}
+        {/* Keep the canvas clear of the notch / camera cutout (landscape) and
+            the home indicator, so nothing a game puts at its edge is covered */}
         <div
           ref={stageRef}
-          className="absolute inset-y-0 left-[env(safe-area-inset-left)] right-[env(safe-area-inset-right)]"
+          className="absolute top-0 bottom-[env(safe-area-inset-bottom)] left-[env(safe-area-inset-left)] right-[env(safe-area-inset-right)]"
         />
         {/* Fades off the first frame of the game instead of cutting to it */}
         <AnimatePresence>
