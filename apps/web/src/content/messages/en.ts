@@ -14,6 +14,7 @@ export const en: Messages = {
     discover: "Discover",
     library: "Library",
     coop: "Online co-op",
+    online: "Online games",
     search: "Search",
   },
   sidebar: {
@@ -89,6 +90,7 @@ export const en: Messages = {
     featured: "Featured",
     categories: "Genres",
     coopFilter: "Online co-op",
+    onlineFilter: "Online games",
     emptyTitle: "No games here yet",
     emptyDescription: "Try another genre or keyword.",
   },

@@ -1,4 +1,4 @@
-import { GameController03Icon, Search01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
+import { CloudSavingDone01Icon, GameController03Icon, Search01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { games } from "@web-games/games";
 import { AnimatePresence, motion } from "motion/react";
@@ -24,13 +24,18 @@ const CARD = { default: { duration: 0.2, ease: EASE_OUT }, layout: { duration: 0
 export function LibraryView({
   category,
   coop,
+  online,
   onCategory,
   onCoop,
+  onOnline,
 }: {
   category: string;
   coop: boolean;
+  /** Only games that save to the player's account. */
+  online: boolean;
   onCategory: (c: string) => void;
   onCoop: (on: boolean) => void;
+  onOnline: (on: boolean) => void;
 }) {
   const locale = useLocale();
   const m = useMessages();
@@ -41,9 +46,10 @@ export function LibraryView({
       (g) =>
         (category === "all" || g.category === category) &&
         (!coop || g.online !== undefined) &&
+        (!online || g.requiresAccount === true) &&
         (!q || [g.title.vi, g.title.en, g.tagline[locale], ...g.tags[locale], coopKeywords(g)].some((s) => s.toLowerCase().includes(q))),
     );
-  }, [category, coop, query, locale]);
+  }, [category, coop, online, query, locale]);
 
   return (
     <main className="grid gap-5 md:gap-6">
@@ -82,6 +88,14 @@ export function LibraryView({
             >
               <HugeiconsIcon icon={UserGroupIcon} className="size-4.5" />
               {m.library.coopFilter}
+            </Toggle>
+            <Toggle
+              pressed={online}
+              onPressedChange={onOnline}
+              className="h-10 shrink-0 gap-2 rounded-full border border-primary/40 bg-card px-4 text-sm font-medium text-primary hover:bg-primary/10 hover:text-primary aria-pressed:border-transparent aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+            >
+              <HugeiconsIcon icon={CloudSavingDone01Icon} className="size-4.5" />
+              {m.library.onlineFilter}
             </Toggle>
             <span aria-hidden className="h-6 w-px shrink-0 bg-border" />
           </>

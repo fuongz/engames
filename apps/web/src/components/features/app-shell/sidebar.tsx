@@ -1,4 +1,12 @@
-import { Download04Icon, LibraryIcon, Store01Icon, UserGroupIcon, VolumeHighIcon, VolumeOffIcon } from "@hugeicons/core-free-icons";
+import {
+  CloudSavingDone01Icon,
+  Download04Icon,
+  LibraryIcon,
+  Store01Icon,
+  UserGroupIcon,
+  VolumeHighIcon,
+  VolumeOffIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/core";
@@ -34,12 +42,14 @@ export function Sidebar() {
   const install = useInstallStore((s) => s.install);
   const path = useRouterState({ select: (s) => s.location.pathname });
   const coopFilter = useRouterState({ select: (s) => (s.location.search as { coop?: unknown }).coop === 1 });
+  const onlineFilter = useRouterState({ select: (s) => (s.location.search as { online?: unknown }).online === 1 });
   // index.html is prerendered at "/", and hydration keeps its attributes, so the
   // active link is only decided after mount (a normal re-render patches it).
   const [mounted, setMounted] = useState(false);
   const discover = mounted && path === "/";
-  const coop = mounted && path.startsWith("/library") && coopFilter;
-  const library = mounted && path.startsWith("/library") && !coopFilter;
+  const coop = mounted && path.startsWith("/library") && coopFilter && !onlineFilter;
+  const online = mounted && path.startsWith("/library") && onlineFilter && !coopFilter;
+  const library = mounted && path.startsWith("/library") && !coopFilter && !onlineFilter;
 
   useEffect(() => {
     setMounted(true);
@@ -70,6 +80,12 @@ export function Sidebar() {
           {coop && <ActiveBar />}
           <HugeiconsIcon icon={UserGroupIcon} className="size-5" />
           {m.nav.coop}
+        </Link>
+        {/* The library, filtered to games that save to your account (Tiệm Bánh Ngọt) */}
+        <Link to="/library" search={{ online: 1 }} className={SIDEBAR_ITEM} data-active={online}>
+          {online && <ActiveBar />}
+          <HugeiconsIcon icon={CloudSavingDone01Icon} className="size-5" />
+          {m.nav.online}
         </Link>
       </nav>
 
