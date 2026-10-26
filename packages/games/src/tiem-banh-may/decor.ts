@@ -1,5 +1,5 @@
 import type { PointerInfo, Rect } from "@web-games/core";
-import { type App, H, W, btn, close, top, viewRect } from "./app";
+import { type App, W, btn, close, top, viewRect } from "./app";
 import { C, heart, panel, sprite, text } from "./art";
 import {
   DOOR_TILE,
@@ -22,6 +22,7 @@ import { K, pillWidth } from "./kit";
 import {
   type Floor,
   ROOM,
+  ROOM_H,
   drawPiece,
   drawRoom,
   floorAt,
@@ -80,10 +81,10 @@ const PER_PAGE = 4;
 const DRAG_SLOP = 8;
 
 function layout(app: App) {
-  const y0 = Math.max(top(app), 0) + 12;
-  const floor = floorAt(y0 + 92);
-  const roomBottom = floor.top + ROOM.size;
-  const drawer = { x: 14, y: roomBottom + 12, w: W - 28, h: 146 };
+  // A header row (title, charm, close), then the room
+  const y0 = top(app) + 12;
+  const floor = floorAt(y0 + K.pill + 14);
+  const drawer = { x: 14, y: floor.top + ROOM_H + 10, w: W - 28, h: 122 };
   return { y0, floor, drawer };
 }
 
@@ -151,7 +152,7 @@ export function drawDecor(app: App, s: DecorState) {
   const { y0, floor: f, drawer } = layout(app);
   ctx.fillStyle = C.page;
   ctx.fillRect(v.x, v.y, v.w, v.h);
-  drawRoom(app, f, v, s.look);
+  drawRoom(app, f, v, s.look, GRID_ROWS, -Math.ceil((f.y0 - v.y) / f.th));
 
   // The grid: faint lines, the door and the till kept clear
   ctx.save();
@@ -221,15 +222,21 @@ export function drawDecor(app: App, s: DecorState) {
   }
 
   // Title, charm, and the way out without saving
-  const tw = Math.max(150, pillWidth(app, tr.decor.title, false) + 20);
-  const title = { x: (W - tw) / 2, y: y0, w: tw, h: K.pill };
+  const tw = Math.min(
+    180,
+    Math.max(140, pillWidth(app, tr.decor.title, false) + 20),
+  );
+  const title = { x: 14, y: y0, w: tw, h: K.pill };
   panel(ctx, title, { fill: "#dff3f6", radius: K.pill / 2, line: K.line });
-  text(ctx, tr.decor.title, W / 2, title.y + title.h / 2, { size: 22 });
+  text(ctx, tr.decor.title, title.x + title.w / 2, title.y + title.h / 2, {
+    size: 22,
+  });
   close(app, { x: 0, y: y0 + 12, w: W - 30, h: 0 }, () =>
     app.go({ kind: "hub" }),
   );
   const c = charm({ ...save.decor, placed: s.placed, ...s.look });
-  const chip = { x: W / 2 - 110, y: y0 + 50, w: 220, h: 30 };
+  const cx0 = title.x + title.w + 10;
+  const chip = { x: cx0, y: y0 + (K.pill - 30) / 2, w: W - 90 - cx0, h: 30 };
   panel(ctx, chip, { fill: "#fde3ea", radius: 15, line: 2 });
   heart(ctx, chip.x + 22, chip.y + 15, 8);
   text(
@@ -237,11 +244,16 @@ export function drawDecor(app: App, s: DecorState) {
     tr.decor.charmNow(c, tr.decor.tiers[charmTier(c)]),
     chip.x + 38,
     chip.y + 15,
-    { size: 15, align: "left", maxWidth: chip.w - 46 },
+    { size: 13, align: "left", maxWidth: chip.w - 44 },
   );
 
   // The room takes presses: pick up a piece, drag it, tap it
-  const room: Rect = { x: 0, y: f.top + 40, w: ROOM.size, h: ROOM.size - 40 };
+  const room: Rect = {
+    x: 0,
+    y: f.y0 - f.th,
+    w: ROOM.size,
+    h: ROOM_H - (f.y0 - f.th - f.top),
+  };
   app.ui.add({
     rect: room,
     down: (p) => {
@@ -276,7 +288,9 @@ export function drawDecor(app: App, s: DecorState) {
     if (p) {
       const def = furniture(p.id);
       const r = tileRect(f, p.x, p.y, def.w, def.h);
-      const cy = Math.max(f.top + 30, r.y - f.th * 1.4);
+      // Above the piece, or below it when that would run under the header
+      const above = r.y - f.th * 0.9;
+      const cy = above < f.y0 + 26 ? r.y + r.h + 26 : above;
       const cx = Math.min(W - 70, Math.max(70, r.x + r.w / 2));
       roundAction(app, "decor-flip", cx - 34, cy, "⇄", () => {
         s.placed[s.selected ?? 0] = { ...p, flip: !p.flip };
@@ -304,23 +318,24 @@ export function drawDecor(app: App, s: DecorState) {
   // What stops the layout from being saved, then cancel or done
   const why = problem(app, s.placed);
   if (why)
-    text(ctx, why, W / 2, drawer.y + drawer.h + 16, {
-      size: 15,
+    text(ctx, why, W / 2, f.y0 + f.th / 2, {
+      size: 14,
       fill: C.bad,
-      maxWidth: W - 40,
+      outline: C.white,
+      maxWidth: 200,
     });
-  const by = Math.min(H - 90, drawer.y + drawer.h + 34);
+  const by = drawer.y + drawer.h + 10;
   btn(
     app,
     "decor-cancel",
-    { x: 18, y: by, w: 180, h: 64 },
+    { x: 18, y: by, w: 180, h: 56 },
     tr.decor.cancel,
     () => app.go({ kind: "hub" }),
   );
   btn(
     app,
     "decor-done",
-    { x: 214, y: by, w: W - 232, h: 64 },
+    { x: 214, y: by, w: W - 232, h: 56 },
     tr.decor.done,
     () => {
       const res = arrange(save, s.placed, s.look.wall, s.look.floor);

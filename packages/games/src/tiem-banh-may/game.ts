@@ -14,12 +14,24 @@ import {
   sheet,
   viewRect,
 } from "./app";
-import { C, bar, bolt, chip, face, heart, sprite, text, wrap } from "./art";
+import {
+  C,
+  FONT,
+  bar,
+  bolt,
+  chip,
+  coin,
+  face,
+  heart,
+  sprite,
+  text,
+  wrap,
+} from "./art";
 import { drawBook, drawPicker } from "./book";
 import { SaveSync, listSlots } from "./cloud";
 import { drawHub } from "./hub";
 import { drawBake, updateBake } from "./kitchen";
-import { BEDTIME, FAST_SPEED, NIGHT_SPEED, OPEN } from "./config";
+import { BEDTIME, NIGHT_SPEEDS, OPEN } from "./config";
 import {
   type SaveData,
   advance,
@@ -33,6 +45,7 @@ import { drawDisplay } from "./display";
 import { drawLearned } from "./learned";
 import { drawMarket } from "./market";
 import { drawDecor } from "./decor";
+import { drawName, hideNameField } from "./name";
 import { drawMusicBox } from "./musicbox";
 import { DUR, Motion, easeOut } from "./motion";
 import { drawReport } from "./report";
@@ -131,7 +144,7 @@ export function setup(rt: Runtime): GameHooks {
     screen: { kind: "loading" },
     time: 0,
     motion: new Motion(reduceMotion),
-    fast: false,
+    speed: 1,
     held: false,
     paused: false,
     info: null,
@@ -144,7 +157,7 @@ export function setup(rt: Runtime): GameHooks {
     },
     setPaused(on) {
       app.paused = on;
-      app.fast = false;
+      app.speed = 1;
       ui.cancel();
       // The music rests with the bakery
       if (on) tune.hold();
@@ -307,7 +320,7 @@ export function setup(rt: Runtime): GameHooks {
       const save = await mine.load();
       sync = mine;
       app.save = save;
-      app.fast = false;
+      app.speed = 1;
       // The first day comes with a guide (unless this bakery finished or skipped it)
       const seen = rt.game.storage.get<number | null>(
         tourKey(cloud.playerId, slot),
@@ -317,10 +330,13 @@ export function setup(rt: Runtime): GameHooks {
         seen === null ? (save.day === 1 ? 0 : null) : seen < 0 ? null : seen;
       writeSummary(save);
       // Closed mid-day: the day starts again from the morning's display
+      // A bakery without a name is asked for one first
       app.go(
         save.phase === "open"
           ? { kind: "shop", shop: newDay(save) }
-          : { kind: "hub" },
+          : save.name
+            ? { kind: "hub" }
+            : { kind: "name", first: true },
       );
     } catch {
       mine.dispose();
@@ -349,16 +365,16 @@ export function setup(rt: Runtime): GameHooks {
   /** The night clock: minutes pass in the kitchen, ovens bake, alarms ring. */
   function tickNight(dt: number) {
     const before = app.save;
-    const after = advance(before, dt * (app.fast ? FAST_SPEED : NIGHT_SPEED));
+    const after = advance(before, dt * NIGHT_SPEEDS[app.speed]);
     if (after === before) {
-      app.fast = false;
+      app.speed = 1;
       return;
     }
     app.save = after;
     // Fast-forward stops at bedtime, at 9:00 and when something is ready
     const crossed = (t: number) => before.night < t && after.night >= t;
     if (crossed(BEDTIME) || crossed(OPEN) || after.night >= clockCap(after))
-      app.fast = false;
+      app.speed = 1;
     const timers: {
       recipe: Parameters<typeof recipe>[0];
       step: number;
@@ -383,7 +399,7 @@ export function setup(rt: Runtime): GameHooks {
         elapsed(before, t) < target &&
         elapsed(after, t) >= target
       ) {
-        app.fast = false;
+        app.speed = 1;
         app.sfx.bell();
         app.toast(
           app.tr().ready(recipe(t.recipe).name[rt.locale()]),
@@ -450,7 +466,18 @@ export function setup(rt: Runtime): GameHooks {
     if (!sync) return;
     const tr = app.tr();
     if (sync.status === "offline") {
-      chip(ctx, 14, H - 160, tr.saveFailed, 30, "left");
+      // Centred low on the screen, clear of the header and the side buttons
+      ctx.font = `800 ${30 * 0.55}px ${FONT}`;
+      const w = ctx.measureText(tr.saveFailed).width + 26;
+      chip(
+        ctx,
+        W / 2 - w / 2,
+        // Low on the screen, above the bottom buttons: never over the header
+        app.rt.stage.view.y + app.rt.stage.view.h - 200,
+        tr.saveFailed,
+        30,
+        "left",
+      );
     } else if (sync.status === "conflict") {
       shade(app);
       const m = { x: 40, y: H / 2 - 150, w: W - 80, h: 300 };
@@ -471,11 +498,12 @@ export function setup(rt: Runtime): GameHooks {
   }
 
   /** What a HUD stat means, with its value now. */
-  function drawInfo(stat: "rep" | "energy" | "mood") {
+  function drawInfo(stat: "coins" | "rep" | "energy" | "mood") {
     const tr = app.tr();
     const save = app.save;
     const info = tr.stat[stat];
     const value = Math.round(stat === "rep" ? save.rep : save[stat]);
+    // Coins have no ceiling: just the amount
     const lines = wrap(ctx, info.body, dialogPage(W - 80) - 40, 17);
     const h = dialogHeight(44 + 120, lines.length, 25);
     const m = { x: 40, y: Math.max(140, (H - h) / 2), w: W - 80, h };
@@ -485,14 +513,30 @@ export function setup(rt: Runtime): GameHooks {
     shade(app, done);
     const paper = sheet(app, m, info.title);
     const iy = paper.y + 50;
-    icon(app, stat === "rep" ? "heart" : stat, W / 2 - 58, iy, 52, () =>
-      stat === "rep"
-        ? heart(ctx, W / 2 - 58, iy, 20)
-        : stat === "energy"
-          ? bolt(ctx, W / 2 - 58, iy, 22)
-          : face(ctx, W / 2 - 58, iy, 22, save.mood),
+    icon(
+      app,
+      stat === "rep" ? "heart" : stat === "coins" ? "coin" : stat,
+      W / 2 - 58,
+      iy,
+      52,
+      () =>
+        stat === "rep"
+          ? heart(ctx, W / 2 - 58, iy, 20)
+          : stat === "coins"
+            ? coin(ctx, W / 2 - 58, iy, 22)
+            : stat === "energy"
+              ? bolt(ctx, W / 2 - 58, iy, 22)
+              : face(ctx, W / 2 - 58, iy, 22, save.mood),
     );
-    text(ctx, `${value}/100`, W / 2 + 30, iy + 2, { size: 30 });
+    text(
+      ctx,
+      stat === "coins" ? tr.num(value) : `${value}/100`,
+      W / 2 + 30,
+      iy + 2,
+      {
+        size: 30,
+      },
+    );
     lines.forEach((l, i) => {
       text(ctx, l, W / 2, paper.y + 120 + i * 25, { size: 17 });
     });
@@ -568,12 +612,15 @@ export function setup(rt: Runtime): GameHooks {
       app.motion.frame(app.time);
       app.held = false;
       const s = app.screen;
+      // The name field only lives on the naming dialog
+      if (s.kind !== "name") hideNameField();
       if (s.kind === "loading" || (!sprites.ready && s.kind !== "error"))
         drawLoading();
       else if (s.kind === "error") drawError();
       else if (s.kind === "hub") drawHub(app);
       else if (s.kind === "display") drawDisplay(app);
       else if (s.kind === "decor") drawDecor(app, s.decor);
+      else if (s.kind === "name") drawName(app, s);
       else if (s.kind === "music") drawMusicBox(app);
       else if (s.kind === "learned") drawLearned(app, s);
       else if (s.kind === "market")
@@ -620,6 +667,7 @@ export function setup(rt: Runtime): GameHooks {
       tune.hold();
     },
     dispose() {
+      hideNameField();
       sync?.dispose();
       tune.stop();
     },

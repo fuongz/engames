@@ -189,6 +189,18 @@ export interface Strings {
   on: string;
   off: string;
   switchShop: string;
+  side: { music: string; pause: string; speed: string; coffee: string };
+  crowdShort: (n: number) => string;
+  bookShort: string;
+  closedSign: string;
+  naming: {
+    title: string;
+    titleNew: string;
+    ask: string;
+    done: string;
+    saved: string;
+    rename: string;
+  };
   restart: string;
   restartAsk: (n: number) => string;
   restartSure: string;
@@ -232,7 +244,10 @@ export interface Strings {
   inStock: (q: string) => string;
   packOf: (q: string) => string;
   displayTitle: string;
-  stat: Record<"rep" | "energy" | "mood", { title: string; body: string }>;
+  stat: Record<
+    "coins" | "rep" | "energy" | "mood",
+    { title: string; body: string }
+  >;
   gotIt: string;
   ingredientsTitle: string;
   trayLabel: string;
@@ -269,7 +284,6 @@ export interface Strings {
   };
   trayHint: string;
   onStands: string;
-  tapTill: string;
   tile: Record<
     | "revenue"
     | "tips"
@@ -378,9 +392,9 @@ export const STRINGS: Localized<Strings> = {
     hintMarket: "Kho trống trơn. Đi siêu thị mua nguyên liệu trước nhé!",
     hintBake: "Có nguyên liệu rồi, vào bếp làm bánh thôi!",
     hintOpen: "Bánh đã lên kệ. Mở cửa khi bạn sẵn sàng!",
-    hintTimeUp: "Hết giờ làm việc rồi. Đến giờ mở cửa!",
-    display: (n, cap) => `Tủ kính ${n}/${cap}`,
-    emptyDisplay: "Tủ kính còn trống",
+    hintTimeUp: "Đến giờ làm việc rồi! Mở cửa đón khách nào.",
+    display: (n, cap) => `Quầy bánh ${n}/${cap}`,
+    emptyDisplay: "Quầy bánh còn trống",
 
     pack: (a, u) =>
       u === "egg"
@@ -414,7 +428,7 @@ export const STRINGS: Localized<Strings> = {
     upgradeInfo: {
       mixer: "Đánh bông tự động, bớt 10 phút",
       fridge: "Đồ tươi để được 5 ngày",
-      display: "Tủ kính chứa 90 cái",
+      display: "Mỗi kệ quầy bánh chứa 18 cái",
       oven2: "Nướng 2 mẻ cùng lúc",
     },
     close: "Đóng",
@@ -423,7 +437,7 @@ export const STRINGS: Localized<Strings> = {
     make: "Làm",
     makeFast: "Làm nhanh 2★",
     missing: (ing) => `Thiếu ${ing.toLowerCase()}`,
-    displayFull: "Tủ kính đầy",
+    displayFull: "Quầy bánh đầy",
     needTime: "Không đủ giờ",
 
     stepAdd: (amount, ing) => `${amount} ${ing.toLowerCase()}`,
@@ -572,6 +586,23 @@ export const STRINGS: Localized<Strings> = {
     on: "Bật",
     off: "Tắt",
     switchShop: "Đổi tiệm",
+    side: {
+      music: "Nhạc",
+      pause: "Tạm dừng",
+      speed: "Tua nhanh",
+      coffee: "Cà phê",
+    },
+    crowdShort: (n) => `~${n} khách`,
+    bookShort: "Công thức",
+    closedSign: "Đóng cửa",
+    naming: {
+      title: "Đổi tên tiệm",
+      titleNew: "Đặt tên tiệm",
+      ask: "Tiệm bánh của bạn tên là gì?",
+      done: "Xong",
+      saved: "Đã đặt tên tiệm!",
+      rename: "Đổi tên tiệm",
+    },
     restart: "Chơi lại từ đầu",
     restartAsk: (n) =>
       `Chơi lại Tiệm ${n} từ đầu? Tiền, công thức, nâng cấp và bánh của tiệm này sẽ mất. Bảng xếp hạng vẫn giữ thành tích tốt nhất của bạn.`,
@@ -622,8 +653,12 @@ export const STRINGS: Localized<Strings> = {
     clearBasket: "Bỏ hết",
     inStock: (q) => `Trong kho: ${q}`,
     packOf: (q) => `Gói ${q}`,
-    displayTitle: "Tủ kính",
+    displayTitle: "Quầy bánh",
     stat: {
+      coins: {
+        title: "Tiền xu",
+        body: "Xu là tiền của tiệm. Bạn kiếm xu khi bán bánh, có thêm tiền tip khi khách vui hoặc chọn hộp vừa khít. Xu dùng để đi chợ mua nguyên liệu, mua công thức, nâng cấp dụng cụ và sắm nội thất. Hết xu cũng đừng lo, hàng xóm sẽ cho mượn một ít.",
+      },
       rep: {
         title: "Uy tín",
         body: "Uy tín càng cao, càng nhiều khách ghé tiệm mỗi ngày. Uy tín tăng khi khách nhận đúng bánh, đơn đặt trước giao đủ và khách VIP vui. Uy tín giảm khi thối tiền thiếu hay khách VIP không vừa ý. Tâm trạng tốt cũng cộng thêm một chút mỗi ngày.",
@@ -652,7 +687,7 @@ export const STRINGS: Localized<Strings> = {
     },
     tour: {
       welcome:
-        "Chào mừng đến Tiệm Bánh Mây! Mình là Mây. Đêm nay mình cùng làm mẻ bánh đầu tiên nhé.",
+        "Chào mừng đến tiệm bánh của bạn! Mình là Mây. Đêm nay mình cùng làm mẻ bánh đầu tiên nhé.",
       start: "Bắt đầu",
       skip: "Bỏ qua",
       skipped: "Xem lại hướng dẫn trong Cài đặt nhé!",
@@ -676,7 +711,6 @@ export const STRINGS: Localized<Strings> = {
     },
     trayHint: "Khách tự chọn ở quầy rồi mang tới đây",
     onStands: "Trên quầy",
-    tapTill: "Chạm quầy thu ngân để tính nhanh hơn",
     tile: {
       revenue: "Bán bánh",
       tips: "Tiền tip",
@@ -792,9 +826,9 @@ export const STRINGS: Localized<Strings> = {
     hintMarket: "The pantry is empty. Go to the supermarket first!",
     hintBake: "Ingredients are in. Time to bake!",
     hintOpen: "Cakes are on display. Open when you're ready!",
-    hintTimeUp: "Out of working hours. Time to open!",
-    display: (n, cap) => `Display ${n}/${cap}`,
-    emptyDisplay: "The display is empty",
+    hintTimeUp: "Time to get to work! Open the doors.",
+    display: (n, cap) => `Stands ${n}/${cap}`,
+    emptyDisplay: "The stands are empty",
 
     pack: (a, u) =>
       u === "egg"
@@ -830,7 +864,7 @@ export const STRINGS: Localized<Strings> = {
     upgradeInfo: {
       mixer: "Whisks for you, 10 min faster",
       fridge: "Fresh goods last 5 days",
-      display: "Display holds 90",
+      display: "Each stand shelf holds 18",
       oven2: "Bake two batches at once",
     },
     close: "Close",
@@ -839,7 +873,7 @@ export const STRINGS: Localized<Strings> = {
     make: "Bake",
     makeFast: "Quick bake 2★",
     missing: (ing) => `Need ${ing.toLowerCase()}`,
-    displayFull: "Display full",
+    displayFull: "Stands full",
     needTime: "Not enough time",
 
     stepAdd: (amount, ing) => `${amount} ${ing.toLowerCase()}`,
@@ -988,6 +1022,18 @@ export const STRINGS: Localized<Strings> = {
     on: "On",
     off: "Off",
     switchShop: "Switch bakery",
+    side: { music: "Music", pause: "Pause", speed: "Speed", coffee: "Coffee" },
+    crowdShort: (n) => `~${n} customers`,
+    bookShort: "Recipes",
+    closedSign: "Closed",
+    naming: {
+      title: "Rename the bakery",
+      titleNew: "Name your bakery",
+      ask: "What is your bakery called?",
+      done: "Done",
+      saved: "Your bakery has a name!",
+      rename: "Rename the bakery",
+    },
     restart: "Start over",
     restartAsk: (n) =>
       `Start Bakery ${n} over? Its coins, recipes, upgrades and cakes will be gone. The leaderboard keeps your best result.`,
@@ -1038,8 +1084,12 @@ export const STRINGS: Localized<Strings> = {
     clearBasket: "Empty it",
     inStock: (q) => `In pantry: ${q}`,
     packOf: (q) => `Pack of ${q}`,
-    displayTitle: "Display case",
+    displayTitle: "Cake stands",
     stat: {
+      coins: {
+        title: "Coins",
+        body: "Coins are your bakery's money. You earn them selling cakes, plus tips from happy customers and snug boxes. Spend them at the market on ingredients, on new recipes, better tools and furniture. Run out? A kind neighbour will lend you a little.",
+      },
       rep: {
         title: "Reputation",
         body: "The higher your reputation, the more customers visit each day. It rises when customers get the right cake, pre-orders are filled and VIPs are happy. It falls when change comes up short or a VIP leaves unhappy. A good mood adds a little every day too.",
@@ -1068,7 +1118,7 @@ export const STRINGS: Localized<Strings> = {
     },
     tour: {
       welcome:
-        "Welcome to Cloud Bakery! I'm Mây. Let's bake our very first batch tonight.",
+        "Welcome to your bakery! I'm Mây. Let's bake our very first batch tonight.",
       start: "Let's go",
       skip: "Skip",
       skipped: "You can replay the guide from Settings.",
@@ -1092,7 +1142,6 @@ export const STRINGS: Localized<Strings> = {
     },
     trayHint: "Customers pick at the stands and bring it here",
     onStands: "On the stands",
-    tapTill: "Tap the counter to ring up faster",
     tile: {
       revenue: "Sales",
       tips: "Tips",

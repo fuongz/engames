@@ -1337,8 +1337,8 @@ function timerButtons(app: App, b: BakeState) {
     { size: 22 },
   );
   const ff = { x: 194, y: H - 150, w: 84, h: 72 };
-  btn(app, "fast", ff, "", () => (app.fast = !app.fast), {
-    fill: app.fast ? "#ffd6a8" : C.cream,
+  btn(app, "fast", ff, "", () => (app.speed = app.speed > 1 ? 1 : 3), {
+    fill: app.speed > 1 ? "#ffd6a8" : C.cream,
   });
   icon(
     app,

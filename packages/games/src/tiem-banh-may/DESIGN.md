@@ -189,6 +189,38 @@ and the player works the till.
   stands and the discount / close-early buttons. Stands can be reached from
   any free side. Save v6 lays v5 floors out afresh around the counter (pieces
   bought before wait in storage).
+- **A longer floor** (2026-10-26, the owner found the room too small): the
+  grid is 6×9, all open from the start, and the wall shows only one tile's
+  height (the bottom band of the painted wall: the lower door and window), so
+  the floor gets the room. The room art paints five floor rows; the game
+  draws the rest by repeating its last two, so checks keep alternating. The
+  stock board and the discount / close-early buttons sit under the room; the
+  decor screen has a header row (title, charm, close) above it. New bakeries
+  start with the stands on the bottom row.
+- **The home screen is the closed shop** (2026-10-26, from the owner's
+  references): the night screen shows the player's storefront instead of the
+  kitchen, dimmed, with a "Đóng cửa" sign on the door, Mây behind the
+  counter and tonight's batches on the stands (tap a stand for the display).
+  The floor is painted on down to the bottom on tall phones (decoration
+  only). The HUD: coins, reputation, energy and mood as same-size pills with
+  plain numbers, the time left tonight under them, and a desk calendar
+  (weekday, date, time, tomorrow's weather; tap it for the forecast and the
+  expected crowd). Round buttons run down the sides: the record, the night's
+  speed (tap: ×2, ×3, back to normal; it still stops itself at bedtime, 9:00
+  and when something is ready) and coffee (with how many cups) on the left;
+  pause and settings on the right. Lower down, Siêu thị and Công thức stand
+  on the left, Làm bánh and Trang trí on the right, and the big Đi ngủ /
+  Mở cửa button sits between them at the bottom. Batches in the oven show as
+  chips above it. The nap was removed (owner's call).
+- **The bakery's name** (2026-10-26): the game is now "Tiệm Bánh Ngọt" /
+  "Cozy Little Bakery", and each player names their own shop. A new
+  bakery (or an older save without a name, save v7) opens on a "Đặt tên
+  tiệm" dialog (an idea shows faintly until they type); Settings has "Đổi tên tiệm". The
+  name hangs on a wooden sign on the wall, shows on the slot cards and in
+  Settings. Names are tidied to one line and 24 characters (`NAME_MAX`); the
+  server check refuses control characters. Typing needs a real `<input>`:
+  `name.ts` lays one over the drawn field while the dialog is up and removes
+  it on any other screen.
 - **Walls and floors**: one wall and one floor show at a time; buying one puts
   it up at once, and the decor drawer has Đồ đạc / Tường / Sàn tabs to switch
   between those owned. Each variant is a full room picture (`room-<id>`,

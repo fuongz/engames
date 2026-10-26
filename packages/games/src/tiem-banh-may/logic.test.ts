@@ -555,7 +555,7 @@ describe("saves", () => {
     void caffeine;
     const up = parseSave(v1);
     expect(up).toMatchObject({
-      v: 6,
+      v: 7,
       records: ["sheep"],
       night: WAKE + 40,
       energy: 80,
@@ -566,7 +566,7 @@ describe("saves", () => {
     // and a version-2 save just gains an empty job list
     const { jobs, ...v2 } = { ...s, v: 2 } as Record<string, unknown>;
     void jobs;
-    expect(parseSave(v2)).toMatchObject({ v: 6, jobs: [], playing: "sheep" });
+    expect(parseSave(v2)).toMatchObject({ v: 7, jobs: [], playing: "sheep" });
     expect(parseSave({ ...s, recipes: ["cookie", "baguette"] })).toBeNull();
     expect(parseSave({ ...s, coins: 1.5 })).toBeNull();
     expect(plausible(s, { ...s, day: 2, coins: s.coins + 500 })).toBe(true);

@@ -13,6 +13,7 @@ export const vi = {
     discover: "Khám phá",
     library: "Thư viện",
     coop: "Co-op online",
+    online: "Chơi online",
     search: "Tìm kiếm",
   },
   sidebar: {
@@ -88,6 +89,7 @@ export const vi = {
     featured: "Nổi bật",
     categories: "Thể loại",
     coopFilter: "Co-op online",
+    onlineFilter: "Chơi online",
     emptyTitle: "Chưa có game nào",
     emptyDescription: "Thử thể loại khác hoặc từ khóa khác nhé.",
   },

@@ -11,6 +11,7 @@ import {
 } from "./art";
 import type { FurnitureId, RecipeId, RecordId, UpgradeId } from "./config";
 import type { DecorState } from "./decor";
+import type { NameState } from "./name";
 import { H, W } from "./config";
 import type { BakeState } from "./kitchen";
 import type { Motion } from "./motion";
@@ -60,6 +61,8 @@ export type Screen =
   | { kind: "display" }
   /** Decor mode: the storefront grid, edited in place until saved. */
   | { kind: "decor"; decor: DecorState }
+  /** Naming the bakery: on a new one (`first`), or from Settings. */
+  | NameState
   | { kind: "bake"; bake: BakeState }
   | { kind: "shop"; shop: ShopState }
   | { kind: "report"; report: DayReport }
@@ -100,7 +103,8 @@ export interface App {
   /** Entrances, exits and nudges, keyed by what each frame draws. */
   motion: Motion;
   /** Fast-forward the night clock (waiting on the oven, or for morning). */
-  fast: boolean;
+  /** The night clock's pace: 1 normal, 2 and 3 faster (stops by itself at walls). */
+  speed: 1 | 2 | 3;
   /** A prompt is up: the night clock holds for this frame. */
   held: boolean;
   /** The player paused: clock, ovens and customers stand still. */
@@ -110,7 +114,7 @@ export interface App {
   tour: number | null;
   setTour(step: number | null): void;
   /** A HUD stat's explanation is open (the clock holds while it is). */
-  info: "rep" | "energy" | "mood" | null;
+  info: "coins" | "rep" | "energy" | "mood" | null;
   /** The save slot being played (0-based). */
   slot: number;
   /** Account actions the slot picker and the settings call back into the shell. */

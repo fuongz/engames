@@ -47,8 +47,8 @@ function title(
 }
 
 const POSTER_TITLE: Localized<[string, string]> = {
-  vi: ["TIỆM BÁNH", "MÂY"],
-  en: ["CLOUD", "BAKERY"],
+  vi: ["TIỆM", "BÁNH NGỌT"],
+  en: ["COZY LITTLE", "BAKERY"],
 };
 
 export async function renderPoster(

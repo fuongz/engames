@@ -24,6 +24,7 @@ import {
   emptyLedger,
   newGame,
 } from "./logic";
+import { cleanName, nameIdeas } from "./name";
 import { parseSave } from "./save";
 
 const decor = (placed: Placed[], owned = placed.map((p) => p.id)): Decor => ({
@@ -130,7 +131,7 @@ describe("the storefront grid", () => {
     expect(charmTier(charm(s.decor))).toBe(0);
     expect(charmTier(charm(d))).toBe(1);
     // and a full floor sends the rest to storage
-    for (let i = 0; i < 30; i++) d = receive(d, ["basic-chair"]);
+    for (let i = 0; i < 120; i++) d = receive(d, ["basic-chair"]);
     expect(layoutOk(d.placed)).toBe(true);
     expect(stored(d).length).toBeGreaterThan(0);
   });
@@ -159,8 +160,8 @@ describe("the storefront grid", () => {
 describe("self-serve stands", () => {
   it("sizes the display by the shelves on the floor, and needs a stand to open", () => {
     const s = newGame(1);
-    // Two basic stands, two shelves each
-    expect(shelvesOf(s.decor)).toBe(4);
+    // Two basic stands, four trays each (six pieces a tray)
+    expect(shelvesOf(s.decor)).toBe(8);
     expect(displayCap(s)).toBe(48);
     expect(displayCap({ ...s, upgrades: ["display"] })).toBe(72);
     const noStands = s.decor.placed.filter((p) => p.id !== "basic-stand");
@@ -228,7 +229,8 @@ describe("saves", () => {
   it("upgrades a version-4 save with the starting furniture", () => {
     const { decor: _, ...rest } = newGame(3);
     const up = parseSave({ ...rest, v: 4 });
-    expect(up?.v).toBe(6);
+    expect(up?.v).toBe(7);
+    expect(up?.name).toBe("");
     expect(up?.decor).toEqual(startDecor());
     expect(up && assets(up)).toBe(START_COINS + 0);
   });
@@ -249,5 +251,20 @@ describe("saves", () => {
     };
     expect(parseSave(blocked)).toBeNull();
     expect(parseSave(s)).not.toBeNull();
+  });
+});
+
+describe("the bakery's name", () => {
+  it("tidies what was typed and refuses what the sign can't show", () => {
+    expect(cleanName("  Tiệm   Bánh\nNhỏ  ")).toBe("Tiệm Bánh Nhỏ");
+    expect(cleanName("x".repeat(40))).toHaveLength(24);
+    const s = newGame(5);
+    expect(parseSave({ ...s, name: "Tiệm Bánh Nhỏ Xinh" })?.name).toBe(
+      "Tiệm Bánh Nhỏ Xinh",
+    );
+    expect(parseSave({ ...s, name: "x".repeat(25) })).toBeNull();
+    expect(parseSave({ ...s, name: "a\nb" })).toBeNull();
+    expect(nameIdeas(5, "vi")).toHaveLength(3);
+    expect(nameIdeas(5, "vi")).toEqual(nameIdeas(5, "vi"));
   });
 });

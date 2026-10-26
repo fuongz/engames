@@ -4,6 +4,8 @@ import {
   FURNITURE,
   INGREDIENTS,
   MAX_REP,
+  NAME_MAX,
+  isControl,
   OPEN,
   RECIPES,
   RECORDS,
@@ -48,6 +50,8 @@ const ids = (x: unknown, known: Set<string>) =>
  * had no energy or mood: map it onto the version-2 night and give defaults.
  */
 function migrate(raw: Record<string, unknown>): Record<string, unknown> {
+  // v6 → v7: bakeries get a name; older ones are asked for it on next open
+  if (raw.v === 6) return { ...raw, v: 7, name: "" };
   // v5 → v6: the checkout counter moved into the room; the floor is laid out
   // afresh around it and every piece bought before waits in storage
   if (raw.v === 5 && isObj(raw.decor)) {
@@ -60,7 +64,7 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
       const i = extra.indexOf(id);
       if (i >= 0) extra.splice(i, 1);
     }
-    return {
+    return migrate({
       ...raw,
       v: 6,
       decor: {
@@ -69,7 +73,7 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
         wall: raw.decor.wall ?? start.wall,
         floor: raw.decor.floor ?? start.floor,
       },
-    };
+    });
   }
   // v4 → v5: the storefront, furnished with the starting set
   if (raw.v === 4) return migrate({ ...raw, v: 5, decor: startDecor() });
@@ -98,7 +102,13 @@ function migrate(raw: Record<string, unknown>): Record<string, unknown> {
 export function parseSave(raw: unknown): SaveData | null {
   if (!isObj(raw)) return null;
   const s = migrate(raw);
-  if (s.v !== 6) return null;
+  if (s.v !== 7) return null;
+  if (
+    typeof s.name !== "string" ||
+    s.name.length > NAME_MAX ||
+    [...s.name].some(isControl)
+  )
+    return null;
   // Records: known ones, and the one playing must be owned
   if (
     !ids(s.records, RECORD_IDS) ||

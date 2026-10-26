@@ -12,6 +12,7 @@ import {
   wrap,
 } from "./art";
 import { drawHub } from "./hub";
+import { shopName } from "./name";
 import {
   dialogButtons,
   dialogHeight,
@@ -72,7 +73,9 @@ export function drawSlots(app: App, list: App["screen"] & { kind: "slots" }) {
     const mid = tile.y + tile.h / 2;
     // The bakery played last stands out
     const playing = slot === app.slot;
-    text(ctx, tr.slotName(slot + 1), tx, mid - 30, {
+    // The bakery's own name, or "Tiệm 2" for an empty slot
+    const title = save?.name || tr.slotName(slot + 1);
+    text(ctx, title, tx, mid - 30, {
       size: 24,
       weight: 800,
       align: "left",
@@ -175,7 +178,7 @@ export function drawSettings(
     return;
   }
 
-  const m = { x: 40, y: 220, w: W - 80, h: 520 };
+  const m = { x: 40, y: 190, w: W - 80, h: 604 };
   const paper = sheet(app, m, tr.settings);
   close(app, m, back);
   const audio = app.rt.game.audio;
@@ -258,14 +261,24 @@ export function drawSettings(
   );
   menuButton(
     app,
-    "restart",
+    "rename",
     row(2),
+    tr.naming.rename,
+    (x, y, s) =>
+      sprite(ctx, app.sprites.get("f-basic-stand"), x, y, s * 1.4, s),
+    () => app.go({ kind: "name", first: false }),
+    { fill: "#dff3f6" },
+  );
+  menuButton(
+    app,
+    "restart",
+    row(3),
     tr.restart,
     (x, y, s) => icon(app, "restart", x, y, s, () => restartIcon(ctx, x, y, s)),
     () => app.go({ kind: "settings", confirm: 1 }),
     { fill: "#f2c4bc" },
   );
-  text(ctx, tr.slotName(app.slot + 1), W / 2, m.y + m.h - 30, {
+  text(ctx, shopName(app.save, app.rt.locale()), W / 2, m.y + m.h - 30, {
     size: 16,
     fill: C.muted,
   });
