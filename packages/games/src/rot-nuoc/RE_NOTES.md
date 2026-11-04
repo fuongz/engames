@@ -18,23 +18,33 @@ available, so REA had nothing to open; everything comes from the video.
 
 ## Our design decisions (not in the ad)
 
-- **Levels** are generated from the level number (same level, same layout):
-  3 colours at level 1, one more every 4 levels, 9 by level 25 (the ad's board
-  has 9), 12 at most; always 2 empty tubes. Each layout is checked with a
-  depth-first solver before it is used, so **every level can be solved without
-  boosters**; a starting tube is never already complete.
-- **Boosters** are kept across levels (saved per device): 5 undos and 2 extra
-  tubes to start (ad: "↶5", "+🧪2"); +1 undo per cleared level (max 20); at
-  most one extra tube per level; the gift fills over 5 levels and gives
-  +3 undos and +1 tube. Restart is free.
+- **Levels** are generated from the level number (same level, same layout).
+  Difficulty, retuned in Nov 2026 because the first curve was too easy:
+  - 4 colours at level 1, one more every 3 levels, 12 from level 25;
+  - from level 20, every even level has **one** empty tube instead of two.
+    Random layouts with one spare are almost never solvable past 8 colours, so
+    those levels use 7 colours (8 from level 40);
+  - from level 15, every third level is a **"?" level**: each layer under the
+    top shows as "?" until the layer above it is poured off. Restart covers
+    them again;
+  - several solvable layouts are drawn per level and the hardest kept: fewest
+    same-colour neighbours, then the most work for the solver.
+  Each layout is checked with a depth-first solver before it is used, so
+  **every level can be solved without boosters**; a starting tube is never
+  already complete. Generation stays under ~60 ms.
+- **Boosters** are kept across levels (saved per device): 3 undos and 2 extra
+  tubes to start (ad: "↶5", "+🧪2"); +1 undo every second cleared level
+  (max 20); at most one extra tube per level; the gift fills over 5 levels and
+  gives +3 undos and +1 tube. Restart is free.
+- **Pours** take 0.5 s. Several can run at once as long as no tube is lifted
+  twice, and a tube that is still filling can take a second pour.
 - **Leaderboard**: the portal's save dialog appears every 5 levels (score =
   the level just cleared) instead of after each level; the card summary shows
   the last level cleared.
 - **Cut**: the back/home button (the portal has one), coins, ads.
 - **Extras**: number keys pick tubes, Z/R/T for undo/restart/tube; a hint on
   the first levels, a warning when no move is left, a sparkle when a tube is
-  completed, confetti on a win. Several pours can animate at once as long as
-  they don't share a tube.
+  completed, confetti on a win.
 
 ## Open questions
 

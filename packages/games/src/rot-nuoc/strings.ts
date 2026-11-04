@@ -7,6 +7,7 @@ export interface Strings {
   level: (n: number) => string;
   claim: string;
   tapHint: string;
+  mysteryHint: string;
   ruleHint: string;
   stuck: string;
   noUndo: string;
@@ -27,6 +28,7 @@ export const STRINGS: Localized<Strings> = {
     level: (n) => `MÀN ${n}`,
     claim: "Nhận",
     tapHint: "Chạm một ống, rồi chạm ống khác để rót",
+    mysteryHint: "Lớp “?” chỉ lộ màu khi lớp trên được rót đi",
     ruleHint: "Chỉ rót lên nước cùng màu hoặc vào ống trống",
     stuck: "Hết nước đi! Hoàn tác, thêm ống hoặc chơi lại",
     noUndo: "Hết lượt hoàn tác",
@@ -44,6 +46,7 @@ export const STRINGS: Localized<Strings> = {
     level: (n) => `LEVEL ${n}`,
     claim: "Claim",
     tapHint: "Tap a tube, then another one to pour",
+    mysteryHint: "A “?” layer shows its colour once the layer above is poured off",
     ruleHint: "Pour only onto the same colour or into an empty tube",
     stuck: "No moves left! Undo, add a tube or restart",
     noUndo: "No undos left",

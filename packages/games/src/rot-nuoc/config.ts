@@ -8,10 +8,31 @@ export const CAPACITY = 4; // ad: four layers per tube
 export const EMPTY_TUBES = 2; // ad: two empty tubes at level 58
 export const MAX_COLORS = 12;
 
-/** Colours grow with the level: 3 at the start, 9 by level 25 (the ad's level 58 has 9), 12 at most. */
-export function colorsFor(level: number) {
-  return Math.min(MAX_COLORS, 3 + Math.floor((level - 1) / 4));
+/** From level 20, every even level has a single empty tube. */
+export const ONE_EMPTY_FROM = 20;
+export function emptiesFor(level: number) {
+  return level >= ONE_EMPTY_FROM && level % 2 === 0 ? 1 : EMPTY_TUBES;
 }
+
+/**
+ * Colours grow with the level: 4 at the start, one more every 3 levels, 12
+ * from level 25. A one-empty-tube level is capped lower: random layouts with
+ * one spare tube are almost never solvable past 8 colours, and 7–8 colours
+ * with one spare is already the hardest board in the game.
+ */
+export function colorsFor(level: number) {
+  const ramp = Math.min(MAX_COLORS, 4 + Math.floor((level - 1) / 3));
+  if (emptiesFor(level) === 1) return Math.min(ramp, level >= 40 ? 8 : 7);
+  return ramp;
+}
+
+/** From level 15, every third level hides each layer under the top as "?" until it is uncovered. */
+export const HIDDEN_FROM = 15;
+export const hiddenFor = (level: number) =>
+  level >= HIDDEN_FROM && level % 3 === 0;
+
+/** Solvable layouts generated per level; the one the solver finds hardest is kept. */
+export const CANDIDATES = 5;
 
 /** At most this many tubes per row; more than that wraps to a second row. */
 export const ROW_MAX = 8;
@@ -35,11 +56,11 @@ export const COLORS = [
 
 // ---------------------------------------------------------------- boosters
 
-export const START_UNDOS = 5; // ad: "↶5"
+export const START_UNDOS = 3; // ad: "↶5", fewer to make levels count
 export const START_TUBES = 2; // ad: "+🧪2"
 export const MAX_UNDOS = 20;
-/** Every cleared level adds an undo. */
-export const UNDO_PER_LEVEL = 1;
+/** Every second cleared level adds an undo. */
+export const UNDO_EVERY = 2;
 /** ad: the gift box "Claim". It fills over this many levels. */
 export const GIFT_EVERY = 5;
 export const GIFT_UNDOS = 3;
@@ -52,5 +73,5 @@ export const REPORT_EVERY = 5;
 
 // ---------------------------------------------------------------- animation
 
-export const POUR_TIME = 0.8;
+export const POUR_TIME = 0.5;
 export const LIFT = 26;

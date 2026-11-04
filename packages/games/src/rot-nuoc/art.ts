@@ -343,6 +343,7 @@ export function drawGift(
 // ---------------------------------------------------------------- tubes
 
 export const TUBE_W = 46;
+const HIDDEN_FILL = "#2e2f3a";
 export const UNIT_H = 38;
 export const MOUTH_H = 18;
 export const tubeLength = (capacity: number) => MOUTH_H + capacity * UNIT_H;
@@ -351,6 +352,8 @@ export const tubeLength = (capacity: number) => MOUTH_H + capacity * UNIT_H;
 export interface Layer {
   color: number;
   amount: number;
+  /** Still covered: drawn as a dark "?" block instead of its colour. */
+  hidden?: boolean;
 }
 
 function tubePath(ctx: Ctx, len: number, inset: number) {
@@ -401,8 +404,17 @@ export function drawTube(
   for (const l of layers) {
     if (l.amount <= 0) continue;
     const h = l.amount * UNIT_H * squash;
-    ctx.fillStyle = COLORS[l.color];
+    ctx.fillStyle = l.hidden ? HIDDEN_FILL : COLORS[l.color];
     ctx.fillRect(cx - 200, level - h, 400, h + 0.6);
+    if (l.hidden) {
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.fillRect(cx - 200, level - h, 400, 2);
+      ctx.fillStyle = "#a9adbd";
+      ctx.font = `800 ${Math.round(22 * squash)}px "Baloo 2", system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("?", cx, level - h / 2 + 1);
+    }
     level -= h;
   }
   ctx.restore();

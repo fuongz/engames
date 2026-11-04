@@ -37,7 +37,8 @@ import {
   REPORT_EVERY,
   START_TUBES,
   START_UNDOS,
-  UNDO_PER_LEVEL,
+  UNDO_EVERY,
+  hiddenFor,
   W,
 } from "./config";
 import {
@@ -102,7 +103,12 @@ export function setup(rt: Runtime): GameHooks {
   let shakes: number[] = [];
   let bits: Bit[] = [];
   let toast: { text: string; t: number; color: string } | null = null;
-  let won: { t: number; pours: number; level: number } | null = null;
+  let won: {
+    t: number;
+    pours: number;
+    level: number;
+    undo: boolean;
+  } | null = null;
   let t = 0;
 
   const view = () => stage.view;
@@ -174,12 +180,16 @@ export function setup(rt: Runtime): GameHooks {
     toast = { text: str, t: 0, color };
   }
 
+  /** Lifted and pouring: it cannot be touched until it is back. */
+  const flying = (i: number) => anims.some((a) => a.move.from === i);
   const busy = (i: number) =>
     anims.some((a) => a.move.from === i || a.move.to === i);
 
   function tapTube(i: number) {
-    if (busy(i)) return;
+    if (flying(i)) return;
     if (selected === null) {
+      // A tube still filling can take another pour, but cannot be picked up yet
+      if (busy(i)) return;
       if (
         board.tubes[i].length === 0 ||
         isComplete(board.tubes[i], board.capacity)
@@ -314,9 +324,11 @@ export function setup(rt: Runtime): GameHooks {
   function checkWin() {
     if (won || anims.length > 0 || !solved(board)) return;
     const level = board.level;
-    won = { t: 0, pours: board.moves, level };
+    const undoEarned = level % UNDO_EVERY === 0;
+    won = { t: 0, pours: board.moves, level, undo: undoEarned };
     progress.level = level + 1;
-    progress.undos = Math.min(MAX_UNDOS, progress.undos + UNDO_PER_LEVEL);
+    if (undoEarned)
+      progress.undos = Math.min(MAX_UNDOS, progress.undos + 1);
     progress.gift = Math.min(GIFT_EVERY, progress.gift + 1);
     save();
     storage.set(SUMMARY_KEY, {
@@ -422,10 +434,16 @@ export function setup(rt: Runtime): GameHooks {
   /** Group a tube into layers, then adjust for any pour still animating into or out of it. */
   function layersOf(i: number): Layer[] {
     const tube: Tube = board.tubes[i];
+    const hidden = board.hidden[i];
     const layers: Layer[] = [];
-    for (const c of tube) {
+    for (const [k, c] of tube.entries()) {
+      // A "?" layer is drawn on its own, so its neighbours give nothing away
+      if (hidden[k]) {
+        layers.push({ color: c, amount: 1, hidden: true });
+        continue;
+      }
       const last = layers[layers.length - 1];
-      if (last && last.color === c) last.amount++;
+      if (last && !last.hidden && last.color === c) last.amount++;
       else layers.push({ color: c, amount: 1 });
     }
     for (const a of anims) {
@@ -433,7 +451,8 @@ export function setup(rt: Runtime): GameHooks {
       const pending = a.move.count * (1 - p);
       if (a.move.from === i && pending > 0) {
         const last = layers[layers.length - 1];
-        if (last && last.color === a.move.color) last.amount += pending;
+        if (last && !last.hidden && last.color === a.move.color)
+          last.amount += pending;
         else layers.push({ color: a.move.color, amount: pending });
       }
       if (a.move.to === i && pending > 0) {
@@ -583,6 +602,8 @@ export function setup(rt: Runtime): GameHooks {
       ctx.globalAlpha = 1;
     } else if (!won && anims.length === 0 && !solved(board) && !hasMove()) {
       text(ctx, l.stuck, W / 2, bottom - 110, 17, "#ffd36b", "center", 700);
+    } else if (hiddenFor(board.level) && board.moves === 0) {
+      text(ctx, l.mysteryHint, W / 2, bottom - 110, 17, "#dfe4ee", "center", 700);
     } else if (board.level <= 2 && board.moves === 0) {
       text(ctx, l.tapHint, W / 2, bottom - 110, 17, "#dfe4ee", "center", 700);
     }
@@ -613,7 +634,8 @@ export function setup(rt: Runtime): GameHooks {
       "center",
       700,
     );
-    text(ctx, tr().undoReward, W / 2, cy + 28, 16, "#9affb0", "center", 700);
+    if (won.undo)
+      text(ctx, tr().undoReward, W / 2, cy + 28, 16, "#9affb0", "center", 700);
     if (won.t > 0.6) {
       const r = nextBtn();
       ctx.fillStyle = "#3a2a06";
