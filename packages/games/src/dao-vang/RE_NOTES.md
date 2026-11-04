@@ -26,18 +26,22 @@ generated for Engames and processed by `tools/dao-vang-sprites.py`.
 ## Our decisions
 
 - **Portrait 540×960**, mobile first; the swing is about ±70° from straight down
-  so the whole board is reachable from the centre.
+  so the whole board is reachable from the centre. One full swing takes 2.2 s.
 - **Numbers** (`config.ts`): gold 50 / 150 / 500, diamond 600, rocks 15 / 35,
-  mole 2, mole with diamond 602. Reel speed = 660 / weight px/s (capped at the
+  mole 2, mole with diamond 602. Reel speed = 580 / weight px/s (capped at the
   empty speed 720); strength ×1.6. Polish ×1.5 diamonds, rock book ×3 rocks.
-- **Goal**: the level's step is 550 + 120 per level; the bank must hold the sum
-  of all steps so far. Boards are generated with at least 2.1× the step in
-  gold and diamonds, so every level is winnable with room for misses.
+- **Goal**: the level's step is 650 + 130 per level; the bank must hold the sum
+  of all steps so far. Boards are generated with at least 1.9× the step in
+  gold and diamonds: every level is winnable, but there's little room for misses.
 - **Board generation** is deterministic from a run seed and the level number
   (`mulberry32`). Deeper levels shift gold further down, add rocks and moles,
-  and swap cheap nuggets for diamonds. `logic.test.ts` plays levels 1–8 with a
-  simple greedy bot: ≥85 % clears on levels 1–3, ≥50 % up to 8, starting with
-  no spare money.
+  and swap cheap nuggets for diamonds. Rocks: 4 + level (max 13); moles walk
+  60–115 px/s.
+- **Difficulty** (raised Nov 2026; the first tuning was too easy). A simple
+  greedy bot that starts each level with no spare money clears about: L1 100 %,
+  L2 90 %, L3 75 %, L4 50 %, L5 40 %, L6–8 10–15 %. Before: 100/98/93/90/80 %
+  and still 53 % at L8. Real players carry spare money and shop, so they go
+  further. `logic.test.ts` asserts ≥80 % on L1–2 and ≥30 % on L3–5.
 - **Mystery sacks** roll on landing: 60 % money (20–300), 20 % a stick of
   dynamite, 20 % strength for the rest of the level. With the clover: 70 %
   money (200–800), 15 % / 15 %.

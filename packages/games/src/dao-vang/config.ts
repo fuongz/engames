@@ -12,14 +12,14 @@ export const PIVOT = { x: 270, y: 164 };
 export const REST_LEN = 70;
 /** Widest swing either side of straight down, in radians (≈70°). */
 export const SWING_MAX = (70 * Math.PI) / 180;
-/** Swing phase speed, rad/s: one full left-right-left in ≈2.7 s. */
-export const SWING_SPEED = (2 * Math.PI) / 2.7;
+/** Swing phase speed, rad/s: one full left-right-left in ≈2.2 s, quick enough that aiming matters. */
+export const SWING_SPEED = (2 * Math.PI) / 2.2;
 /** How fast the claw shoots out, px/s. */
 export const EXTEND_SPEED = 520;
 /** Reeling in with nothing on the hook, px/s. */
 export const EMPTY_PULL = 720;
 /** Reeling in with a load: PULL / weight, px/s (capped at EMPTY_PULL). */
-export const PULL = 660;
+export const PULL = 580;
 /** Strength (potion or sack) multiplies the reel speed by this. */
 export const STRENGTH_BOOST = 1.6;
 /** Radius of the claw's grabbing tip. */
@@ -36,8 +36,8 @@ export const BOARD_TOP = 280;
 export const BOARD_BOTTOM = 920;
 export const BOARD_MARGIN = 22;
 
-/** Money the level itself must add to the bank: rises 120 a level. */
-export const goalStep = (level: number) => 550 + 120 * (level - 1);
+/** Money the level itself must add to the bank: rises 130 a level. */
+export const goalStep = (level: number) => 650 + 130 * (level - 1);
 /** The bank must hold this much when the clock runs out (money carries over). */
 export function goalFor(level: number) {
   let g = 0;
@@ -45,7 +45,7 @@ export function goalFor(level: number) {
   return g;
 }
 /** The valuables on a board add up to at least this many times the level's step. */
-export const BOARD_RATIO = 2.1;
+export const BOARD_RATIO = 1.9;
 
 // ---------------------------------------------------------------- objects
 
@@ -102,13 +102,13 @@ export function valuableWeights(level: number): [ItemKind, number][] {
     ["diamond", level < 2 ? 0 : Math.min(2.6, 0.2 + level * 0.25)],
   ];
 }
-export const rocksFor = (level: number) => Math.min(11, 3 + level);
+export const rocksFor = (level: number) => Math.min(13, 4 + level);
 export const molesFor = (level: number) =>
   level < 2 ? 0 : Math.min(4, Math.ceil((level - 1) / 2));
 /** From this level a mole may carry a diamond. */
 export const MOLE_DIAMOND_FROM = 3;
 export const sacksFor = (level: number) => (level % 3 === 0 ? 2 : 1);
-export const MOLE_SPEED = [45, 85];
+export const MOLE_SPEED = [60, 115];
 
 // ---------------------------------------------------------------- sacks
 
@@ -119,7 +119,7 @@ export type SackOutcome =
 
 /** Chance of each outcome and the money range, plain and with the lucky clover. */
 export const SACK = {
-  plain: { money: 0.6, dynamite: 0.2, min: 20, max: 300 },
+  plain: { money: 0.6, dynamite: 0.2, min: 10, max: 250 },
   lucky: { money: 0.7, dynamite: 0.15, min: 200, max: 800 },
 };
 

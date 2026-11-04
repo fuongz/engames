@@ -15,6 +15,7 @@ import {
   SWING_SPEED,
   goalFor,
   goalStep,
+  SACK,
 } from "./config";
 import {
   type GameEvent,
@@ -226,7 +227,8 @@ describe("mystery sacks", () => {
     for (let i = 0; i < 400; i++) {
       const o = rollSack(rnd, false);
       kinds.add(o.kind);
-      if (o.kind === "money") expect(o.amount).toBeGreaterThanOrEqual(20);
+      if (o.kind === "money")
+        expect(o.amount).toBeGreaterThanOrEqual(SACK.plain.min);
     }
     expect([...kinds].sort()).toEqual(["dynamite", "money", "strength"]);
   });
@@ -407,8 +409,8 @@ function playLevel(s: State) {
 }
 
 describe("balance", () => {
-  it("a simple bot clears the early levels on most boards", () => {
-    for (let l = 1; l <= 8; l++) {
+  it("a simple bot with no spare money clears levels 1–2 on most boards and 3–5 on some", () => {
+    for (let l = 1; l <= 5; l++) {
       let cleared = 0;
       const runs = 20;
       for (let seed = 1; seed <= runs; seed++) {
@@ -424,7 +426,7 @@ describe("balance", () => {
         if (s.phase === "cleared") cleared++;
       }
       expect(cleared / runs, `level ${l}`).toBeGreaterThanOrEqual(
-        l <= 3 ? 0.85 : 0.5,
+        l <= 2 ? 0.8 : 0.3,
       );
     }
   });
