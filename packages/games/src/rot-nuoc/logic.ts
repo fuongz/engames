@@ -1,9 +1,11 @@
 import { mulberry32 } from "@web-games/core/math";
 import {
+  CANDIDATES,
   CAPACITY,
-  EMPTY_TUBES,
   EXTRA_TUBES_PER_LEVEL,
   colorsFor,
+  emptiesFor,
+  hiddenFor,
 } from "./config";
 
 // Pure Water Sort rules: no DOM, no canvas. A tube is a list of colour ids from
@@ -22,8 +24,11 @@ export interface Board {
   level: number;
   capacity: number;
   tubes: Tube[];
+  /** Same shape as `tubes`: true where a layer still shows as "?". */
+  hidden: boolean[][];
   /** The starting layout, for Restart. */
   initial: Tube[];
+  initialHidden: boolean[][];
   history: Move[];
   moves: number;
   extraTubes: number;
@@ -86,13 +91,14 @@ export const isSolved = (tubes: Tube[], capacity: number) =>
 /**
  * Depth-first search with a visited set over canonical states (tube order does
  * not matter). Used to make sure every generated level can be solved without
- * boosters. Returns null when the node budget runs out.
+ * boosters. `solved` is null when the node budget runs out; `nodes` (states
+ * visited before the first solution) is how hard the layout is to search.
  */
-export function solvable(
+export function solve(
   start: Tube[],
   capacity: number,
   budget = 60000,
-): boolean | null {
+): { solved: boolean | null; nodes: number } {
   const seen = new Set<string>();
   const key = (tubes: Tube[]) =>
     tubes
@@ -130,16 +136,35 @@ export function solvable(
     }
     return exhausted ? null : false;
   };
-  return search(start);
+  const solved = search(start);
+  return { solved, nodes };
+}
+
+export const solvable = (start: Tube[], capacity: number, budget = 60000) =>
+  solve(start, capacity, budget).solved;
+
+/** Neighbouring layers of the same colour: each one is a head start for the player. */
+export function adjacentPairs(tubes: Tube[]) {
+  let n = 0;
+  for (const t of tubes)
+    for (let i = 1; i < t.length; i++) if (t[i] === t[i - 1]) n++;
+  return n;
 }
 
 // ---------------------------------------------------------------- levels
 
-/** Shuffle every layer into the coloured tubes, then add the empty ones. Same level, same layout. */
+/**
+ * Shuffle every layer into the coloured tubes, then add the empty ones. Several
+ * solvable layouts are drawn and the hardest kept: fewest same-colour
+ * neighbours first, then the most solver work. Same level, same layout.
+ */
 export function generateLevel(level: number, capacity = CAPACITY): Tube[] {
   const colors = colorsFor(level);
+  const empties = emptiesFor(level);
   const rng = mulberry32(level * 7919 + 17);
-  for (let attempt = 0; attempt < 200; attempt++) {
+  let best: { tubes: Tube[]; pairs: number; nodes: number } | null = null;
+  let found = 0;
+  for (let attempt = 0; attempt < 3000 && found < CANDIDATES; attempt++) {
     const layers: number[] = [];
     for (let c = 0; c < colors; c++)
       for (let i = 0; i < capacity; i++) layers.push(c);
@@ -150,27 +175,46 @@ export function generateLevel(level: number, capacity = CAPACITY): Tube[] {
     const tubes: Tube[] = [];
     for (let c = 0; c < colors; c++)
       tubes.push(layers.slice(c * capacity, (c + 1) * capacity));
-    for (let e = 0; e < EMPTY_TUBES; e++) tubes.push([]);
-    // Not already (nearly) done, and not a tube that starts complete
+    for (let e = 0; e < empties; e++) tubes.push([]);
+    // Not a tube that starts complete
     if (tubes.some((t) => t.length > 0 && isComplete(t, capacity))) continue;
-    if (solvable(tubes, capacity) !== true) continue;
-    return tubes;
+    const pairs = adjacentPairs(tubes);
+    // Cheap filter before the solver: a layout full of ready-made pairs is too easy
+    if (best && pairs > best.pairs) continue;
+    const r = solve(tubes, capacity);
+    if (r.solved !== true) continue;
+    found++;
+    if (
+      !best ||
+      pairs < best.pairs ||
+      (pairs === best.pairs && r.nodes > best.nodes)
+    )
+      best = { tubes, pairs, nodes: r.nodes };
   }
-  // Fallback that is always solvable: a striped layout (in practice never reached)
+  if (best) return best.tubes;
+  // Fallback that is always solvable: a striped layout with two empty tubes (in practice never reached)
   const tubes: Tube[] = [];
   for (let c = 0; c < colors; c++)
     tubes.push(Array.from({ length: capacity }, (_, i) => (c + i) % colors));
-  for (let e = 0; e < EMPTY_TUBES; e++) tubes.push([]);
+  for (let e = 0; e < 2; e++) tubes.push([]);
   return tubes;
+}
+
+/** Every layer but the top of each tube starts hidden on a "?" level. */
+export function hiddenLayout(tubes: Tube[], hide: boolean): boolean[][] {
+  return tubes.map((t) => t.map((_, i) => hide && i < t.length - 1));
 }
 
 export function createBoard(level: number): Board {
   const tubes = generateLevel(level);
+  const hidden = hiddenLayout(tubes, hiddenFor(level));
   return {
     level,
     capacity: CAPACITY,
     tubes: clone(tubes),
+    hidden: hidden.map((h) => [...h]),
     initial: clone(tubes),
+    initialHidden: hidden,
     history: [],
     moves: 0,
     extraTubes: 0,
@@ -181,6 +225,13 @@ export function createBoard(level: number): Board {
 export function pour(b: Board, from: number, to: number): Move | null {
   const m = pourInto(b.tubes, b.capacity, from, to);
   if (!m) return null;
+  // Poured layers are seen on the way, and whatever they uncovered shows
+  for (let i = 0; i < m.count; i++) {
+    b.hidden[m.from].pop();
+    b.hidden[m.to].push(false);
+  }
+  const rest = b.hidden[m.from];
+  if (rest.length > 0) rest[rest.length - 1] = false;
   b.history.push(m);
   b.moves++;
   return m;
@@ -193,6 +244,8 @@ export function undo(b: Board): Move | null {
   for (let i = 0; i < m.count; i++) {
     b.tubes[m.to].pop();
     b.tubes[m.from].push(m.color);
+    b.hidden[m.to].pop();
+    b.hidden[m.from].push(false);
   }
   b.moves = Math.max(0, b.moves - 1);
   return m;
@@ -203,6 +256,7 @@ export const canAddTube = (b: Board) => b.extraTubes < EXTRA_TUBES_PER_LEVEL;
 export function addTube(b: Board) {
   if (!canAddTube(b)) return false;
   b.tubes.push([]);
+  b.hidden.push([]);
   b.extraTubes++;
   return true;
 }
@@ -210,7 +264,11 @@ export function addTube(b: Board) {
 /** Back to the starting layout (any extra tube used this level stays used). */
 export function restart(b: Board) {
   b.tubes = clone(b.initial);
-  for (let i = 0; i < b.extraTubes; i++) b.tubes.push([]);
+  b.hidden = b.initialHidden.map((h) => [...h]);
+  for (let i = 0; i < b.extraTubes; i++) {
+    b.tubes.push([]);
+    b.hidden.push([]);
+  }
   b.history = [];
   b.moves = 0;
 }

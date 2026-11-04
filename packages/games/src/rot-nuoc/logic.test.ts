@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { CAPACITY, EMPTY_TUBES, colorsFor } from "./config";
+import { CAPACITY, colorsFor, emptiesFor, hiddenFor } from "./config";
 import {
   addTube,
+  adjacentPairs,
   canPour,
   createBoard,
   generateLevel,
@@ -50,7 +51,7 @@ describe("rules", () => {
     expect(addTube(b)).toBe(false);
     pour(b, from, to);
     restart(b);
-    expect(b.tubes.length).toBe(colorsFor(5) + EMPTY_TUBES + 1);
+    expect(b.tubes.length).toBe(colorsFor(5) + emptiesFor(5) + 1);
     expect(b.moves).toBe(0);
   });
 
@@ -63,11 +64,11 @@ describe("rules", () => {
 
 describe("levels", () => {
   it("are deterministic, use every colour exactly CAPACITY times, and are all solvable", () => {
-    for (const level of [1, 2, 7, 20, 25, 40, 58, 80]) {
+    for (const level of [1, 2, 7, 20, 21, 25, 40, 58, 80, 101]) {
       const a = generateLevel(level);
       expect(JSON.stringify(generateLevel(level))).toBe(JSON.stringify(a));
       const colors = colorsFor(level);
-      expect(a.length).toBe(colors + EMPTY_TUBES);
+      expect(a.length).toBe(colors + emptiesFor(level));
       const counts = new Map<number, number>();
       for (const t of a)
         for (const c of t) counts.set(c, (counts.get(c) ?? 0) + 1);
@@ -79,8 +80,50 @@ describe("levels", () => {
 
   it("start unsolved and get harder", () => {
     expect(solved(createBoard(1))).toBe(false);
-    expect(colorsFor(1)).toBe(3);
-    expect(colorsFor(25)).toBe(9); // the ad's level-58 board has 9
-    expect(colorsFor(200)).toBe(12);
+    expect(colorsFor(1)).toBe(4);
+    expect(colorsFor(25)).toBe(12);
+    expect(colorsFor(201)).toBe(12);
+    // One spare tube on even levels from 20, with fewer colours so it stays solvable
+    expect(emptiesFor(19)).toBe(2);
+    expect(emptiesFor(20)).toBe(1);
+    expect(emptiesFor(21)).toBe(2);
+    expect(colorsFor(20)).toBe(7);
+    expect(colorsFor(40)).toBe(8);
+  });
+
+  it("keep the layout with the fewest ready-made same-colour pairs", () => {
+    for (const level of [3, 12, 25, 33]) {
+      expect(adjacentPairs(generateLevel(level)), `level ${level}`).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe("hidden layers", () => {
+  it("cover all but the top layer on a ? level, and only there", () => {
+    expect(hiddenFor(14)).toBe(false);
+    expect(hiddenFor(15)).toBe(true);
+    expect(hiddenFor(16)).toBe(false);
+    const b = createBoard(15);
+    for (const [i, t] of b.tubes.entries())
+      expect(b.hidden[i]).toEqual(t.map((_, k) => k < t.length - 1));
+    expect(createBoard(16).hidden.flat().some(Boolean)).toBe(false);
+  });
+
+  it("uncover the new top after a pour, stay seen after undo, and come back on restart", () => {
+    const b = createBoard(1);
+    b.tubes = [[0, 1, 2, 2], [3, 3, 2], []];
+    b.hidden = [[true, true, true, false], [true, true, false], []];
+    b.initialHidden = b.hidden.map((h) => [...h]);
+    b.initial = b.tubes.map((t) => [...t]);
+    const m = pour(b, 0, 2);
+    expect(m?.count).toBe(2);
+    expect(b.hidden[0]).toEqual([true, false]);
+    expect(b.hidden[2]).toEqual([false, false]);
+    undo(b);
+    expect(b.tubes[0]).toEqual([0, 1, 2, 2]);
+    expect(b.hidden[0]).toEqual([true, false, false, false]);
+    expect(b.hidden[2]).toEqual([]);
+    restart(b);
+    expect(b.hidden[0]).toEqual([true, true, true, false]);
   });
 });
