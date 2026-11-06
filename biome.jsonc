@@ -42,6 +42,8 @@
   "files": {
     "includes": [
       "**/*",
+      // Local agent worktrees are independent checkouts with their own config.
+      "!**/.claude",
       "!**/node_modules",
       "!**/*.d.ts",
       // build output
