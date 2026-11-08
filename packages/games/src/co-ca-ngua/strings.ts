@@ -26,15 +26,14 @@ export interface Strings {
   person: (n: number) => string;
   roll: string;
   yourRoll: string;
-  pickDie: string;
-  pickHorse: (die: number) => string;
+  /** Walk `total` (null: nothing to walk), and/or bring a horse out. */
+  pickHorse: (total: number | null, out: boolean) => string;
   turnOf: (name: string) => string;
   firstTurn: (name: string) => string;
-  doubles: string;
+  bonus: (doubles: boolean) => string;
   noMove: string;
-  noMoveDoubles: string;
-  threeDoubles: string;
-  lost: (die: number) => string;
+  noMoveBonus: string;
+  threeBonus: string;
   captured: (victim: string) => string;
   capturedYou: (by: string) => string;
   home: string;
@@ -67,7 +66,7 @@ const EN_PLACE = ["1st", "2nd", "3rd", "4th"];
 export const STRINGS: Localized<Strings> = {
   vi: {
     title: "Cờ Cá Ngựa",
-    subtitle: "Hai xí ngầu · ra 6 mới xuất ngựa · đưa cả 4 về đích",
+    subtitle: "Hai xí ngầu · đổ đôi hoặc 1-6 để xuất ngựa · đưa cả 4 về đích",
     players: "Số người chơi",
     people: "Người chơi trên máy này",
     peopleHint: (p, n) => (p === n ? "Thay nhau gieo trên cùng một máy" : p === 1 ? `Bạn và ${n - 1} máy` : `${p} người, ${n - p} máy`),
@@ -79,12 +78,12 @@ export const STRINGS: Localized<Strings> = {
     rulesShort: "Luật",
     newShort: "Ván mới",
     rulesLines: [
-      "Mỗi lượt gieo hai xí ngầu, đi từng xí ngầu một: chạm xí ngầu, rồi chạm con ngựa (cùng con hay con khác).",
-      "Xí ngầu ra 6 mới xuất được một ngựa khỏi chuồng.",
-      "Đi theo chiều kim đồng hồ, hết một vòng thì rẽ vào đường về đích.",
-      "Đổ đôi được gieo thêm; ba lần đôi liền thì mất lượt.",
-      "Đứng trúng ngựa đối thủ là đá nó về chuồng, trừ ô xuất phát và ô ngôi sao.",
-      "Về đích phải đúng số. Đi được cả hai xí ngầu thì phải đi cả hai; xí ngầu không đi được thì bỏ.",
+      "Mỗi lượt gieo hai xí ngầu và cộng lại: một con ngựa đi đủ tổng đó, không chia cho hai con.",
+      "Đổ đôi (1-1 đến 6-6) hoặc 1-6 thì được xuất một ngựa ra ô xuất phát, hoặc cho con khác đi tổng.",
+      "Đi theo chiều kim đồng hồ, hết một vòng thì rẽ vào đường về đích; về đích đủ hoặc dư số đều được.",
+      "Không được nhảy qua đầu ngựa nào, kể cả ngựa mình; mỗi ô chỉ đứng một ngựa.",
+      "Dừng đúng ô có ngựa đối thủ là đá nó về chuồng, ô nào cũng vậy; chỉ đường về đích là an toàn.",
+      "Đổ đôi hoặc 1-6 được gieo thêm, ba lần liền thì mất lượt. Không con nào đi được thì mất lượt.",
       "Ai đưa đủ 4 ngựa về đích trước thì về nhất; người còn lại chơi tiếp tranh hạng.",
       "Online: mỗi lượt 20 giây; hết giờ hoặc mất kết nối thì máy đi thay.",
     ],
@@ -95,15 +94,13 @@ export const STRINGS: Localized<Strings> = {
     person: (n) => `Người ${n}`,
     roll: "Gieo",
     yourRoll: "Lượt của bạn · chạm xí ngầu để gieo",
-    pickDie: "Chọn xí ngầu rồi chạm con ngựa",
-    pickHorse: (d) => `Đi ${d} · chạm con ngựa đang sáng`,
+    pickHorse: (n, out) => `${n === null ? "Xuất ngựa" : out ? `Xuất ngựa hoặc đi ${n}` : `Đi ${n}`} · chạm con ngựa đang sáng`,
     turnOf: (name) => `Lượt của ${name}`,
     firstTurn: (name) => `${name} đi trước`,
-    doubles: "Đổ đôi · được gieo thêm!",
+    bonus: (d) => (d ? "Đổ đôi · được gieo thêm!" : "Đổ 1-6 · được gieo thêm!"),
     noMove: "Không đi được · mất lượt",
-    noMoveDoubles: "Không đi được · đổ đôi nên gieo tiếp",
-    threeDoubles: "Ba lần đôi liền · mất lượt!",
-    lost: (d) => `Xí ngầu ${d} không đi được`,
+    noMoveBonus: "Không đi được · nhưng được gieo tiếp",
+    threeBonus: "Gieo thêm ba lần liền · mất lượt!",
     captured: (v) => `Đá ngựa ${v} về chuồng!`,
     capturedYou: (by) => `${by} đá ngựa của bạn về chuồng!`,
     home: "Về đích!",
@@ -128,7 +125,7 @@ export const STRINGS: Localized<Strings> = {
   },
   en: {
     title: "Ludo",
-    subtitle: "Two dice · a 6 brings a horse out · bring all 4 home",
+    subtitle: "Two dice · doubles or 1-6 bring a horse out · bring all 4 home",
     players: "Players",
     people: "People on this phone",
     peopleHint: (p, n) => (p === n ? "Take turns rolling on one phone" : p === 1 ? `You and ${n - 1} CPU` : `${p} people, ${n - p} CPU`),
@@ -140,12 +137,12 @@ export const STRINGS: Localized<Strings> = {
     rulesShort: "Rules",
     newShort: "New",
     rulesLines: [
-      "Roll two dice and play them one at a time: tap a die, then a horse (the same one or another).",
-      "A die showing 6 brings a horse out of its stable.",
-      "Move clockwise; after a full lap, turn up your own home path.",
-      "Doubles roll again; three doubles in a row lose the turn.",
-      "Land on a rival to send it back to its stable, except on start and star squares.",
-      "Exact number to reach home. If both dice can be played, play both; a die that can't be played is lost.",
+      "Roll two dice and add them up: one horse moves the whole total; it isn't split between two.",
+      "Doubles (1-1 to 6-6) or a 1 and a 6 bring a horse out onto its start square, or move another horse the total.",
+      "Move clockwise; after a full lap, turn up your own home path. Reaching home needs the number or more.",
+      "No horse can jump another, your own included; one horse to a square.",
+      "Stop on a rival to send it back to its stable, on any square; only your home path is safe.",
+      "Doubles or 1-6 roll again; three in a row lose the turn. No horse can move: the turn passes.",
       "First to bring all 4 home wins; the rest play on for the places.",
       "Online: 20 seconds a turn; if time runs out or you drop, the computer plays for you.",
     ],
@@ -156,15 +153,13 @@ export const STRINGS: Localized<Strings> = {
     person: (n) => `Player ${n}`,
     roll: "Roll",
     yourRoll: "Your turn · tap the dice to roll",
-    pickDie: "Pick a die, then tap a horse",
-    pickHorse: (d) => `Move ${d} · tap a glowing horse`,
+    pickHorse: (n, out) => `${n === null ? "Bring one out" : out ? `Bring one out or move ${n}` : `Move ${n}`} · tap a glowing horse`,
     turnOf: (name) => `${name}'s turn`,
     firstTurn: (name) => `${name} goes first`,
-    doubles: "Doubles · roll again!",
+    bonus: (d) => (d ? "Doubles · roll again!" : "1 and 6 · roll again!"),
     noMove: "No move · turn passes",
-    noMoveDoubles: "No move · doubles, roll again",
-    threeDoubles: "Three doubles in a row · turn lost!",
-    lost: (d) => `The ${d} can't be played`,
+    noMoveBonus: "No move · but roll again",
+    threeBonus: "Three bonus rolls in a row · turn lost!",
     captured: (v) => `Sent ${v} back to the stable!`,
     capturedYou: (by) => `${by} sent your horse back!`,
     home: "Home!",

@@ -1,6 +1,6 @@
 import { nextRandom } from "@web-games/core/math";
 import { chooseMove } from "./ai";
-import { type Move, capturesAt, distinctOptions, finished, legalMoves, progressOf, target } from "./board";
+import { type Move, capturesAt, destination, distinctOptions, finished, isBonusRoll, legalMoves, progressOf } from "./board";
 import {
   AUTO_MOVE_DELAY,
   BASE,
@@ -10,7 +10,7 @@ import {
   type Difficulty,
   HOME,
   HOP_TIME,
-  MAX_DOUBLES,
+  MAX_BONUS,
   MAX_TIMEOUTS,
   MAX_TURNS,
   ONLINE_SCORE,
@@ -21,8 +21,9 @@ import {
   TOKENS,
 } from "./config";
 
-// Ludo rules, pure, the Vietnamese way: two dice a turn, each spent on its own.
-// One `Match` is one game at a table of 2–4 colours, paced in
+// Ludo rules, pure, the Vietnamese way (cờ cá ngựa): two dice a turn, their
+// total moves one horse; doubles or 1-6 bring a horse out and roll again; no
+// jumping over horses. One `Match` is one game at a table of 2–4 colours, paced in
 // seconds (dice tumble, hops, the computer's pauses) so the same code runs the
 // game on a phone and in the realtime room (online.ts) — the client only draws
 // it. Positions are per-colour progress: BASE, 0..50 around the loop from the
@@ -30,7 +31,7 @@ import {
 
 // ---------------------------------------------------------------- the match
 
-export type Input = { kind: "roll" } | { kind: "move"; die: number; token: number };
+export type Input = { kind: "roll" } | { kind: "move"; token: number };
 
 export interface Player {
   /** Board corner, 0 bottom-left then clockwise; it fixes the colour. */
@@ -64,8 +65,7 @@ export interface Anim {
 export type MatchEvent =
   | { type: "turn"; player: number }
   | { type: "roll"; player: number; dice: number[]; auto: boolean }
-  | { type: "move"; player: number; die: number; token: number; from: number; to: number; auto: boolean }
-  | { type: "lost"; player: number; die: number; value: number }
+  | { type: "move"; player: number; token: number; from: number; to: number; auto: boolean }
   | { type: "capture"; player: number; victim: number; token: number }
   | { type: "home"; player: number; token: number }
   | { type: "finish"; player: number; place: number }
@@ -84,11 +84,9 @@ export interface Match {
   phaseId: number;
   /** The last roll, two dice (0 before the first). */
   dice: number[];
-  /** Which dice of the roll are spent (or lost). */
-  used: boolean[];
-  /** Doubles rolled in a row this turn. */
-  doubles: number;
-  /** Legal (die, horse) pairs for the current player (phase "move"). */
+  /** Bonus rolls (doubles or 1-6) in a row this turn. */
+  bonus: number;
+  /** Horses the current player can move with the roll (phase "move"). */
   moves: Move[];
   /** The move being animated (phase "moving"). */
   anim: Anim | null;
@@ -139,8 +137,7 @@ export function createMatch(seed: number, setup: MatchSetup): Match {
     t: 0,
     phaseId: 0,
     dice: [0, 0],
-    used: [true, true],
-    doubles: 0,
+    bonus: 0,
     moves: [],
     anim: null,
     passReason: null,
@@ -178,42 +175,36 @@ function setPhase(m: Match, phase: Phase) {
   m.phaseId++;
 }
 
-export const isDoubles = (dice: readonly number[]) => dice[0] > 0 && dice[0] === dice[1];
-
 function roll(m: Match, auto: boolean) {
   m.dice = [1 + Math.floor(nextRandom(m) * 6), 1 + Math.floor(nextRandom(m) * 6)];
-  m.used = [false, false];
-  if (isDoubles(m.dice)) m.doubles++;
+  if (isBonusRoll(m.dice)) m.bonus++;
   m.events.push({ type: "roll", player: m.turn, dice: m.dice.slice(), auto });
   setPhase(m, "rolling");
 }
 
 function afterRoll(m: Match) {
-  const p = m.players[m.turn];
-  if (isDoubles(m.dice) && m.doubles >= MAX_DOUBLES) {
+  if (isBonusRoll(m.dice) && m.bonus >= MAX_BONUS) {
     m.passReason = "three";
   } else {
-    m.moves = legalMoves(p.tokens, m.dice, m.used);
+    m.moves = legalMoves(m.players, m.turn, m.dice);
     m.passReason = m.moves.length ? null : "none";
   }
   if (m.passReason) {
     m.moves = [];
-    m.used = [true, true];
     m.events.push({ type: "pass", player: m.turn, reason: m.passReason });
     setPhase(m, "pass");
   } else setPhase(m, "move");
 }
 
-/** Spend die `die` on horse `token` of the current player. False if that isn't legal. */
-function move(m: Match, die: number, token: number, auto: boolean): boolean {
+/** Move horse `token` of the current player by the roll. False if that isn't legal. */
+function move(m: Match, token: number, auto: boolean): boolean {
   const p = m.players[m.turn];
-  if (!m.moves.some((x) => x.die === die && x.token === token)) return false;
+  if (!m.moves.some((x) => x.token === token)) return false;
   const from = p.tokens[token];
-  const to = target(from, m.dice[die]);
+  const to = destination(m.players, m.turn, token, m.dice);
   if (to === null) return false;
   const hits = capturesAt(m.players, m.turn, to);
   p.tokens[token] = to;
-  m.used[die] = true;
   const captured = hits.map((h) => {
     const victim = m.players[h.player];
     const was = victim.tokens[h.token];
@@ -222,7 +213,7 @@ function move(m: Match, die: number, token: number, auto: boolean): boolean {
     return { ...h, from: was };
   });
   p.captures += captured.length;
-  m.events.push({ type: "move", player: m.turn, die, token, from, to, auto });
+  m.events.push({ type: "move", player: m.turn, token, from, to, auto });
   if (to === HOME) m.events.push({ type: "home", player: m.turn, token });
   m.anim = { token, from, to, captured };
   m.moves = [];
@@ -268,15 +259,15 @@ function nextTurn(m: Match) {
       break;
     }
   }
-  m.doubles = 0;
+  m.bonus = 0;
   m.passReason = null;
   m.events.push({ type: "turn", player: m.turn });
   setPhase(m, "roll");
 }
 
-/** The roll is done: doubles roll again, anything else hands over. */
+/** The roll is done: doubles and 1-6 roll again, anything else hands over. */
 function endRoll(m: Match) {
-  if (isDoubles(m.dice)) setPhase(m, "roll");
+  if (isBonusRoll(m.dice)) setPhase(m, "roll");
   else nextTurn(m);
 }
 
@@ -289,20 +280,12 @@ function afterMove(m: Match) {
     if (checkOver(m)) return;
     return nextTurn(m);
   }
-  // The other die, if it can still be played
-  m.moves = legalMoves(p.tokens, m.dice, m.used);
-  if (m.moves.length) return setPhase(m, "move");
-  for (const die of [0, 1])
-    if (!m.used[die]) {
-      m.used[die] = true;
-      m.events.push({ type: "lost", player: m.turn, die, value: m.dice[die] });
-    }
   endRoll(m);
 }
 
 /** The computer's choice for the current player. */
 function botMove(m: Match, level: Difficulty): Move {
-  return chooseMove(m.players, m.turn, m.dice, m.used, m.moves, level, () => nextRandom(m));
+  return chooseMove(m.players, m.turn, m.dice, m.moves, level, () => nextRandom(m));
 }
 
 function timedOut(p: Player) {
@@ -344,24 +327,24 @@ export function stepMatch(m: Match, dt: number, inputs: readonly (Input | null |
       if (m.t >= ROLL_TIME) afterRoll(m);
       return;
     case "move": {
-      if (input?.kind === "move" && move(m, input.die, input.token, false)) {
+      if (input?.kind === "move" && move(m, input.token, false)) {
         p.timeouts = 0;
         return;
       }
       if (auto) {
         if (m.t >= BOT_MOVE_DELAY) {
           const b = botMove(m, p.level);
-          move(m, b.die, b.token, p.seat !== null);
+          move(m, b.token, p.seat !== null);
         }
         return;
       }
       // Only one thing to do: do it
-      const options = distinctOptions(p.tokens, m.dice, m.moves);
-      if (options.length === 1 && m.t >= AUTO_MOVE_DELAY) return void move(m, options[0].die, options[0].token, false);
+      const options = distinctOptions(p.tokens, m.moves);
+      if (options.length === 1 && m.t >= AUTO_MOVE_DELAY) return void move(m, options[0].token, false);
       if (clockOut) {
         timedOut(p);
         const b = botMove(m, "normal");
-        move(m, b.die, b.token, true);
+        move(m, b.token, true);
       }
       return;
     }
@@ -370,8 +353,8 @@ export function stepMatch(m: Match, dt: number, inputs: readonly (Input | null |
       return;
     case "pass":
       if (m.t < PASS_TIME) return;
-      // Doubles that couldn't be played still earn the roll; the third doubles never do
-      if (m.passReason === "none" && isDoubles(m.dice)) {
+      // A bonus roll that couldn't be played still earns the roll; the third in a row never does
+      if (m.passReason === "none" && isBonusRoll(m.dice)) {
         m.passReason = null;
         setPhase(m, "roll");
       } else nextTurn(m);

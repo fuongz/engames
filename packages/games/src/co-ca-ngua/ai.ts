@@ -1,56 +1,62 @@
-import { type Move, SAFE, capturesAt, distinctOptions, legalMoves, loopIndex, progressOf, target } from "./board";
+import { type Move, type Seat, capturesAt, destination, distinctOptions, loopIndex } from "./board";
 import { type Difficulty, HOME, LAST_TRACK, TRACK_LEN } from "./config";
 
 // The computer player. Pure (runs on the phone and, for the computer's seats,
-// autopilot and timed-out turns, in the realtime room). One decision spends
-// one of the two dice on one horse.
+// autopilot and timed-out turns, in the realtime room). One decision: which
+// horse takes the roll (the two dice together).
 //   Easy   — any legal move, at random.
-//   Normal — a rule of thumb: capture > leave base > reach safety > progress,
-//            and don't stop right in front of an opponent.
-//   Hard   — the same priorities with exact two-dice odds (one die or
-//            their sum), each token weighed by how far it has come, the leader
-//            hunted first, and opponents it can reach next turn; with both
-//            dice unspent it plans the pair (best first move + best second).
+//   Normal — a rule of thumb: capture > leave base > reach the home column >
+//            progress, and don't stop where an opponent can hit it next turn.
+//   Hard   — weighs the whole board the move leaves: every horse out is
+//            worth a lot, more the further it has come, less the chance it
+//            is hit next turn (exact two-dice odds, blocked paths included);
+//            its own standing against the rivals' average, so a capture,
+//            a horse brought out and a risky stop all fall out of one number.
+//            A one-ply look at the rivals' replies was tried and was no
+//            stronger.
 // Ludo is mostly dice; see RE_NOTES.md for how often each level wins
 // (logic.test.ts keeps a floor under Hard and Normal vs Easy).
 
-export interface Seat {
-  corner: number;
-  tokens: readonly number[];
+/** Chance that two dice add up to d (2..12). */
+const SUM: number[] = Array.from({ length: 13 }, (_, d) => (d < 2 ? 0 : (6 - Math.abs(d - 7)) / 36));
+/** Chance of a bonus roll (doubles or 1-6), which brings a horse out onto its start square. */
+const EXIT = 8 / 36;
+
+/** Loop squares (0..51) that have a horse on them. */
+function taken(players: readonly Seat[]) {
+  const s = new Set<number>();
+  for (const q of players) for (const p of q.tokens) if (p >= 0 && p <= LAST_TRACK) s.add(loopIndex(q.corner, p));
+  return s;
 }
 
-/** Chance that a roll of two dice can carry a horse exactly d squares (one die, or both together). */
-const REACH: number[] = Array.from({ length: 13 }, (_, d) => {
-  let n = 0;
-  for (let x = 1; x <= 6; x++) for (let y = 1; y <= 6; y++) if (x === d || y === d || x + y === d) n++;
-  return n / 36;
-});
+/** Nobody stands on the d - 1 loop squares after `from`. */
+function clear(occupied: Set<number>, from: number, d: number) {
+  for (let k = 1; k < d; k++) if (occupied.has((from + k) % TRACK_LEN)) return false;
+  return true;
+}
 
-/**
- * Chance (0..1) that some opponent can land on loop square `at` on their next
- * turn. A token d squares behind needs a die showing d; with `exact`, both dice
- * adding up to d count too.
- */
-function threat(players: readonly Seat[], me: number, at: number, exact: boolean) {
-  if (SAFE.has(at)) return 0;
+/** Chance (0..1) that some opponent can land on loop square `at` on their next roll. */
+function threat(players: readonly Seat[], me: number, at: number) {
+  const occupied = taken(players);
   let safe = 1;
   players.forEach((q, i) => {
     if (i === me) return;
+    // Coming out of base onto its start square
+    if (loopIndex(q.corner, 0) === at && q.tokens.some((p) => p < 0)) safe *= 1 - EXIT;
     for (const p of q.tokens) {
       if (p < 0 || p > LAST_TRACK) continue;
-      const d = (at - loopIndex(q.corner, p) + TRACK_LEN) % TRACK_LEN;
-      // It must still be on the loop when it gets there (not turned up its home column)
-      if (d === 0 || p + d > LAST_TRACK) continue;
-      const chance = d > 12 ? 0 : exact ? REACH[d] : d <= 6 ? 11 / 36 : 0;
-      safe *= 1 - chance;
+      const qa = loopIndex(q.corner, p);
+      const d = (at - qa + TRACK_LEN) % TRACK_LEN;
+      // Two dice make 2..12; it must not have turned up its home column, nor jump anyone on the way
+      if (d < 2 || d > 12 || p + d > LAST_TRACK || !clear(occupied, qa, d)) continue;
+      safe *= 1 - SUM[d];
     }
   });
   return 1 - safe;
 }
 
-/** The board after `me` moves `token` by `die` (captures included). */
-function after(players: readonly Seat[], me: number, token: number, die: number): Seat[] {
-  const to = target(players[me].tokens[token], die) ?? players[me].tokens[token];
+/** The board after `me` moves `token` to `to` (captures included). */
+function after(players: readonly Seat[], me: number, token: number, to: number): Seat[] {
   const hits = capturesAt(players, me, to);
   return players.map((q, i) => ({
     corner: q.corner,
@@ -62,95 +68,67 @@ function after(players: readonly Seat[], me: number, token: number, die: number)
 }
 
 /** Normal's rule of thumb for one move. */
-function rule(players: readonly Seat[], me: number, token: number, die: number) {
+function rule(players: readonly Seat[], me: number, token: number, dice: readonly number[]) {
   const { corner, tokens } = players[me];
   const from = tokens[token];
-  const to = target(from, die);
+  const to = destination(players, me, token, dice);
   if (to === null) return -Infinity;
-  let s = die * 0.5;
+  let s = (to - Math.max(from, 0)) * 0.25;
   const hits = capturesAt(players, me, to);
   if (hits.length) s += 60 + hits.reduce((a, h) => a + players[h.player].tokens[h.token], 0) * 0.4;
   if (from < 0) s += 35;
   if (to === HOME) s += 40;
   else if (to > LAST_TRACK && from <= LAST_TRACK) s += 28;
-  else if (to <= LAST_TRACK && SAFE.has(loopIndex(corner, to))) s += 18;
   // Danger: stopping where someone can hit it next turn, and staying where someone could
-  if (to <= LAST_TRACK) s -= threat(players, me, loopIndex(corner, to), false) * 6 * (12 + to * 0.4);
-  if (from >= 0 && from <= LAST_TRACK) s += threat(players, me, loopIndex(corner, from), false) * 6 * (8 + from * 0.4);
+  const board = after(players, me, token, to);
+  if (to <= LAST_TRACK) s -= threat(board, me, loopIndex(corner, to)) * 6 * (12 + to * 0.4);
+  if (from >= 0 && from <= LAST_TRACK) s += threat(players, me, loopIndex(corner, from)) * 6 * (8 + from * 0.4);
   return s;
 }
 
-/** Hard's sharper rule for one move. */
-function tactics(players: readonly Seat[], me: number, token: number, die: number) {
-  const { corner, tokens } = players[me];
-  const from = tokens[token];
-  const to = target(from, die);
-  if (to === null) return -Infinity;
-  /** What losing a token at `p` would cost. */
-  const worth = (p: number) => 14 + p;
-  let s = die * 0.4;
-  const lead = Math.max(...players.map((q, i) => (i === me ? -1 : progressOf(q.tokens))));
-  for (const h of capturesAt(players, me, to)) {
-    const q = players[h.player];
-    s += 70 + q.tokens[h.token] * 0.8 + (progressOf(q.tokens) === lead ? 15 : 0);
+/** What a horse is worth to its colour: being out at all counts most, then how far it has come. */
+const worth = (p: number) => (p < 0 ? 0 : 100 + Math.min(p, HOME));
+
+/** One colour's standing: its horses' worth, less what it stands to lose next turn. */
+function standing(board: readonly Seat[], who: number) {
+  let s = 0;
+  for (const p of board[who].tokens) {
+    s += worth(p);
+    if (p >= 0 && p <= LAST_TRACK) s -= threat(board, who, loopIndex(board[who].corner, p)) * worth(p);
   }
-  if (from < 0) s += 38 + (tokens.every((p) => p < 0 || p >= HOME) ? 15 : 0);
-  if (to === HOME) s += 45;
-  // Into the home column: safe for good, the further it came the better
-  else if (to > LAST_TRACK && from <= LAST_TRACK) s += 26 + from * 0.35;
-  else if (to <= LAST_TRACK && SAFE.has(loopIndex(corner, to))) s += 14;
-  const board = after(players, me, token, die);
-  if (to <= LAST_TRACK) {
-    const at = loopIndex(corner, to);
-    s -= threat(board, me, at, true) * 6 * worth(to) * 0.4;
-    // Opponents it could hit next turn
-    players.forEach((q, i) => {
-      if (i === me) return;
-      for (const p of board[i].tokens) {
-        if (p < 0 || p > LAST_TRACK) continue;
-        const qa = loopIndex(q.corner, p);
-        const d = (qa - at + TRACK_LEN) % TRACK_LEN;
-        if (d >= 1 && d <= 6 && to + d <= LAST_TRACK && !SAFE.has(qa)) s += 3 + p * 0.08;
-      }
-    });
-  }
-  if (from >= 0 && from <= LAST_TRACK) s += threat(players, me, loopIndex(corner, from), true) * 6 * worth(from) * 0.4;
   return s;
+}
+
+/** Hard: the board the move leaves, its own standing against the rivals' average (a capture shows up there). */
+function judge(players: readonly Seat[], me: number, token: number, dice: readonly number[]) {
+  const to = destination(players, me, token, dice);
+  if (to === null) return -Infinity;
+  const board = after(players, me, token, to);
+  let rivals = 0;
+  for (let i = 0; i < board.length; i++) if (i !== me) rivals += standing(board, i);
+  return standing(board, me) - rivals / (board.length - 1);
 }
 
 /**
- * The die and horse for `players[me]`, from `moves` (the legal ones; must not
- * be empty). `rand` breaks ties and makes Easy vary.
+ * The horse for `players[me]` to move by `dice`, from `moves` (the legal
+ * ones; must not be empty). `rand` breaks ties and makes Easy vary.
  */
 export function chooseMove(
   players: readonly Seat[],
   me: number,
   dice: readonly number[],
-  used: readonly boolean[],
   moves: readonly Move[],
   level: Difficulty,
   rand: () => number,
 ): Move {
-  const options = distinctOptions(players[me].tokens, dice, moves);
-  if (options.length <= 1) return options[0] ?? moves[0] ?? { die: 0, token: 0 };
+  const options = distinctOptions(players[me].tokens, moves);
+  if (options.length <= 1) return options[0] ?? moves[0] ?? { token: 0 };
   if (level === "easy") return options[Math.floor(rand() * options.length)] ?? options[0];
-  const score = level === "hard" ? tactics : rule;
-  const plan = level === "hard" && !used[0] && !used[1];
+  const score = level === "hard" ? judge : rule;
   let best = options[0];
   let bestScore = -Infinity;
   for (const m of options) {
-    let s = score(players, me, m.token, dice[m.die]);
-    if (plan) {
-      // Then the other die, from the board this move leaves
-      const board = after(players, me, m.token, dice[m.die]);
-      const spent = [false, false];
-      spent[m.die] = true;
-      let second = Number.NEGATIVE_INFINITY;
-      for (const n of distinctOptions(board[me].tokens, dice, legalMoves(board[me].tokens, dice, spent)))
-        second = Math.max(second, score(board, me, n.token, dice[n.die]));
-      if (second > Number.NEGATIVE_INFINITY) s += second;
-    }
-    s += rand() * 0.01;
+    const s = score(players, me, m.token, dice) + rand() * 0.01;
     if (s > bestScore) {
       bestScore = s;
       best = m;

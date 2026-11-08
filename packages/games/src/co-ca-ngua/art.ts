@@ -1,6 +1,6 @@
 import type { Rect } from "@web-games/core";
 import { TRACK, homeColumn } from "./board";
-import { GRID, STARS, W } from "./config";
+import { GRID, W } from "./config";
 
 // Drawing for Cờ Cá Ngựa: a raised board tray on a deep-blue doodle
 // backdrop; each colour's corner is a little Vietnamese scene (Hội An, the
@@ -44,11 +44,6 @@ export const AVATARS = [
 export const ROLL: Rect = { x: W / 2 - 62, y: 778, w: 124, h: 108 };
 export const DIE = { x: W / 2, y: ROLL.y + 52, size: 35, gap: 26 };
 export const DIE_HIT: Rect = { x: ROLL.x - 6, y: ROLL.y - 6, w: ROLL.w + 12, h: ROLL.h + 12 };
-/** Tap areas for die 0 (left) and die 1 (right). */
-export const DIE_HITS: Rect[] = [
-  { x: DIE_HIT.x, y: DIE_HIT.y, w: DIE_HIT.w / 2, h: DIE_HIT.h },
-  { x: DIE_HIT.x + DIE_HIT.w / 2, y: DIE_HIT.y, w: DIE_HIT.w / 2, h: DIE_HIT.h },
-];
 export const STATUS_Y = 924;
 
 // ---------------------------------------------------------------- text
@@ -293,27 +288,6 @@ const SLOTS: [number, number, number][][] = [
   ],
 ];
 
-function star(ctx: Ctx, x: number, y: number, r: number) {
-  ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const rr = i % 2 === 0 ? r : r * 0.45;
-    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-  }
-  ctx.closePath();
-}
-
-/** A little shield (start squares are safe). */
-function shield(ctx: Ctx, x: number, y: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x, y - r);
-  ctx.quadraticCurveTo(x + r * 0.55, y - r * 0.7, x + r * 0.85, y - r * 0.72);
-  ctx.quadraticCurveTo(x + r * 0.9, y + r * 0.45, x, y + r);
-  ctx.quadraticCurveTo(x - r * 0.9, y + r * 0.45, x - r * 0.85, y - r * 0.72);
-  ctx.quadraticCurveTo(x - r * 0.55, y - r * 0.7, x, y - r);
-  ctx.closePath();
-}
-
 /** A rectangle in squares (bottom-left-corner coordinates) turned to view corner `vc`, in screen px. */
 function cornerRect(x: number, y: number, w: number, h: number, vc: number): Rect {
   const a = rotatePoint(x, y, vc);
@@ -420,32 +394,12 @@ export function drawBoard(ctx: Ctx, colorOf: (number | null)[], rot: number, pro
     roundRect(ctx, r, 6);
     ctx.fill();
   };
-  const centre = (cx: number, cy: number) => ({ x: x + (cx + 0.5) * CELL, y: y + (cy + 0.5) * CELL });
   for (const [cx, cy] of TRACK) square(cx, cy, CREAM);
   for (let vc = 0; vc < 4; vc++) {
     for (const [cx, cy] of homeColumn(vc)) square(cx, cy, fill(vc), "rgba(0,0,0,0.18)");
-    // The start square: the colour, with a shield (safe)
+    // The start square: the colour (no safe squares: anyone can be hit anywhere on the loop)
     const [sx, sy] = TRACK[vc * 13];
     square(sx, sy, fill(vc), "rgba(0,0,0,0.18)");
-    const c = centre(sx, sy);
-    shield(ctx, c.x, c.y, CELL * 0.3);
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.fill();
-    ctx.strokeStyle = dark(vc);
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-  // Safe stars: a pale grey square with a gold star
-  for (const i of STARS) {
-    const [cx, cy] = TRACK[i];
-    square(cx, cy, "#e4e7f4");
-    const c = centre(cx, cy);
-    star(ctx, c.x, c.y, CELL * 0.34);
-    ctx.fillStyle = "#f7c53d";
-    ctx.fill();
-    ctx.strokeStyle = "#b9850c";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
   }
 
   // The middle: four triangles, one per colour, pointing in

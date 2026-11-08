@@ -1,4 +1,4 @@
-import { GRID, HOME, HOME_COLUMN, LAST_TRACK, QUARTER, SIX, STARS, STARTS, TRACK_LEN } from "./config";
+import { GRID, HOME, HOME_COLUMN, LAST_TRACK, QUARTER, TRACK_LEN } from "./config";
 
 // The board and single moves, pure: shared by the rules (logic.ts), the
 // computer (ai.ts) and the drawing (art.ts).
@@ -33,9 +33,6 @@ export function rotate([x, y]: Cell, k: number): Cell {
   return c;
 }
 
-/** Track squares no one can be captured on: every start square and the four stars. */
-export const SAFE = new Set([...STARTS, ...STARS]);
-
 /** Which loop square (0..51, from the bottom-left start) a colour's progress `pos` sits on. */
 export const loopIndex = (corner: number, pos: number) => (corner * QUARTER + pos) % TRACK_LEN;
 
@@ -53,32 +50,59 @@ export const homeColumn = (corner: number): Cell[] =>
 
 // ---------------------------------------------------------------- moves
 
-/** Where a token at `pos` lands with `die`, or null if it can't move. */
-export function target(pos: number, die: number): number | null {
-  if (pos >= HOME) return null;
-  if (pos < 0) return die === SIX ? 0 : null;
-  return pos + die <= HOME ? pos + die : null;
+/** A colour at the table, as the rules need it. */
+export interface Seat {
+  corner: number;
+  tokens: readonly number[];
 }
 
-/** Tokens that can move with `die`. */
-export const legalTokens = (tokens: readonly number[], die: number) => tokens.flatMap((p, t) => (target(p, die) === null ? [] : [t]));
+/** Doubles, or a 1 and a 6: it brings a horse out of base and earns another roll. */
+export const isBonusRoll = (dice: readonly number[]) =>
+  dice[0] > 0 && (dice[0] === dice[1] || (dice[0] === 1 && dice[1] === 6) || (dice[0] === 6 && dice[1] === 1));
 
-/** Movable tokens with identical moves folded together (all tokens in base, or stacked on one square). */
-export function distinctMoves(tokens: readonly number[], movable: readonly number[]) {
-  const seen = new Set<number>();
-  return movable.filter((t) => {
-    if (seen.has(tokens[t])) return false;
-    seen.add(tokens[t]);
-    return true;
-  });
+/** How far a horse goes: both dice together, always on one horse. */
+export const rollTotal = (dice: readonly number[]) => dice[0] + dice[1];
+
+/**
+ * Who stands on square `pos` (0..HOME-1) of `me`'s path, not counting `me`'s
+ * horse `skip`: one of `me`'s own, a rival's (only on the shared loop), or nobody.
+ */
+export function occupant(players: readonly Seat[], me: number, pos: number, skip = -1): "own" | "rival" | null {
+  const mine = players[me];
+  if (mine.tokens.some((p, t) => t !== skip && p === pos)) return "own";
+  if (pos > LAST_TRACK) return null;
+  const at = loopIndex(mine.corner, pos);
+  for (let i = 0; i < players.length; i++) {
+    if (i === me) continue;
+    const q = players[i];
+    if (q.tokens.some((p) => p >= 0 && p <= LAST_TRACK && loopIndex(q.corner, p) === at)) return "rival";
+  }
+  return null;
 }
 
-/** Opponent tokens a move to `to` would send home: everyone else on that loop square, unless it is safe. */
-export function capturesAt(players: readonly { corner: number; tokens: readonly number[] }[], me: number, to: number) {
+/**
+ * Where `me`'s horse `token` lands with `dice`, or null if it can't move.
+ * Out of base only on a bonus roll, onto its start square. On the board it
+ * goes the total of both dice, can't jump any horse (its own or a rival's),
+ * can't stop on its own horse, and stopping on a rival captures it. Reaching
+ * home needs the total or more: two dice never show 1, so an exact rule could
+ * strand a horse one square short.
+ */
+export function destination(players: readonly Seat[], me: number, token: number, dice: readonly number[]): number | null {
+  const from = players[me].tokens[token];
+  if (from >= HOME) return null;
+  if (from < 0) return isBonusRoll(dice) && occupant(players, me, 0, token) !== "own" ? 0 : null;
+  const to = Math.min(HOME, from + rollTotal(dice));
+  for (let p = from + 1; p < to; p++) if (occupant(players, me, p, token)) return null;
+  if (to < HOME && occupant(players, me, to, token) === "own") return null;
+  return to;
+}
+
+/** Rival tokens a move to `to` sends back to base: whoever stands on that loop square. */
+export function capturesAt(players: readonly Seat[], me: number, to: number) {
   const hits: { player: number; token: number }[] = [];
   if (to < 0 || to > LAST_TRACK) return hits;
   const at = loopIndex(players[me].corner, to);
-  if (SAFE.has(at)) return hits;
   players.forEach((q, i) => {
     if (i === me) return;
     q.tokens.forEach((p, t) => {
@@ -92,39 +116,21 @@ export function capturesAt(players: readonly { corner: number; tokens: readonly 
 export const progressOf = (tokens: readonly number[]) => tokens.reduce((s, p) => s + p + 1, 0);
 export const finished = (tokens: readonly number[]) => tokens.every((p) => p === HOME);
 
-/** One decision: spend die `die` (0 or 1) on horse `token`. */
+/** One decision: which horse takes the roll. */
 export interface Move {
-  die: number;
   token: number;
 }
 
-/** Where `token` stands after `move` (own horses only; captures don't change what you can do). */
-function afterOwn(tokens: readonly number[], m: Move, dice: readonly number[]) {
-  const next = tokens.slice();
-  next[m.token] = target(tokens[m.token], dice[m.die]) ?? tokens[m.token];
-  return next;
-}
+/** Every horse of `me` that can take this roll. */
+export const legalMoves = (players: readonly Seat[], me: number, dice: readonly number[]): Move[] =>
+  players[me].tokens.flatMap((_, token) => (destination(players, me, token, dice) === null ? [] : [{ token }]));
 
-/**
- * Every legal (die, horse) pair. Use as much of the roll as you can: while
- * both dice are unspent, a first move that would leave the other die
- * unplayable is only allowed when no first move keeps both playable.
- */
-export function legalMoves(tokens: readonly number[], dice: readonly number[], used: readonly boolean[]): Move[] {
-  const free = [0, 1].filter((i) => !used[i] && dice[i] > 0);
-  const all = free.flatMap((die) => legalTokens(tokens, dice[die]).map((token) => ({ die, token })));
-  if (free.length < 2) return all;
-  const both = all.filter((m) => legalTokens(afterOwn(tokens, m, dice), dice[1 - m.die]).length > 0);
-  return both.length ? both : all;
-}
-
-/** Legal moves with identical ones folded (same die value, horses on the same square). */
-export function distinctOptions(tokens: readonly number[], dice: readonly number[], moves: readonly Move[]) {
-  const seen = new Set<string>();
+/** Legal moves with identical ones folded (horses on the same square: in base). */
+export function distinctOptions(tokens: readonly number[], moves: readonly Move[]) {
+  const seen = new Set<number>();
   return moves.filter((m) => {
-    const key = `${dice[m.die]}:${tokens[m.token]}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
+    if (seen.has(tokens[m.token])) return false;
+    seen.add(tokens[m.token]);
     return true;
   });
 }

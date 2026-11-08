@@ -5,19 +5,19 @@ import { STRINGS } from "./strings";
 
 // Ludo on the realtime server: 2–4 people at a table of the host's size, the
 // computer (Normal) in the empty seats and in any seat whose player dropped.
-// A client only ever says "roll" or "spend die D on horse N"; the room checks
+// A client only ever says "roll" or "move horse N"; the room checks
 // it is their turn and the move is legal. See docs/standards/online-multiplayer.md.
 
 export const TICK_RATE = 10;
 
-/** One untrusted action list → a roll, or a die (0/1) to spend on a horse, or null. */
+/** One untrusted action list → a roll, or the horse to move, or null. */
 export function parseAction(actions: unknown[]): Input | null {
   for (const raw of actions) {
     if (typeof raw !== "object" || raw === null) continue;
     const a = raw as Record<string, unknown>;
     if (a.type === "roll") return { kind: "roll" };
-    if (a.type === "move" && (a.die === 0 || a.die === 1) && Number.isInteger(a.token) && (a.token as number) >= 0 && (a.token as number) < TOKENS)
-      return { kind: "move", die: a.die, token: a.token as number };
+    if (a.type === "move" && Number.isInteger(a.token) && (a.token as number) >= 0 && (a.token as number) < TOKENS)
+      return { kind: "move", token: a.token as number };
   }
   return null;
 }

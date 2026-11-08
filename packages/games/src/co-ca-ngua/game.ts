@@ -11,7 +11,6 @@ import {
   DARK,
   DIE,
   DIE_HIT,
-  DIE_HITS,
   FONT,
   INK,
   INK_SOFT,
@@ -43,7 +42,7 @@ import {
   toScreen,
   wrap,
 } from "./art";
-import { distinctOptions, rotate, squareOf, target } from "./board";
+import { destination, distinctOptions, isBonusRoll, rollTotal, rotate, squareOf } from "./board";
 import {
   BASE,
   CAPTURE_TIME,
@@ -51,7 +50,7 @@ import {
   type Difficulty,
   HOME,
   HOP_TIME,
-  MAX_DOUBLES,
+  MAX_BONUS,
   PLAYER_COUNTS,
   ROLL_TIME,
   TABLE_BONUS,
@@ -62,7 +61,7 @@ import {
 import avatarsUrl from "./img/avatars.webp";
 import propsUrl from "./img/props.webp";
 import tokensUrl from "./img/tokens.webp";
-import { type Anim, type Input, type Match, type MatchEvent, type Phase, clockLeft, createMatch, isAuto, isDoubles, stepMatch } from "./logic";
+import { type Anim, type Input, type Match, type MatchEvent, type Phase, clockLeft, createMatch, isAuto, stepMatch } from "./logic";
 import { roomMatch } from "./online";
 import { STRINGS } from "./strings";
 
@@ -115,6 +114,8 @@ function parseRun(raw: unknown): { match: Match; setup: Setup } | null {
   const s = r.setup;
   if (!m || !s || !Array.isArray(m.players) || m.players.length < 2 || m.players.length > 4) return null;
   if (!PHASES.includes(m.phase) || m.phase === "over" || !Number.isInteger(m.turn) || !m.players[m.turn]) return null;
+  // A game saved under the old rules (each die spent on its own) doesn't carry on
+  if (!Number.isInteger(m.bonus) || !Array.isArray(m.moves) || m.moves.some((x) => "die" in x)) return null;
   for (const p of m.players)
     if (!Array.isArray(p.tokens) || p.tokens.length !== TOKENS || !p.tokens.every((x) => Number.isInteger(x) && x >= BASE && x <= HOME)) return null;
   if (!PLAYER_COUNTS.includes(s.total as 2) || !DIFFICULTIES.includes(s.level)) return null;
@@ -189,7 +190,7 @@ export function setup(rt: Runtime): GameHooks {
   let landedAt = -10;
   const particles: Particle[] = [];
   /** What the previous frame saw, to fire sounds and effects as the phase clock passes them. */
-  let seen = { phaseId: match.phaseId, phase: match.phase, t: match.t, anim: match.anim, dice: match.dice, doubles: match.doubles };
+  let seen = { phaseId: match.phaseId, phase: match.phase, t: match.t, anim: match.anim, dice: match.dice, bonus: match.bonus };
 
   const save = () => {
     if (online) return;
@@ -230,19 +231,8 @@ export function setup(rt: Runtime): GameHooks {
     return !isAuto(p);
   }
 
-  /** The die this device has selected to spend (0 left, 1 right). */
-  let pick = 0;
-  let pickFor = -1;
-  const tokensFor = (die: number) => match.moves.filter((m) => m.die === die).map((m) => m.token);
-  /** The selected die, defaulting to the first one that can be played each time the choice comes up. */
-  function picked() {
-    if (match.phase !== "move") return pick;
-    if (pickFor !== match.phaseId || !tokensFor(pick).length) {
-      pickFor = match.phaseId;
-      pick = tokensFor(0).length ? 0 : 1;
-    }
-    return pick;
-  }
+  /** Horses the current player can move with this roll. */
+  const movable = () => match.moves.map((m) => m.token);
 
   const canRoll = () => !overlay && localTurn() && match.phase === "roll" && sentFor !== match.phaseId;
   const canMove = () => !overlay && localTurn() && match.phase === "move" && sentFor !== match.phaseId && !match.players[match.turn].idle;
@@ -413,7 +403,7 @@ export function setup(rt: Runtime): GameHooks {
   }
 
   /** Fire what the phase clock passed between t0 and t1 (t0 < 0 = the phase just began). */
-  function crossed(s: { phase: Phase; anim: Anim | null; dice: number[]; doubles: number }, t0: number, t1: number, current: boolean) {
+  function crossed(s: { phase: Phase; anim: Anim | null; dice: number[]; bonus: number }, t0: number, t1: number, current: boolean) {
     const t = tr();
     const p = match.players[match.turn];
     switch (s.phase) {
@@ -422,10 +412,10 @@ export function setup(rt: Runtime): GameHooks {
         if (t0 < ROLL_TIME && t1 >= ROLL_TIME) {
           sfx.land();
           landedAt = now;
-          if (isDoubles(s.dice) && s.doubles < MAX_DOUBLES) {
+          if (isBonusRoll(s.dice) && s.bonus < MAX_BONUS) {
             sfx.six();
             // The roll usually ends between frames, so this fires for the phase just left too
-            say(t.doubles, COLORS[p?.corner ?? 0]);
+            say(t.bonus(s.dice[0] === s.dice[1]), COLORS[p?.corner ?? 0]);
           }
         }
         return;
@@ -459,7 +449,7 @@ export function setup(rt: Runtime): GameHooks {
       case "pass":
         if (t0 < 0 && current) {
           sfx.pass();
-          say(match.passReason === "three" ? t.threeDoubles : isDoubles(match.dice) ? t.noMoveDoubles : t.noMove, INK_SOFT);
+          say(match.passReason === "three" ? t.threeBonus : isBonusRoll(match.dice) ? t.noMoveBonus : t.noMove, INK_SOFT);
         }
         return;
       case "move":
@@ -480,7 +470,7 @@ export function setup(rt: Runtime): GameHooks {
       crossed(seen, seen.t, Number.POSITIVE_INFINITY, false);
       crossed(match, -1, match.t, true);
     } else if (match.t > seen.t) crossed(match, seen.t, match.t, true);
-    seen = { phaseId: match.phaseId, phase: match.phase, t: match.t, anim: match.anim, dice: match.dice, doubles: match.doubles };
+    seen = { phaseId: match.phaseId, phase: match.phase, t: match.t, anim: match.anim, dice: match.dice, bonus: match.bonus };
   }
 
   function onEvent(e: MatchEvent) {
@@ -495,10 +485,6 @@ export function setup(rt: Runtime): GameHooks {
       case "roll":
       case "move":
         if (e.auto && online && match.players[e.player]?.seat === me && !match.players[e.player]?.idle && !match.players[e.player]?.away) say(t.timedOut, INK_SOFT);
-        break;
-      case "lost":
-        sfx.pass();
-        say(t.lost(e.value), INK_SOFT);
         break;
       case "finish": {
         const p = match.players[e.player];
@@ -554,7 +540,7 @@ export function setup(rt: Runtime): GameHooks {
     particles.length = 0;
     notice = null;
     overlay = null;
-    seen = { phaseId: match.phaseId, phase: match.phase, t: match.t, anim: match.anim, dice: match.dice, doubles: match.doubles };
+    seen = { phaseId: match.phaseId, phase: match.phase, t: match.t, anim: match.anim, dice: match.dice, bonus: match.bonus };
     for (const e of match.events.splice(0)) onEvent(e);
     save();
   }
@@ -593,9 +579,7 @@ export function setup(rt: Runtime): GameHooks {
     }
     if (!best) return false;
     sfx.tap();
-    // The selected die, or the other one if only that one can move this horse
-    const die = tokensFor(picked()).includes(best.t) ? picked() : 1 - picked();
-    act({ kind: "move", die, token: best.t });
+    act({ kind: "move", token: best.t });
     return true;
   }
 
@@ -748,15 +732,6 @@ export function setup(rt: Runtime): GameHooks {
     }
     if (inRect(p, DIE_HIT)) {
       if (canRoll()) return roll();
-      if (canMove()) {
-        // Choose which die to spend
-        const die = inRect(p, DIE_HITS[0]) ? 0 : 1;
-        if (!tokensFor(die).length) return sfx.nope();
-        sfx.tap();
-        pick = die;
-        pickFor = match.phaseId;
-        return;
-      }
       // Online, a tap while the computer covers for you takes your seat back
       if (online && localTurn() && match.players[match.turn]?.idle) return act({ kind: "roll" });
     }
@@ -879,8 +854,8 @@ export function setup(rt: Runtime): GameHooks {
     ctx.globalAlpha = match.phase === "over" ? 0.5 : 1;
     const lift = drawRollButton(ctx, ROLL, color, waiting ? k : 0, match.phase === "rolling");
     const rolling = match.phase === "rolling" && match.t < ROLL_TIME;
-    const choosing = canMove();
-    const spending = match.phase === "move" || match.phase === "moving";
+    // The roll is spent once a horse sets off
+    const spent = match.phase === "moving";
     const pop = now - landedAt;
     for (let i = 0; i < 2; i++) {
       const dx = DIE.x + (i === 0 ? -DIE.gap : DIE.gap);
@@ -897,25 +872,12 @@ export function setup(rt: Runtime): GameHooks {
         y -= Math.abs(Math.sin(now * 3 + i * 0.8)) * 4;
       }
       if (pop >= 0 && pop < 0.25) scale = 1 + 0.18 * Math.sin((pop / 0.25) * Math.PI);
-      const spent = spending && match.used[i];
-      const selected = choosing && picked() === i;
-      // A die you can't play this time (it'll be lost) is greyed too
-      const dead = choosing && !spent && !tokensFor(i).length;
-      if (selected) y -= 5;
       ctx.save();
-      ctx.globalAlpha *= spent ? 0.35 : dead ? 0.55 : 1;
+      ctx.globalAlpha *= spent ? 0.45 : 1;
       ctx.fillStyle = "rgba(40,15,0,0.3)";
       ctx.beginPath();
       ctx.ellipse(dx, DIE.y - lift + 24, 20, 5, 0, 0, Math.PI * 2);
       ctx.fill();
-      if (selected) {
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 4;
-        roundRect(ctx, { x: dx - 26, y: y - 29, w: 52, h: 52 }, 12);
-        ctx.fillStyle = "rgba(255,255,255,0.28)";
-        ctx.fill();
-        ctx.stroke();
-      }
       drawDie(ctx, dx, y - 4, DIE.size * scale, value, spin);
       ctx.restore();
     }
@@ -930,10 +892,8 @@ export function setup(rt: Runtime): GameHooks {
     if (picking) {
       // Where each choice would land, under the horses
       const p = match.players[match.turn];
-      const die = picked();
-      const own = match.moves.filter((m) => m.die === die);
-      for (const { token: tk } of distinctOptions(p.tokens, match.dice, own)) {
-        const to = target(p.tokens[tk], match.dice[die]);
+      for (const { token: tk } of distinctOptions(p.tokens, match.moves)) {
+        const to = destination(match.players, match.turn, tk, match.dice);
         if (to === null) continue;
         const at = to >= HOME ? toScreen(7.5, 7.5) : squarePoint(p.corner, to);
         if (at) drawTarget(ctx, at.x, at.y, p.corner, pulse);
@@ -941,7 +901,7 @@ export function setup(rt: Runtime): GameHooks {
     }
     for (const d of list) {
       const p = match.players[d.pi];
-      const glow = picking && d.pi === match.turn && tokensFor(picked()).includes(d.t);
+      const glow = picking && d.pi === match.turn && movable().includes(d.t);
       drawToken(ctx, tokenImg, p.corner, d.x, d.y, d.scale, {
         // A little hop on the spot for the horses you can move
         lift: d.lift + (glow ? 2 + Math.abs(Math.sin(now * 5 + d.t)) * 9 : 0),
@@ -952,7 +912,7 @@ export function setup(rt: Runtime): GameHooks {
     // A bobbing arrow over each horse you can move
     if (picking)
       for (const d of list) {
-        if (d.pi !== match.turn || !tokensFor(picked()).includes(d.t)) continue;
+        if (d.pi !== match.turn || !movable().includes(d.t)) continue;
         drawPointer(ctx, d.x, d.y - CELL * 1.45 * d.scale - 8 - pulse * 6, COLORS[match.players[d.pi].corner]);
       }
   }
@@ -981,9 +941,10 @@ export function setup(rt: Runtime): GameHooks {
       const hot = !online && played.people > 1;
       if (match.phase === "roll") return { str: hot ? `${t.turnOf(name)} · ${t.roll}!` : t.yourRoll, color: LIGHT[p.corner] };
       if (match.phase === "move") {
-        // Two dice still to choose between, or just the one
-        const both = tokensFor(0).length > 0 && tokensFor(1).length > 0 && match.dice[0] !== match.dice[1];
-        const str = both ? t.pickDie : t.pickHorse(match.dice[picked()]);
+        // Bring one out, walk the total, or either
+        const out = movable().some((tk) => p.tokens[tk] < 0);
+        const walk = movable().some((tk) => p.tokens[tk] >= 0);
+        const str = t.pickHorse(walk ? rollTotal(match.dice) : null, out);
         return { str: hot ? `${name} · ${str}` : str, color: LIGHT[p.corner] };
       }
       // Your die is tumbling or your horse is hopping: the board says it all
@@ -1159,15 +1120,9 @@ export function setup(rt: Runtime): GameHooks {
         else if (overlay === "menu" && canResume()) overlay = null;
         else if (!overlay) overlay = "menu";
       } else if ((e.code === "Space" || e.code === "Enter") && !overlay) roll();
-      else if (e.code === "KeyD" && canMove()) {
-        if (tokensFor(1 - picked()).length) {
-          pick = 1 - picked();
-          sfx.tap();
-        } else sfx.nope();
-      } else if (/^Digit[1-4]$/.test(e.code) && canMove()) {
+      else if (/^Digit[1-4]$/.test(e.code) && canMove()) {
         const token = Number(e.code.slice(5)) - 1;
-        const die = tokensFor(picked()).includes(token) ? picked() : 1 - picked();
-        if (tokensFor(die).includes(token)) act({ kind: "move", die, token });
+        if (movable().includes(token)) act({ kind: "move", token });
         else sfx.nope();
       }
     },

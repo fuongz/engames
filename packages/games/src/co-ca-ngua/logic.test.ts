@@ -1,7 +1,7 @@
 import { mulberry32, nextRandom } from "@web-games/core/math";
 import { describe, expect, it } from "vitest";
 import { chooseMove } from "./ai";
-import { SAFE, TRACK, capturesAt, distinctMoves, legalMoves, legalTokens, loopIndex, rotate, squareOf, target } from "./board";
+import { TRACK, capturesAt, destination, distinctOptions, isBonusRoll, legalMoves, loopIndex, rotate, squareOf } from "./board";
 import { BASE, type Difficulty, HOME, LAST_TRACK, MAX_TIMEOUTS, TURN_SECONDS } from "./config";
 import { type Input, type Match, clockLeft, createMatch, setAway, stepMatch } from "./logic";
 import { coCaNguaOnline, parseAction, playersOf } from "./online";
@@ -22,6 +22,9 @@ function until(m: Match, phase: Match["phase"], inputs: (Input | null)[] = [], m
 
 const offline = (humans: string[], total: number, level: Difficulty = "normal") =>
   createMatch(1, { humans, total, level, turnSeconds: 0 });
+
+/** Yellow's (corner 2) progress that stands on red's (corner 0) progress `pos`. */
+const yellowOn = (pos: number) => (loopIndex(0, pos) - 26 + 52) % 52;
 
 describe("the board", () => {
   it("has a 52-square loop of distinct squares, each next to the one before", () => {
@@ -44,68 +47,74 @@ describe("the board", () => {
       // Its last loop square sits right below its home column
       expect(squareOf(c, LAST_TRACK)).toEqual(rotate([7, 14], c));
     }
-    expect([...SAFE].map((i) => TRACK[i])).toContainEqual([2, 8]);
-  });
-
-  it("needs a six to leave base and the exact number to reach home", () => {
-    expect(target(BASE, 5)).toBeNull();
-    expect(target(BASE, 6)).toBe(0);
-    expect(target(HOME - 3, 3)).toBe(HOME);
-    expect(target(HOME - 3, 4)).toBeNull();
-    expect(target(HOME, 1)).toBeNull();
-    expect(legalTokens([BASE, BASE, 10, HOME], 4)).toEqual([2]);
-    expect(distinctMoves([BASE, BASE, 10, 10], [0, 1, 2, 3])).toEqual([0, 2]);
-  });
-
-  it("captures on plain squares, never on safe ones", () => {
-    // Red (corner 0) at progress 10; green (corner 1) lands on the same square from its side
-    const greenPos = (loopIndex(0, 10) - 13 + 52) % 52;
-    const players = [
-      { corner: 0, tokens: [10, BASE, BASE, BASE] },
-      { corner: 1, tokens: [greenPos - 3, BASE, BASE, BASE] },
-    ];
-    expect(capturesAt(players, 1, greenPos)).toEqual([{ player: 0, token: 0 }]);
-    // Red on its start square is safe from everyone
-    const onStart = [
-      { corner: 0, tokens: [0, BASE, BASE, BASE] },
-      { corner: 3, tokens: [(52 - 39) % 52, BASE, BASE, BASE] },
-    ];
-    expect(loopIndex(3, 13)).toBe(loopIndex(0, 0));
-    expect(capturesAt(onStart, 1, 13)).toEqual([]);
-    // A star square
-    const star = (8 - 13 + 52) % 52;
-    expect(capturesAt([{ corner: 0, tokens: [8, BASE, BASE, BASE] }, players[1]], 1, star)).toEqual([]);
   });
 });
 
-describe("using the two dice", () => {
-  it("lists a move per die, and makes you use both when you can", () => {
-    // 6 brings a horse out; the 2 can then move it, so every legal first move keeps the 2 playable
-    expect(legalMoves([BASE, BASE, BASE, BASE], [6, 2], [false, false])).toEqual([0, 1, 2, 3].map((token) => ({ die: 0, token })));
-    // A horse 3 from home with 2 and 3: no order plays both, so either die alone is allowed
-    expect(legalMoves([HOME - 3, HOME, HOME, HOME], [2, 3], [false, false])).toEqual([{ die: 0, token: 0 }, { die: 1, token: 0 }]);
-    // Horses at 10 and 54 with 4 and 2: the 4 can only go to the horse at 10; the 2 to either
-    const m = legalMoves([10, HOME - 2, HOME, HOME], [4, 2], [false, false]);
-    expect(m).toContainEqual({ die: 0, token: 0 });
-    expect(m).toContainEqual({ die: 1, token: 1 });
-    // Spending the 2 on the horse at 10 would still leave the 4 playable, so it's allowed too
-    expect(m).toContainEqual({ die: 1, token: 0 });
-    // Only the free die counts once one is spent
-    expect(legalMoves([10, BASE, BASE, BASE], [4, 6], [true, false])).toEqual([0, 1, 2, 3].map((token) => ({ die: 1, token })));
+describe("the rules of a move", () => {
+  const red = (tokens: number[], yellow: number[] = [BASE, BASE, BASE, BASE]) => [
+    { corner: 0, tokens },
+    { corner: 2, tokens: yellow },
+  ];
+
+  it("counts doubles and 1-6 as bonus rolls", () => {
+    for (const d of [[1, 1], [3, 3], [6, 6], [1, 6], [6, 1]]) expect(isBonusRoll(d)).toBe(true);
+    for (const d of [[6, 2], [2, 3], [5, 1], [0, 0]]) expect(isBonusRoll(d)).toBe(false);
   });
 
-  it("forbids a first move that throws the other die away when both can be played", () => {
-    // One horse out at 52 (4 from home), the rest in base, dice 4 and 6:
-    // spending the 4 first sends it home and the 6 then brings a horse out — fine;
-    // spending the 6 first brings one out and the 4 moves either — fine too
-    expect(legalMoves([HOME - 4, BASE, BASE, BASE], [4, 6], [false, false])).toHaveLength(4);
-    // A horse at 53 (3 from home) and dice 3 and 5: the 5 can't be used at all, the 3 must
-    expect(legalMoves([HOME - 3, HOME, HOME, HOME], [3, 5], [false, false])).toEqual([{ die: 0, token: 0 }]);
+  it("brings a horse out only on a bonus roll, onto a start square its own horses don't hold", () => {
+    expect(destination(red([BASE, BASE, BASE, BASE]), 0, 0, [3, 3])).toBe(0);
+    expect(destination(red([BASE, BASE, BASE, BASE]), 0, 0, [1, 6])).toBe(0);
+    // A six alone isn't enough
+    expect(destination(red([BASE, BASE, BASE, BASE]), 0, 0, [6, 2])).toBeNull();
+    expect(destination(red([0, BASE, BASE, BASE]), 0, 1, [2, 2])).toBeNull();
+    // A rival on the start square is knocked off
+    const players = red([BASE, BASE, BASE, BASE], [yellowOn(0), BASE, BASE, BASE]);
+    expect(destination(players, 0, 0, [5, 5])).toBe(0);
+    expect(capturesAt(players, 0, 0)).toEqual([{ player: 1, token: 0 }]);
+  });
+
+  it("moves one horse the total of both dice", () => {
+    expect(destination(red([10, BASE, BASE, BASE]), 0, 0, [2, 3])).toBe(15);
+    expect(legalMoves(red([10, 20, BASE, BASE]), 0, [2, 3])).toEqual([{ token: 0 }, { token: 1 }]);
+    // On a bonus roll a horse in base may come out, or another walk the total
+    expect(legalMoves(red([10, BASE, BASE, BASE]), 0, [4, 4])).toEqual([0, 1, 2, 3].map((token) => ({ token })));
+    expect(distinctOptions([10, BASE, BASE, BASE], legalMoves(red([10, BASE, BASE, BASE]), 0, [4, 4]))).toEqual([{ token: 0 }, { token: 1 }]);
+  });
+
+  it("never jumps a horse: a rival ahead stops it short, landing on it captures", () => {
+    const players = red([10, BASE, BASE, BASE], [yellowOn(14), BASE, BASE, BASE]);
+    expect(destination(players, 0, 0, [1, 2])).toBe(13);
+    expect(destination(players, 0, 0, [2, 2])).toBe(14);
+    expect(capturesAt(players, 0, 14)).toEqual([{ player: 1, token: 0 }]);
+    expect(destination(players, 0, 0, [2, 3])).toBeNull();
+    expect(destination(players, 0, 0, [6, 6])).toBeNull();
+  });
+
+  it("doesn't jump or land on its own horses either", () => {
+    const players = red([10, 14, BASE, BASE]);
+    expect(destination(players, 0, 0, [1, 2])).toBe(13);
+    expect(destination(players, 0, 0, [2, 2])).toBeNull();
+    expect(destination(players, 0, 0, [3, 3])).toBeNull();
+    // Up the home column too
+    expect(destination(red([LAST_TRACK + 1, LAST_TRACK + 3, BASE, BASE]), 0, 0, [2, 3])).toBeNull();
+  });
+
+  it("has no safe squares on the loop, and reaches home with the number or more", () => {
+    // Red on its own start square can be hit
+    const players = red([0, BASE, BASE, BASE], [yellowOn(0) - 4, BASE, BASE, BASE]);
+    expect(destination(players, 1, 0, [1, 3])).toBe(yellowOn(0));
+    expect(capturesAt(players, 1, yellowOn(0))).toEqual([{ player: 0, token: 0 }]);
+    // One square short is never stuck: two dice make at least 2
+    expect(destination(red([HOME - 1, BASE, BASE, BASE]), 0, 0, [1, 1])).toBe(HOME);
+    expect(destination(red([HOME - 3, BASE, BASE, BASE]), 0, 0, [6, 5])).toBe(HOME);
+    expect(destination(red([HOME, BASE, BASE, BASE]), 0, 0, [1, 1])).toBeNull();
+    // Home isn't a square: everyone fits
+    expect(destination(red([HOME - 2, HOME, HOME, HOME]), 0, 0, [1, 1])).toBe(HOME);
   });
 });
 
 describe("a turn", () => {
-  it("lets only the player whose turn it is roll, and doubles roll again", () => {
+  it("lets only the player whose turn it is roll; a bonus roll brings a horse out and rolls again", () => {
     const m = offline(["An", "Bình"], 2);
     m.turn = 0;
     m.seed = seedFor(6, 6);
@@ -116,42 +125,44 @@ describe("a turn", () => {
     expect(m.phase).toBe("rolling");
     expect(m.dice).toEqual([6, 6]);
     expect(until(m, "move")).toBe(true);
-    // Either six brings a horse out
-    expect(m.moves).toHaveLength(8);
-    stepMatch(m, 0.01, [{ kind: "move", die: 1, token: 2 }, null]);
+    // Any of the four can come out
+    expect(m.moves).toHaveLength(4);
+    stepMatch(m, 0.01, [{ kind: "move", token: 2 }, null]);
     expect(m.phase).toBe("moving");
-    expect(m.used).toEqual([false, true]);
-    expect(until(m, "move")).toBe(true);
-    // The other six: bring out another or move the first on
-    stepMatch(m, 0.01, [{ kind: "move", die: 1, token: 0 }, null]);
-    expect(m.phase).toBe("move");
-    stepMatch(m, 0.01, [{ kind: "move", die: 0, token: 2 }, null]);
-    expect(m.players[0].tokens[2]).toBe(6);
+    expect(m.players[0].tokens).toEqual([BASE, BASE, 0, BASE]);
     expect(until(m, "roll")).toBe(true);
-    // Doubles: same player again
+    // Same player again
     expect(m.turn).toBe(0);
-    expect(m.doubles).toBe(1);
+    expect(m.bonus).toBe(1);
   });
 
-  it("plays a die on its own when it is the only sensible move, and loses an unplayable one", () => {
+  it("lets a bonus roll walk a horse already out instead", () => {
     const m = offline(["An", "Bình"], 2);
     m.turn = 0;
-    m.players[0].tokens = [HOME - 3, HOME, HOME, BASE];
+    m.players[0].tokens = [10, BASE, BASE, BASE];
+    m.seed = seedFor(1, 6);
+    stepMatch(m, 0.05, [{ kind: "roll" }, null]);
+    expect(until(m, "move")).toBe(true);
+    stepMatch(m, 0.01, [{ kind: "move", token: 0 }, null]);
+    expect(m.players[0].tokens).toEqual([17, BASE, BASE, BASE]);
+    expect(until(m, "roll")).toBe(true);
+    expect(m.turn).toBe(0);
+  });
+
+  it("plays the only sensible move on its own, then hands over", () => {
+    const m = offline(["An", "Bình"], 2);
+    m.turn = 0;
+    m.players[0].tokens = [10, BASE, BASE, BASE];
     m.seed = seedFor(3, 5);
     stepMatch(m, 0.05, [{ kind: "roll" }, null]);
     expect(until(m, "move")).toBe(true);
-    expect(m.moves).toEqual([{ die: 0, token: 0 }]);
-    const lost: number[] = [];
-    for (let i = 0; i < 200 && m.turn === 0; i++) {
-      stepMatch(m, 0.05, [null, null]);
-      for (const e of m.events.splice(0)) if (e.type === "lost") lost.push(e.value);
-    }
-    expect(m.players[0].tokens[0]).toBe(HOME);
-    expect(lost).toEqual([5]);
+    expect(m.moves).toEqual([{ token: 0 }]);
+    expect(until(m, "roll")).toBe(true);
+    expect(m.players[0].tokens[0]).toBe(18);
     expect(m.turn).toBe(1);
   });
 
-  it("passes the turn when nothing can move, and loses it on three doubles", () => {
+  it("passes the turn when nothing can move, and loses it on a third bonus roll", () => {
     const m = offline(["An", "Bình"], 2);
     m.turn = 0;
     m.seed = seedFor(3, 4);
@@ -163,7 +174,7 @@ describe("a turn", () => {
 
     const k = offline(["An", "Bình"], 2);
     k.turn = 0;
-    k.doubles = 2;
+    k.bonus = 2;
     k.players[0].tokens = [5, BASE, BASE, BASE];
     k.seed = seedFor(2, 2);
     stepMatch(k, 0.05, [{ kind: "roll" }, null]);
@@ -174,27 +185,42 @@ describe("a turn", () => {
     expect(k.turn).toBe(1);
   });
 
+  it("still rolls again after a bonus roll that couldn't be played", () => {
+    const m = offline(["An", "Bình"], 2);
+    const red = m.players.findIndex((p) => p.corner === 0);
+    m.turn = red;
+    // Red's horse on its start square, a yellow one right in front: 1-1 can neither walk nor bring one out
+    m.players[red].tokens = [0, BASE, BASE, BASE];
+    m.players[1 - red].tokens = [yellowOn(1), BASE, BASE, BASE];
+    m.seed = seedFor(1, 1);
+    const inputs = red === 0 ? [{ kind: "roll" } as Input, null] : [null, { kind: "roll" } as Input];
+    stepMatch(m, 0.05, inputs);
+    expect(until(m, "pass")).toBe(true);
+    expect(m.passReason).toBe("none");
+    expect(until(m, "roll")).toBe(true);
+    expect(m.turn).toBe(red);
+  });
+
   it("refuses an illegal move and sends a captured horse home", () => {
     const m = offline(["An", "Bình"], 2);
     // Red (corner 0) at 20; yellow (corner 2) four squares behind it on the loop
-    const behind = (loopIndex(0, 20) - 26 - 4 + 52) % 52;
     m.players[0].tokens = [20, BASE, BASE, BASE];
-    m.players[1].tokens = [behind, 30, BASE, BASE];
+    m.players[1].tokens = [yellowOn(16), 30, BASE, BASE];
     m.turn = 1;
     m.phase = "move";
-    m.dice = [4, 1];
-    m.used = [false, false];
-    m.moves = legalMoves(m.players[1].tokens, m.dice, m.used);
-    stepMatch(m, 0.01, [null, { kind: "move", die: 0, token: 3 }]);
+    m.dice = [1, 3];
+    m.moves = legalMoves(m.players, 1, m.dice);
+    // A horse in base can't come out on 1-3
+    stepMatch(m, 0.01, [null, { kind: "move", token: 3 }]);
     expect(m.phase).toBe("move");
-    stepMatch(m, 0.01, [null, { kind: "move", die: 0, token: 0 }]);
+    stepMatch(m, 0.01, [null, { kind: "move", token: 0 }]);
     expect(m.phase).toBe("moving");
     expect(m.players[0].tokens[0]).toBe(BASE);
     expect(m.anim?.captured).toEqual([{ player: 0, token: 0, from: 20 }]);
     expect(m.players[1].captures).toBe(1);
-    // The 1 is still to play
-    expect(until(m, "move")).toBe(true);
-    expect(m.moves.every((x) => x.die === 1)).toBe(true);
+    // That was the whole roll
+    expect(until(m, "roll")).toBe(true);
+    expect(m.turn).toBe(0);
   });
 
   it("ranks finishers and ends once every person is done", () => {
@@ -204,8 +230,7 @@ describe("a turn", () => {
     m.turn = me;
     m.phase = "move";
     m.dice = [2, 5];
-    m.used = [false, false];
-    m.moves = legalMoves(m.players[me].tokens, m.dice, m.used);
+    m.moves = legalMoves(m.players, me, m.dice);
     expect(until(m, "over")).toBe(true);
     expect(m.players[me].place).toBe(1);
     expect(m.players.map((p) => p.place).sort()).toEqual([1, 2, 3]);
@@ -247,17 +272,14 @@ describe("the clock and the computer standing in", () => {
 
 describe("the computer", () => {
   it("takes a capture when it has one (Normal and Hard)", () => {
-    // Red token 0 can hit yellow 3 squares ahead with the 3; anything else just walks on
-    const ahead = (loopIndex(0, 23) - 26 + 52) % 52;
+    // Red's horse at 20 can hit yellow 3 squares ahead with 1-2; the other just walks on
     const players = [
       { corner: 0, tokens: [20, 5, BASE, BASE] },
-      { corner: 2, tokens: [ahead, BASE, BASE, BASE] },
+      { corner: 2, tokens: [yellowOn(23), BASE, BASE, BASE] },
     ];
-    // The 1 is already spent: the 3 should take the capture
-    const dice = [3, 1];
-    const used = [false, true];
-    const moves = legalMoves(players[0].tokens, dice, used);
-    for (const level of ["normal", "hard"] as Difficulty[]) expect(chooseMove(players, 0, dice, used, moves, level, mulberry32(1))).toEqual({ die: 0, token: 0 });
+    const dice = [1, 2];
+    const moves = legalMoves(players, 0, dice);
+    for (const level of ["normal", "hard"] as Difficulty[]) expect(chooseMove(players, 0, dice, moves, level, mulberry32(1))).toEqual({ token: 0 });
   });
 
   function play(seed: number, levels: Difficulty[]) {
@@ -269,8 +291,10 @@ describe("the computer", () => {
     return m;
   }
 
-  it("ranks the levels: Hard and Normal beat Easy far more often than not", () => {
-    // Measured over 600 games: Hard ~93%, Normal ~86% against Easy; Hard ~68% against Normal
+  it("ranks the levels: Hard and Normal beat Easy clearly more often than not", () => {
+    // Measured over 1000 games: Hard ~76%, Normal ~70% against Easy; Hard ~55% against Normal.
+    // One decision a roll (the total on one horse) leaves less room for skill than two dice spent apart
+
     const N = 120;
     const wins = { hard: 0, normal: 0 };
     for (const level of ["hard", "normal"] as const) {
@@ -281,8 +305,8 @@ describe("the computer", () => {
         if (m.players.find((p) => p.level === level)?.place === 1) wins[level]++;
       }
     }
-    expect(wins.hard / N).toBeGreaterThan(0.75);
-    expect(wins.normal / N).toBeGreaterThan(0.75);
+    expect(wins.hard / N).toBeGreaterThan(0.65);
+    expect(wins.normal / N).toBeGreaterThan(0.62);
   });
 
   it("thinks fast enough for a phone (well under 100 ms a decision)", () => {
@@ -290,8 +314,8 @@ describe("the computer", () => {
     const t = performance.now();
     for (let i = 0; i < 100; i++) {
       const dice = [1 + (i % 6), 6];
-      const moves = legalMoves(players[i % 4].tokens, dice, [false, false]);
-      if (moves.length) chooseMove(players, i % 4, dice, [false, false], moves, "hard", mulberry32(i));
+      const moves = legalMoves(players, i % 4, dice);
+      if (moves.length) chooseMove(players, i % 4, dice, moves, "hard", mulberry32(i));
     }
     // 100 decisions
     expect(performance.now() - t).toBeLessThan(400);
@@ -301,14 +325,14 @@ describe("the computer", () => {
 describe("online adapter", () => {
   it("accepts only a roll or a real token", () => {
     expect(parseAction([{ type: "roll" }])).toEqual({ kind: "roll" });
-    expect(parseAction([{ type: "move", die: 1, token: 2 }])).toEqual({ kind: "move", die: 1, token: 2 });
-    expect(parseAction([{ type: "move", token: 2 }])).toBeNull();
-    expect(parseAction([{ type: "move", die: 2, token: 2 }])).toBeNull();
-    expect(parseAction([{ type: "move", die: "0", token: 2 }])).toBeNull();
-    expect(parseAction([{ type: "move", die: 0, token: 4 }])).toBeNull();
-    expect(parseAction([{ type: "move", die: 0, token: "1" }])).toBeNull();
-    expect(parseAction([{ type: "move", die: 0, token: 1.5 }])).toBeNull();
-    expect(parseAction([null, "roll", { type: "nuke" }, { type: "move", die: 0, token: 0 }])).toEqual({ kind: "move", die: 0, token: 0 });
+    expect(parseAction([{ type: "move", token: 2 }])).toEqual({ kind: "move", token: 2 });
+    // An old client's die is ignored: the horse takes the whole roll
+    expect(parseAction([{ type: "move", die: 1, token: 2 }])).toEqual({ kind: "move", token: 2 });
+    expect(parseAction([{ type: "move" }])).toBeNull();
+    expect(parseAction([{ type: "move", token: 4 }])).toBeNull();
+    expect(parseAction([{ type: "move", token: "1" }])).toBeNull();
+    expect(parseAction([{ type: "move", token: 1.5 }])).toBeNull();
+    expect(parseAction([null, "roll", { type: "nuke" }, { type: "move", token: 0 }])).toEqual({ kind: "move", token: 0 });
     expect(coCaNguaOnline.parseInput({ move: { x: 0, y: 0 }, actions: [] })).toBeNull();
   });
 

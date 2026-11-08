@@ -19,15 +19,11 @@ export const HOME_COLUMN = 5;
 export const HOME = LAST_TRACK + HOME_COLUMN + 1;
 export const TOKENS = 4;
 
-/** Track squares (from the bottom-left start) that are safe: the four starts and the four stars. */
-export const STARTS = [0, 13, 26, 39];
-export const STARS = [8, 21, 34, 47];
-
-/** Two dice a turn, each spent on its own; a die showing this brings a horse out. */
-export const DICE = 2;
-export const SIX = 6;
-/** Doubles earn another roll; this many in a row and the turn is lost. */
-export const MAX_DOUBLES = 3;
+/**
+ * A roll that brings a horse out of base and earns another roll: doubles, or
+ * a 1 and a 6. This many of them in a row and the turn is lost.
+ */
+export const MAX_BONUS = 3;
 
 export type Difficulty = "easy" | "normal" | "hard";
 export const DIFFICULTIES: Difficulty[] = ["easy", "normal", "hard"];
@@ -52,7 +48,7 @@ export const HOP_TIME = 0.15;
 export const CAPTURE_TIME = 0.45;
 /** A beat after a move lands before the next roll. */
 export const SETTLE_TIME = 0.2;
-/** "No move" / "three doubles" stays up this long before the turn passes. */
+/** "No move" / "three bonus rolls" stays up this long before the turn passes. */
 export const PASS_TIME = 0.75;
 /** The computer waits before rolling and before moving, so you can follow it. */
 export const BOT_ROLL_DELAY = 0.35;
