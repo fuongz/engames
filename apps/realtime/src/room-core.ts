@@ -4,7 +4,10 @@ import {
   type LobbyPlayer,
   MAX_MESSAGES_PER_SECOND,
   type RoomGame,
+  type RoomSettings,
   type RoomSim,
+  applySettings,
+  defaultSettings,
   type SeatResult,
   type ServerMessage,
   type TicketClaims,
@@ -42,8 +45,8 @@ export interface MatchResult extends SeatResult {
 export interface RoomHooks {
   /** Start (or stop) calling tick() every `ms`. */
   setTicking(ms: number | null): void;
-  /** A match finished: save the members' scores. */
-  onResults(results: MatchResult[]): void;
+  /** A match finished: save the members' scores (and history), with the settings it was played under. */
+  onResults(results: MatchResult[], settings: RoomSettings): void;
   /** Lobby state changed: persist what must survive hibernation. */
   onLobbyChange?(): void;
 }
@@ -58,6 +61,8 @@ export class RoomCore {
   private tickNo = 0;
   private last = 0;
   private emptySince: number | null = null;
+  /** The host's lobby choices, applied to the next match. */
+  settings: RoomSettings;
 
   constructor(
     readonly slug: string,
@@ -65,7 +70,14 @@ export class RoomCore {
     private readonly game: RoomGame,
     private readonly hooks: RoomHooks,
     private readonly now: () => number = Date.now,
-  ) {}
+  ) {
+    this.settings = defaultSettings(game);
+  }
+
+  /** After a wake-up: the settings the sockets carried through hibernation. */
+  restoreSettings(raw: Record<string, unknown> | undefined) {
+    if (raw) this.settings = applySettings(this.game, this.settings, raw);
+  }
 
   get playing() {
     return this.sim !== null;
@@ -153,6 +165,12 @@ export class RoomCore {
         p.ready = m.ready;
         this.broadcastLobby();
         return;
+      case "settings":
+        if (this.sim) return this.sendTo(p.conn, { t: "error", code: "in-progress" });
+        if (this.host !== p.id) return this.sendTo(p.conn, { t: "error", code: "not-host" });
+        this.settings = applySettings(this.game, this.settings, m.settings);
+        this.broadcastLobby();
+        return;
       case "start":
         if (this.sim) return this.sendTo(p.conn, { t: "error", code: "in-progress" });
         if (this.host !== p.id) return this.sendTo(p.conn, { t: "error", code: "not-host" });
@@ -189,6 +207,7 @@ export class RoomCore {
     this.sim = this.game.create(
       seed,
       seated.map((p) => ({ name: p.name })),
+      this.settings,
     );
     this.seed = seed;
     this.tickNo = 0;
@@ -244,7 +263,7 @@ export class RoomCore {
         return { ...r, name: p?.name ?? "", userId: p?.userId ?? null };
       });
       this.broadcast({ t: "end", results: results.map(({ userId: _, ...r }) => r) });
-      this.hooks.onResults(results);
+      this.hooks.onResults(results, this.settings);
     }
     this.sim = null;
     for (const [id, p] of this.players) {
@@ -270,7 +289,7 @@ export class RoomCore {
       .filter((q) => q.seat !== null)
       .map((q) => ({ seat: q.seat as number, name: q.name }))
       .sort((a, b) => a.seat - b.seat);
-    this.sendTo(p.conn, { t: "start", seed: this.seed, tickRate: this.game.tickRate, you: p.seat ?? -1, seats });
+    this.sendTo(p.conn, { t: "start", seed: this.seed, tickRate: this.game.tickRate, you: p.seat ?? -1, seats, settings: this.settings });
   }
 
   lobbyMessage(you: string): ServerMessage {
@@ -286,6 +305,7 @@ export class RoomCore {
       you,
       players,
       maxPlayers: this.game.maxPlayers,
+      settings: this.settings,
     };
   }
 

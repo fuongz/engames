@@ -1,4 +1,5 @@
 import type { OnlineMode, ServerMessage, Vec } from "./online/protocol";
+import type { RoomSetting } from "./online/room-game";
 import type { AudioBus } from "./audio";
 import type { Locale, Localized } from "./i18n";
 import type { GameStorage } from "./storage";
@@ -44,7 +45,18 @@ export interface GameManifest {
    * Playable online too: the game has an `online.ts` adapter registered in
    * `online/registry.ts` (see docs/standards/online-multiplayer.md).
    */
-  online?: { modes: OnlineMode[]; minPlayers: number; maxPlayers: number };
+  online?: {
+    modes: OnlineMode[];
+    minPlayers: number;
+    maxPlayers: number;
+    /** The host's lobby choices; the same list as the adapter's `settings` (a test keeps them equal). */
+    settings?: RoomSetting[];
+    /**
+     * Empty seats are played by the computer. Co-op games always fill with bots;
+     * a versus game sets this when it does too (Ludo, a property game).
+     */
+    bots?: boolean;
+  };
   /**
    * Progress lives on the player's account (`GameContext.cloud`), so the portal
    * asks guests to sign in before mounting. The game also ships a `save.ts`
@@ -156,6 +168,8 @@ export interface OnlineMatch {
   seed: number;
   /** Simulation steps per second (inputs go out at this rate). */
   tickRate: number;
+  /** The host's lobby choices for this match (see RoomGame.settings). */
+  settings: Record<string, string>;
   /** This input tick's move and actions. */
   send(input: { seq: number; move: Vec; actions: unknown[] }): void;
   /** Match messages from the room (`snap`, `ev`, `end`); returns an unsubscribe. */

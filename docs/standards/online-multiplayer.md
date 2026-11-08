@@ -151,6 +151,7 @@ elsewhere.
 | --- | --- | --- |
 | `ready` | `ready: boolean` | Lobby toggle |
 | `start` | — | Host only, lobby only |
+| `settings` | `settings: Record<string,string>` | Host only, lobby only: change a lobby setting (§7c) |
 | `in` | `seq: number`, `move: {x, y}`, `actions: unknown[]` | Every input tick (20 Hz) while moving or with actions; nothing when idle |
 | `again` | — | After `end`: back to the lobby (any player) |
 | `ping` | `at: number` | Every 5 s, for the latency readout |
@@ -159,8 +160,8 @@ elsewhere.
 
 | `t` | Fields | When |
 | --- | --- | --- |
-| `lobby` | `code, slug, status, host, you, players[], maxPlayers` | On join and on every lobby change |
-| `start` | `seed, tickRate, you: seat, seats[]` | Match begins, or on rejoin mid-match |
+| `lobby` | `code, slug, status, host, you, players[], maxPlayers, settings` | On join and on every lobby change |
+| `start` | `seed, tickRate, you: seat, seats[], settings` | Match begins, or on rejoin mid-match |
 | `snap` | `tick, state, acks: Record<seat, seq>` | Every 2nd tick (10 Hz) |
 | `ev` | `tick, events[]` | Every tick that produced events (sound, effects) |
 | `end` | `results[]` | Match over |
@@ -282,6 +283,36 @@ you when time runs out), and three timeouts in a row or 30 seconds disconnected
 board), at 5 Hz with `tickRate: 10`.
 
 ---
+
+## 7c. Room settings, match history
+
+**Settings.** A game lists lobby choices as `RoomSetting[]` (key, localized label,
+choices, default) — Caro's `bestOf` (1/3/5). Declare the array once in the game's
+`config.ts` and use it for both the adapter's `settings` and the manifest's
+`online.settings` (the portal reads the manifest; `online.test.ts` keeps the two
+equal). The host changes them with `{t:"settings"}`; the room keeps only declared
+keys with allowed values (`applySettings`), shows them in every `lobby`, passes
+them to `create(seed, humans, settings)` and to every client in `start`
+(`OnlineMatch.settings`). They ride on the sockets' attachments, so a hibernated
+lobby wakes up with them.
+
+**Bots in versus.** `online.bots: true` in a versus manifest means empty seats are
+played by the computer (the lobby says so); otherwise a versus room waits for
+`minPlayers` humans.
+
+**Results and history.** `RoomSim.results()` may give each seat an `outcome`
+(`win`/`loss`/`draw`). When a match with at least one signed-in player ends, the
+room posts `{ board, slug, mode, code, at, settings, results, players }`:
+`results` are the members' scores for the board (as before), `players` every seat.
+The portal keeps the match in `online_match` / `online_match_player` only if at
+least one player said yes to "save my match history" (asked once in the lobby,
+switchable in the account menu; `history_consent`). Only consenting players'
+`user_id` is stored; everyone else is just a name. `/history` lists a player's
+matches. A replayed post (same room code and `at`) is ignored.
+
+**QR codes.** The lobby shows the invite link as a QR code (`uqr`, loaded on
+demand); the join dialog scans one with the camera (`qr-scanner`, loaded on
+demand) and accepts an invite link from any host or a bare room code.
 
 ## 8. Security
 

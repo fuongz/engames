@@ -1,9 +1,10 @@
-import { LibraryIcon, Search01Icon, Store01Icon } from "@hugeicons/core-free-icons";
+import { FavouriteIcon, LibraryIcon, Search01Icon, Store01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { useMessages } from "#/hooks/use-messages";
+import { useSession } from "#/hooks/use-session";
 import { INDICATOR_SPRING } from "#/lib/motion";
 
 const ITEM =
@@ -23,6 +24,9 @@ export function MobileNav({ onSearch }: { onSearch: () => void }) {
   useEffect(() => setMounted(true), []);
   const discover = mounted && path === "/";
   const library = mounted && path.startsWith("/library");
+  const favorites = mounted && path.startsWith("/favorites");
+  // Favourites live on the account: the tab is for signed-in players only
+  const signedIn = Boolean(useSession().data?.user);
 
   return (
     <nav className="fixed inset-x-4 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex gap-1 rounded-[25px] border bg-card/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
@@ -36,6 +40,13 @@ export function MobileNav({ onSearch }: { onSearch: () => void }) {
         <HugeiconsIcon icon={LibraryIcon} className="size-5" />
         {m.nav.library}
       </Link>
+      {mounted && signedIn && (
+        <Link to="/favorites" className={ITEM} data-active={favorites}>
+          {favorites && <ActivePill />}
+          <HugeiconsIcon icon={FavouriteIcon} className="size-5" />
+          {m.nav.favorites}
+        </Link>
+      )}
       <button type="button" onClick={onSearch} className={ITEM}>
         <HugeiconsIcon icon={Search01Icon} className="size-5" />
         {m.nav.search}

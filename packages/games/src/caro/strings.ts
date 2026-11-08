@@ -38,7 +38,7 @@ export interface Strings {
   wins: (n: number) => string;
   // online
   gameN: (n: number) => string;
-  firstTo: string;
+  firstTo: (wins: number) => string;
   firstMove: (name: string) => string;
   away: (name: string, seconds: number) => string;
   timedOut: string;
@@ -73,7 +73,7 @@ export const STRINGS: Localized<Strings> = {
       "Chặn 2 đầu: hàng 5 bị đối thủ chặn cả hai đầu thì không tính.",
       "Chạm một ô để chọn, chạm lần nữa để đánh.",
       "Kéo một ngón để di chuyển bàn, chụm hai ngón hoặc nút kính lúp để phóng to.",
-      "Online: thắng 2 ván trước, mỗi lượt 30 giây.",
+      "Online: chủ phòng chọn Bo1, Bo3 hoặc Bo5; mỗi lượt 30 giây.",
     ],
     close: "Đã hiểu",
     you: "Bạn",
@@ -99,7 +99,7 @@ export const STRINGS: Localized<Strings> = {
     tally: (a, b) => `${a} – ${b}`,
     wins: (n) => `Thắng ${n}`,
     gameN: (n) => `Ván ${n}`,
-    firstTo: "Thắng 2 ván trước",
+    firstTo: (n) => (n === 1 ? "Một ván phân thắng thua" : `Ai thắng ${n} ván trước thắng trận`),
     firstMove: (name) => `${name} đi trước`,
     away: (name, s) => `${name} mất kết nối · còn ${s} giây`,
     timedOut: "Hết giờ, máy đánh hộ",
@@ -129,7 +129,7 @@ export const STRINGS: Localized<Strings> = {
       "Blocked both ends: a five your opponent has capped at both ends doesn't count.",
       "Tap a square to pick it, tap it again to play.",
       "Drag one finger to move the board; pinch or use the magnifier to zoom.",
-      "Online: first to win 2 games, 30 seconds a turn.",
+      "Online: the host picks best of 1, 3 or 5; 30 seconds a turn.",
     ],
     close: "Got it",
     you: "You",
@@ -155,7 +155,7 @@ export const STRINGS: Localized<Strings> = {
     tally: (a, b) => `${a} – ${b}`,
     wins: (n) => `${n} ${n === 1 ? "win" : "wins"}`,
     gameN: (n) => `Game ${n}`,
-    firstTo: "First to 2 games",
+    firstTo: (n) => (n === 1 ? "One game decides it" : `First to ${n} games wins`),
     firstMove: (name) => `${name} goes first`,
     away: (name, s) => `${name} disconnected · ${s}s left`,
     timedOut: "Time's up, a move was played for you",

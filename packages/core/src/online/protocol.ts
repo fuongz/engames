@@ -22,6 +22,12 @@ export const MAX_MESSAGES_PER_SECOND = 60;
 /** Inputs a seat may have queued; older ones are dropped. */
 export const INPUT_QUEUE = 4;
 
+/** The host's lobby choices, by setting key (see RoomGame.settings). */
+export type RoomSettings = Record<string, string>;
+
+/** How a match went for one seat. */
+export type Outcome = "win" | "loss" | "draw";
+
 export interface Vec {
   x: number;
   y: number;
@@ -32,6 +38,7 @@ export interface Vec {
 export type ClientMessage =
   | { t: "ready"; ready: boolean }
   | { t: "start" }
+  | { t: "settings"; settings: Record<string, string> }
   | { t: "in"; seq: number; move: Vec; actions: unknown[] }
   | { t: "again" }
   | { t: "ping"; at: number };
@@ -61,6 +68,7 @@ export interface SeatResult {
   name: string;
   score: number;
   detail: string;
+  outcome?: Outcome;
 }
 
 export type ErrorCode = "bad-ticket" | "room-full" | "not-host" | "in-progress" | "bad-message" | "unknown-game";
@@ -75,8 +83,9 @@ export type ServerMessage =
       you: string;
       players: LobbyPlayer[];
       maxPlayers: number;
+      settings: RoomSettings;
     }
-  | { t: "start"; seed: number; tickRate: number; you: number; seats: SeatInfo[] }
+  | { t: "start"; seed: number; tickRate: number; you: number; seats: SeatInfo[]; settings: RoomSettings }
   | { t: "snap"; tick: number; state: unknown; acks: Record<number, number> }
   | { t: "ev"; tick: number; events: unknown[] }
   | { t: "end"; results: SeatResult[] }
@@ -106,6 +115,12 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: m.t };
     case "ping":
       return finite(m.at) ? { t: "ping", at: m.at } : null;
+    case "settings": {
+      // Shape only; the room keeps the keys and values the game declares
+      if (!isObj(m.settings)) return null;
+      const entries = Object.entries(m.settings).filter((e): e is [string, string] => typeof e[1] === "string" && e[0].length <= 24 && e[1].length <= 24);
+      return entries.length <= 8 ? { t: "settings", settings: Object.fromEntries(entries) } : null;
+    }
     case "in": {
       const move = m.move;
       if (!finite(m.seq) || !isObj(move) || !finite(move.x) || !finite(move.y) || !Array.isArray(m.actions)) return null;

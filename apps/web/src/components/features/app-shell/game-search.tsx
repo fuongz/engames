@@ -2,6 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { categories, games } from "@web-games/games";
 import { categoryIcon } from "#/components/shared/games/category-icons";
+import { Button } from "#/components/ui/button";
 import {
   Command,
   CommandDialog,
@@ -34,17 +35,24 @@ export function GameSearch({
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
-      // Phones: sit just under the status bar, so the list stays clear of the
-      // on-screen keyboard and the top of the screen isn't left empty
-      className="top-[calc(env(safe-area-inset-top)+0.75rem)] sm:top-1/3"
+      // Phones: a full-screen search page (no card floating over the page), with
+      // the safe areas padded; from `sm` up, the usual palette card
+      className="max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:grid-rows-[minmax(0,1fr)] max-sm:rounded-none! max-sm:pt-[env(safe-area-inset-top)] max-sm:pb-[env(safe-area-inset-bottom)] max-sm:ring-0 max-sm:data-open:slide-in-from-bottom-4 max-sm:data-open:zoom-in-100 sm:top-1/3"
       title={m.search.title}
       description={m.search.description}
     >
       {/* CommandDialog only supplies the dialog; cmdk's store lives in <Command>,
           and CommandInput/Item crash ("reading 'subscribe'") without it. */}
-      <Command>
-        <CommandInput placeholder={m.search.placeholder} />
-        <CommandList className="max-h-[min(70dvh,480px)]">
+      <Command className="max-sm:h-full max-sm:rounded-none">
+        <div className="flex items-center gap-1 max-sm:px-2 max-sm:pt-2">
+          <div className="min-w-0 flex-1">
+            <CommandInput placeholder={m.search.placeholder} />
+          </div>
+          <Button variant="ghost" className="h-10 px-3 sm:hidden" onClick={() => onOpenChange(false)}>
+            {m.search.cancel}
+          </Button>
+        </div>
+        <CommandList className="max-h-[min(70dvh,480px)] max-sm:max-h-none max-sm:flex-1 max-sm:px-1">
           <CommandEmpty>{m.search.empty}</CommandEmpty>
           <CommandGroup heading={m.search.games} className="**:[[cmdk-group-items]]:grid **:[[cmdk-group-items]]:gap-1">
             {games.map((g) => (

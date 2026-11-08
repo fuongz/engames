@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { boardKey, verifyHmac } from "@web-games/core/online";
 import { findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
+import { recordMatch } from "#/server/db/history";
 import type { Db } from "#/server/db/leaderboard";
 import { saveScore } from "#/server/db/leaderboard";
 
@@ -26,6 +27,23 @@ const resultsBody = z.object({
       }),
     )
     .max(6),
+  // Since match history: every seat, the room's mode and settings. Optional so a
+  // room deployed before it still posts scores.
+  mode: z.string().max(10).optional(),
+  settings: z.record(z.string().max(24), z.string().max(24)).optional(),
+  players: z
+    .array(
+      z.object({
+        seat: z.number().int().min(0).max(5),
+        userId: z.string().min(1).max(100).nullable(),
+        name: z.string().min(1).max(40),
+        score: z.number().int().min(0).max(10_000_000),
+        detail: z.string().max(40),
+        outcome: z.enum(["win", "loss", "draw"]).optional(),
+      }),
+    )
+    .max(6)
+    .optional(),
 });
 
 export async function acceptResults(db: Db, raw: string, signature: string | null, now = Date.now()) {
@@ -41,5 +59,16 @@ export async function acceptResults(db: Db, raw: string, signature: string | nul
   if (!game || parsed.board !== boardKey(parsed.slug, game.mode)) return { status: 400, error: "bad board" } as const;
   for (const r of parsed.results)
     await saveScore(db, { gameSlug: parsed.board, score: r.score, detail: r.detail, name: r.name.slice(0, 20), userId: r.userId });
-  return { status: 200, saved: parsed.results.length } as const;
+  // History is kept only for the players who agreed to it (recordMatch checks)
+  const match = parsed.players
+    ? await recordMatch(db, {
+        gameSlug: parsed.slug,
+        mode: game.mode,
+        roomCode: parsed.code,
+        settings: parsed.settings ?? {},
+        postedAt: parsed.at,
+        players: parsed.players.map((p) => ({ ...p, outcome: p.outcome ?? null })),
+      })
+    : null;
+  return { status: 200, saved: parsed.results.length, history: match !== null } as const;
 }

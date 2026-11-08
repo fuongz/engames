@@ -141,3 +141,86 @@ export const gameSave = sqliteTable(
 );
 
 export type GameSaveRow = typeof gameSave.$inferSelect;
+
+// ---------------------------------------------------------------- Play counts
+
+/** How many times each game was started, across every player (shown as "1.2K plays"). */
+export const gameStat = sqliteTable("game_stat", {
+  gameSlug: text("game_slug").primaryKey(),
+  plays: integer("plays").notNull().default(0),
+});
+
+// ---------------------------------------------------------------- Online match history
+
+/**
+ * A signed-in player's answer to "save my online match history?". No row means
+ * they haven't been asked yet; only `enabled` players get their matches kept.
+ */
+export const historyConsent = sqliteTable("history_consent", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+/** A finished online match that at least one consenting player took part in. */
+export const onlineMatch = sqliteTable(
+  "online_match",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    gameSlug: text("game_slug").notNull(),
+    /** "coop" | "versus". */
+    mode: text("mode").notNull(),
+    roomCode: text("room_code").notNull(),
+    /** The room's settings as JSON, e.g. {"bestOf":"5"}. */
+    settings: text("settings").notNull().default("{}"),
+    /** When the room posted it (ms); with the room code, makes a replayed post a no-op. */
+    postedAt: integer("posted_at").notNull(),
+    playedAt: integer("played_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => [uniqueIndex("online_match_post_uq").on(t.roomCode, t.postedAt)],
+);
+
+/**
+ * Everyone in a saved match. `user_id` is set only for players who agreed to keep
+ * their history; everyone else (guests too) is just a name, so the match reads
+ * right ("won 2–1 against Bình") without saving anything for them.
+ */
+export const onlineMatchPlayer = sqliteTable(
+  "online_match_player",
+  {
+    matchId: integer("match_id")
+      .notNull()
+      .references(() => onlineMatch.id, { onDelete: "cascade" }),
+    seat: integer("seat").notNull(),
+    name: text("name").notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    score: integer("score").notNull(),
+    detail: text("detail"),
+    /** "win" | "loss" | "draw", or null when the game doesn't say. */
+    outcome: text("outcome"),
+  },
+  (t) => [primaryKey({ columns: [t.matchId, t.seat] }), index("online_match_player_user_idx").on(t.userId, t.matchId)],
+);
+
+// ---------------------------------------------------------------- Favourites
+
+/** A signed-in player's favourite games (the heart on a game page). */
+export const favorite = sqliteTable(
+  "favorite",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameSlug: text("game_slug").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.gameSlug] })],
+);

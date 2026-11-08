@@ -25,7 +25,8 @@ export default {
     if (!claims || claims.s !== slug || claims.r !== code) return new Response("bad ticket", { status: 401 });
 
     const headers = new Headers(request.headers);
-    headers.set("x-claims", JSON.stringify(claims));
+    // Header values must be ASCII: a Vietnamese name ("Phương") would arrive mangled
+    headers.set("x-claims", encodeURIComponent(JSON.stringify(claims)));
     return env.ROOMS.getByName(`${slug}:${code}`).fetch(new Request(request, { headers }));
   },
 } satisfies ExportedHandler<Env>;

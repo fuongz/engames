@@ -10,6 +10,14 @@ describe("registry", () => {
     for (const slug of declared) expect(findOnlineGame(slug)?.slug).toBe(slug);
     expect(findOnlineGame("constructor")).toBeUndefined();
   });
+
+  it("gives the portal the same lobby settings and mode the room uses", () => {
+    for (const g of games.filter((g) => g.online)) {
+      const room = findOnlineGame(g.slug);
+      expect(g.online?.settings ?? []).toEqual(room?.settings ?? []);
+      expect(g.online?.modes[0]).toBe(room?.mode);
+    }
+  });
 });
 
 describe("Night Dorm online adapter", () => {
@@ -28,7 +36,7 @@ describe("Night Dorm online adapter", () => {
   });
 
   it("runs a whole match to an end with a result per human seat", () => {
-    const sim = game.create(7, [{ name: "An" }, { name: "Bình" }]);
+    const sim = game.create(7, [{ name: "An" }, { name: "Bình" }], {});
     let ticks = 0;
     const seen = new Set<string>();
     while (!sim.over && ticks < game.tickRate * 600) {

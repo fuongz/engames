@@ -92,7 +92,9 @@ export const kyTucXaOnline: RoomGame<SeatInput> = {
       results() {
         // Stored on the board as text: in the default language
         const detail = STRINGS.vi.detail(state.result?.won ?? false, fmtTime(state.nightTime), state.hunter?.level ?? 1);
-        return humans(state).map((o) => ({ seat: o.id, score: scoreOf(state, o.id), detail }));
+        // Co-op: the whole team wins or loses together
+        const outcome = state.result?.won ? ("win" as const) : ("loss" as const);
+        return humans(state).map((o) => ({ seat: o.id, score: scoreOf(state, o.id), detail, outcome }));
       },
     };
   },

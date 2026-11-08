@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { chooseMove } from "./ai";
 import { type Difficulty, MAX_TIMEOUTS, RECONNECT_SECONDS, SIZE, TURN_SECONDS } from "./config";
 import { type Side, createMatch, findWin, idx, matchScore, newGame, play, setAway, stepMatch, undo } from "./logic";
-import { caroOnline, parsePlace } from "./online";
+import { bestOfOf, caroOnline, parsePlace } from "./online";
 
 const board = (marks: [number, number, Side][]) => {
   const cells = new Array(SIZE * SIZE).fill(0);
@@ -194,6 +194,48 @@ describe("an online match", () => {
   });
 });
 
+describe("match length", () => {
+  const tick = 1 / caroOnline.tickRate;
+  /** Seat 0 wins games until the match ends; returns how many it took. */
+  function sweep(bestOf: 1 | 3 | 5) {
+    const m = createMatch(1, ["An", "Bình"], bestOf);
+    let games = 0;
+    while (m.phase !== "over" && games < 10) {
+      const made = [0, 0];
+      while (m.game.result === null) {
+        const mover = m.game.turn === 1 ? 0 : 1;
+        const k = made[mover]++;
+        const inputs: (number | null)[] = [null, null];
+        inputs[mover] = mover === 0 ? idx(k, 2) : idx(k * 2, 10);
+        stepMatch(m, tick, inputs);
+      }
+      games++;
+      while (m.phase === "between") stepMatch(m, tick, [null, null]);
+    }
+    return { games, m };
+  }
+
+  it("ends after 1, 2 or 3 wins for Bo1, Bo3 and Bo5", () => {
+    for (const [bestOf, wins] of [
+      [1, 1],
+      [3, 2],
+      [5, 3],
+    ] as const) {
+      const { games, m } = sweep(bestOf);
+      expect(games).toBe(wins);
+      expect(m.winner).toBe(0);
+    }
+  });
+
+  it("reads the host's setting, defaulting to Bo3", () => {
+    expect(bestOfOf({ bestOf: "5" })).toBe(5);
+    expect(bestOfOf({ bestOf: "1" })).toBe(1);
+    expect(bestOfOf({})).toBe(3);
+    const sim = caroOnline.create(1, [{ name: "An" }, { name: "Bình" }], { bestOf: "5" });
+    expect((sim.snapshot() as { bestOf: number }).bestOf).toBe(5);
+  });
+});
+
 describe("online adapter", () => {
   it("accepts only a place action on a real square", () => {
     expect(parsePlace([{ type: "place", at: 40 }])).toBe(40);
@@ -204,7 +246,7 @@ describe("online adapter", () => {
   });
 
   it("runs a whole match to an end with a result per seat", () => {
-    const sim = caroOnline.create(5, [{ name: "An" }, { name: "Bình" }]);
+    const sim = caroOnline.create(5, [{ name: "An" }, { name: "Bình" }], {});
     const seen = new Set<string>();
     let ticks = 0;
     while (!sim.over && ticks < 20000) {

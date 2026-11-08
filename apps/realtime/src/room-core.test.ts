@@ -135,3 +135,47 @@ describe("RoomCore match", () => {
     expect(a.last("lobby")?.status).toBe("lobby");
   });
 });
+
+describe("RoomCore settings", () => {
+  const caro = onlineGames.caro;
+  function caroRoom() {
+    const now = 1000;
+    const settingsSeen: Record<string, string>[] = [];
+    const room = new RoomCore("caro", "XYZ234", caro, { setTicking: () => {}, onResults: (_r, s) => settingsSeen.push(s) }, () => now);
+    const join = (p: string) => {
+      const c = new FakeConn();
+      room.join({ r: "XYZ234", s: "caro", p, n: p.toUpperCase(), u: null, e: now + 60_000 }, c);
+      return c;
+    };
+    return { room, join };
+  }
+
+  it("start at the game's defaults; only the host changes them, to allowed values", () => {
+    const { room, join } = caroRoom();
+    const a = join("a");
+    const b = join("b");
+    expect(a.last("lobby")?.settings).toEqual({ bestOf: "3" });
+    room.message("b", { t: "settings", settings: { bestOf: "5" } });
+    expect(b.last("error")?.code).toBe("not-host");
+    room.message("a", { t: "settings", settings: { bestOf: "7" } });
+    expect(b.last("lobby")?.settings).toEqual({ bestOf: "3" });
+    room.message("a", { t: "settings", settings: { bestOf: "5" } });
+    expect(b.last("lobby")?.settings).toEqual({ bestOf: "5" });
+  });
+
+  it("hands the settings to the match and to every client's start", () => {
+    const { room, join } = caroRoom();
+    const a = join("a");
+    join("b");
+    room.message("a", { t: "settings", settings: { bestOf: "1" } });
+    room.message("a", { t: "start" });
+    expect(a.last("start")?.settings).toEqual({ bestOf: "1" });
+    expect(room.playing).toBe(true);
+  });
+
+  it("survive hibernation through restoreSettings", () => {
+    const { room } = caroRoom();
+    room.restoreSettings({ bestOf: "5", junk: "x" });
+    expect(room.settings).toEqual({ bestOf: "5" });
+  });
+});

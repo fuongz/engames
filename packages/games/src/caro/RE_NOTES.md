@@ -20,7 +20,8 @@ pen-and-paper game everyone in Vietnam plays on squared exercise-book paper.
   defending; Normal takes the best square; Hard runs a 4-ply alpha-beta search over the
   best ~10 squares (well under 400 ms on a laptop, see `logic.test.ts`). 3 take-backs a game.
 - **2 players, 1 phone**: hot-seat, unlimited take-backs, session tally.
-- **Online 1-on-1** (`online.ts`, mode `versus`): best of 3, 30 s turns. A timed-out
+- **Online 1-on-1** (`online.ts`, mode `versus`): best of 1, 3 or 5 (the host's lobby
+  setting `bestOf`, default 3; up to N+2 games when draws repeat), 30 s turns. A timed-out
   turn is played for you by the Normal computer; 3 timeouts in a row, or 30 s
   disconnected, forfeits the match.
 

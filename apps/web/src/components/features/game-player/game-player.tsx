@@ -38,6 +38,7 @@ import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
 import { OnlineEntry } from "#/components/features/online/online-entry";
 import { OnlineSession } from "#/components/features/online/online-session";
+import { FavoriteButton } from "./favorite-button";
 import { ScoreDialog, takePendingScore } from "./score-dialog";
 
 /** Give the game's own result screen a moment before the save dialog covers it. */
@@ -283,6 +284,7 @@ export function GamePlayer({
             <HugeiconsIcon icon={ArrowLeft01Icon} />
           </Button>
           <h1 className="min-w-0 flex-1 truncate font-semibold [@media(max-height:500px)]:hidden">{game.title[locale]}</h1>
+          <FavoriteButton slug={game.slug} />
           <ToolButton label={m.player.leaderboard} className="lg:hidden" onClick={() => toggleBoard(true)}>
             <HugeiconsIcon icon={RankingIcon} />
           </ToolButton>

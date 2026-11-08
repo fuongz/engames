@@ -45,8 +45,10 @@ import {
   UNDOS_PER_GAME,
   W,
   WIN_SCORE,
+  winsNeeded,
 } from "./config";
 import { type Game, type Match, type MatchEvent, type Side, canPlay, createMatch, movesBy, newGame, other, play, seatOf, undo } from "./logic";
+import { bestOfOf } from "./online";
 import { STRINGS } from "./strings";
 
 // The imperative shell for Caro: menu, play against the computer or a friend
@@ -131,6 +133,7 @@ export function setup(rt: Runtime): GameHooks {
     ? createMatch(
         online.seed,
         online.seats.map((s) => s.name),
+        bestOfOf(online.settings),
       )
     : null;
   let results: SeatResult[] | null = null;
@@ -792,7 +795,7 @@ export function setup(rt: Runtime): GameHooks {
       if (match) {
         // Games won, as pips
         const s = match.seats[seatOf(c.side)];
-        for (let k = 0; k < 2; k++) {
+        for (let k = 0; k < winsNeeded(match.bestOf); k++) {
           ctx.beginPath();
           ctx.arc(r.x + 92 + k * 24, y + 66, 8, 0, Math.PI * 2);
           ctx.fillStyle = k < (s?.wins ?? 0) ? markColor(c.side) : "rgba(42,45,56,0.12)";
@@ -877,7 +880,7 @@ export function setup(rt: Runtime): GameHooks {
     if (away) text(ctx, away, W / 2, STATUS_Y, fitSize(ctx, away, 22, W - 40), RED);
     else if (notice && now < notice.until) text(ctx, notice.text, W / 2, STATUS_Y, fitSize(ctx, notice.text, 24, W - 40, 700), INK, "center", 700);
     else if (s) text(ctx, s, W / 2, STATUS_Y, fitSize(ctx, s, 24, W - 40), INK_SOFT);
-    else if (match && match.phase === "play") text(ctx, tr().firstTo, W / 2, STATUS_Y, 20, INK_SOFT);
+    else if (match && match.phase === "play") text(ctx, tr().firstTo(winsNeeded(match.bestOf)), W / 2, STATUS_Y, 20, INK_SOFT);
   }
 
   function dim() {

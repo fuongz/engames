@@ -2,6 +2,7 @@ import type { GameManifest } from "@web-games/core";
 import { categories } from "@web-games/games";
 import { useLayoutEffect, useRef, useState } from "react";
 import { CoopBadge } from "#/components/shared/games/coop-badge";
+import { PlayCount } from "#/components/shared/games/play-count";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Kbd, KbdGroup } from "#/components/ui/kbd";
@@ -24,6 +25,8 @@ export function GameDetails({ game }: { game: GameManifest }) {
   return (
     <div className="grid gap-5 text-sm">
       <div className="flex flex-wrap gap-1.5">
+        {/* Not a <Badge>: an empty pill would show until the count loads */}
+        <PlayCount slug={game.slug} className="h-5 rounded-2xl bg-secondary px-2 text-xs font-medium text-secondary-foreground" />
         <CoopBadge game={game} variant="long" />
         {category && <Badge>{category.label[locale]}</Badge>}
         {game.tags[locale].map((t) => (

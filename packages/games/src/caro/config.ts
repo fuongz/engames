@@ -1,3 +1,5 @@
+import type { RoomSetting } from "@web-games/core/online";
+
 // Tuning for Caro. Numbers only; the rules are in logic.ts.
 
 export const W = 540;
@@ -38,10 +40,23 @@ export const TURN_SECONDS = 30;
 export const MAX_TIMEOUTS = 3;
 /** Seconds a dropped player has to come back before the match is forfeited. */
 export const RECONNECT_SECONDS = 30;
-/** Games to win the match (first to 2 = best of 3). */
-export const MATCH_WINS = 2;
+/** Match lengths the host can pick in the lobby (best of N games). */
+export const BEST_OF = [1, 3, 5] as const;
+export type BestOf = (typeof BEST_OF)[number];
+export const DEFAULT_BEST_OF: BestOf = 3;
+/** Games to win the match: first to 1, 2 or 3. */
+export const winsNeeded = (bestOf: number) => Math.ceil(bestOf / 2);
 /** Draws can repeat; the match stops after this many games regardless. */
-export const MAX_GAMES = 5;
+export const maxGames = (bestOf: number) => bestOf + 2;
+/** The lobby setting the host picks the match length with (manifest and room adapter share it). */
+export const ROOM_SETTINGS: RoomSetting[] = [
+  {
+    key: "bestOf",
+    label: { vi: "Thể thức", en: "Match length" },
+    choices: BEST_OF.map((n) => ({ value: String(n), label: { vi: `Bo${n}`, en: `Best of ${n}` } })),
+    default: String(DEFAULT_BEST_OF),
+  },
+];
 /** Pause between games, showing who took the last one. */
 export const BETWEEN_GAMES = 3.5;
 /** Online scores: the match winner, plus a bonus for few moves; the loser gets a little per game won. */

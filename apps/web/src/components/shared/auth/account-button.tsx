@@ -1,9 +1,11 @@
-import { GoogleIcon, Logout01Icon } from "@hugeicons/core-free-icons";
+import { FavouriteIcon, GoogleIcon, Logout01Icon, WorkHistoryIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Link } from "@tanstack/react-router";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -11,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { useHistoryConsent } from "#/hooks/use-history-consent";
 import { useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
 import { signInWithGoogle, signOut } from "#/lib/auth-client";
@@ -23,6 +26,7 @@ import { cn } from "#/lib/utils";
 export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
   const { data, isPending } = useSession();
   const m = useMessages();
+  const history = useHistoryConsent();
   const user = data?.user;
 
   if (isPending) return <div className={variant === "sidebar" ? "h-12" : "size-10"} aria-hidden />;
@@ -80,6 +84,21 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
             <span className="truncate">{user.name}</span>
             <span className="truncate text-xs font-normal text-muted-foreground">{user.email}</span>
           </DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem render={<Link to="/favorites" />}>
+            <HugeiconsIcon icon={FavouriteIcon} />
+            {m.nav.favorites}
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link to="/history" />}>
+            <HugeiconsIcon icon={WorkHistoryIcon} />
+            {m.account.history}
+          </DropdownMenuItem>
+          {/* Unasked (null) reads as off; ticking it is the answer */}
+          <DropdownMenuCheckboxItem checked={history.value === true} onCheckedChange={(on) => void history.set(on)}>
+            {m.account.saveHistory}
+          </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => void signOut()}>

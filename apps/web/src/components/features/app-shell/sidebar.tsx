@@ -1,6 +1,7 @@
 import {
   CloudSavingDone01Icon,
   Download04Icon,
+  FavouriteIcon,
   LibraryIcon,
   Store01Icon,
   UserGroupIcon,
@@ -15,6 +16,7 @@ import { useEffect, useState } from "react";
 import { AccountButton } from "#/components/shared/auth/account-button";
 import { LanguageMenu } from "#/components/shared/i18n/language-menu";
 import { useMessages } from "#/hooks/use-messages";
+import { useSession } from "#/hooks/use-session";
 import { INDICATOR_SPRING } from "#/lib/motion";
 import { useInstallStore } from "#/stores/install";
 import { HelpDialog } from "./help-dialog";
@@ -50,6 +52,9 @@ export function Sidebar() {
   const coop = mounted && path.startsWith("/library") && coopFilter && !onlineFilter;
   const online = mounted && path.startsWith("/library") && onlineFilter && !coopFilter;
   const library = mounted && path.startsWith("/library") && !coopFilter && !onlineFilter;
+  const favorites = mounted && path.startsWith("/favorites");
+  // Favourites live on the account: signed-in players only
+  const signedIn = Boolean(useSession().data?.user);
 
   useEffect(() => {
     setMounted(true);
@@ -87,6 +92,13 @@ export function Sidebar() {
           <HugeiconsIcon icon={CloudSavingDone01Icon} className="size-5" />
           {m.nav.online}
         </Link>
+        {mounted && signedIn && (
+          <Link to="/favorites" className={SIDEBAR_ITEM} data-active={favorites}>
+            {favorites && <ActiveBar />}
+            <HugeiconsIcon icon={FavouriteIcon} className="size-5" />
+            {m.nav.favorites}
+          </Link>
+        )}
       </nav>
 
       <div className="mt-auto grid gap-1">

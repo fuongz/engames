@@ -7,6 +7,7 @@ import { motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring,
 import { type PointerEvent, useEffect, useState } from "react";
 import { useLocale } from "#/hooks/use-messages";
 import { CoopBadge } from "./coop-badge";
+import { PlayCount } from "./play-count";
 import { cn } from "#/lib/utils";
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
@@ -103,7 +104,7 @@ export function GameCard({ game, className }: { game: GameManifest; className?: 
             <>
               {category?.label[locale]}
               <span aria-hidden className="h-3 w-px bg-border" />
-              {game.releasedAt.slice(0, 4)}
+              <PlayCount slug={game.slug} iconless />
             </>
           )}
         </p>

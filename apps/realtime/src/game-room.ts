@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { type TicketClaims, boardKey, hmac, parseClientMessage } from "@web-games/core/online";
+import { type RoomSettings, type TicketClaims, boardKey, hmac, parseClientMessage } from "@web-games/core/online";
 import { findOnlineGame } from "@web-games/games/online";
 import { type Conn, type MatchResult, RoomCore } from "./room-core";
 
@@ -8,6 +8,8 @@ interface Attachment {
   claims: TicketClaims;
   ready: boolean;
   joinedAt: number;
+  /** The room's lobby settings, on every socket so a hibernated room wakes up with them. */
+  settings?: RoomSettings;
 }
 
 /**
@@ -28,12 +30,14 @@ export class GameRoom extends DurableObject<Env> {
     if (!first || !game) return null;
     const core = new RoomCore(first.s, first.r, game, {
       setTicking: (ms) => this.setTicking(ms),
-      onResults: (results) => this.ctx.waitUntil(this.postResults(boardKey(first.s, game.mode), first.s, first.r, results)),
+      onResults: (results, settings) =>
+        this.ctx.waitUntil(this.postResults({ board: boardKey(first.s, game.mode), slug: first.s, mode: game.mode, code: first.r, settings }, results)),
       onLobbyChange: () => this.saveAttachments(),
     });
     this.core = core;
     for (const ws of sockets) {
       const a = ws.deserializeAttachment() as Attachment;
+      core.restoreSettings(a.settings);
       core.join(a.claims, conn(ws), { ready: a.ready, joinedAt: a.joinedAt });
     }
     return core;
@@ -41,7 +45,7 @@ export class GameRoom extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
-    const claims = JSON.parse(request.headers.get("x-claims") ?? "null") as TicketClaims | null;
+    const claims = JSON.parse(decodeURIComponent(request.headers.get("x-claims") ?? "null")) as TicketClaims | null;
     const core = claims && this.room(claims);
     if (!claims || !core) return new Response("unknown game", { status: 404 });
 
@@ -80,15 +84,22 @@ export class GameRoom extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       const a = ws.deserializeAttachment() as Attachment;
       const p = core.players.get(a.claims.p);
-      if (p) ws.serializeAttachment({ ...a, ready: p.ready, joinedAt: p.joinedAt } satisfies Attachment);
+      if (p) ws.serializeAttachment({ ...a, ready: p.ready, joinedAt: p.joinedAt, settings: core.settings } satisfies Attachment);
     }
   }
 
-  /** Members' scores go to the portal, which owns the leaderboard (signed, see docs §8). */
-  private async postResults(board: string, slug: string, code: string, results: MatchResult[]) {
+  /**
+   * A match with a signed-in player in it goes to the portal, which owns the
+   * leaderboard and the match history (signed, see docs §8). `results` are the
+   * members' scores for the board; `players` is every seat, for the history.
+   */
+  private async postResults(
+    room: { board: string; slug: string; mode: string; code: string; settings: RoomSettings },
+    results: MatchResult[],
+  ) {
+    if (!results.some((r) => r.userId !== null)) return;
     const members = results.filter((r) => r.userId !== null && r.score > 0);
-    if (members.length === 0) return;
-    const body = JSON.stringify({ board, slug, code, at: Date.now(), results: members });
+    const body = JSON.stringify({ ...room, at: Date.now(), results: members, players: results });
     try {
       const res = await fetch(`${this.env.PORTAL_URL}/api/online/results`, {
         method: "POST",

@@ -154,6 +154,8 @@ export function OnlineSession({
       seats: match.seats,
       seed: match.seed,
       tickRate: match.tickRate,
+      // A room deployed before settings existed sends none
+      settings: match.settings ?? {},
       send: (input) => socket.send({ t: "in", ...input }),
       onMessage: (fn) =>
         socket.on((e) => {
@@ -190,6 +192,7 @@ export function OnlineSession({
         audioBus.unlock();
         send({ t: "start" });
       }}
+      onSettings={(settings) => send({ t: "settings", settings })}
       onRetry={room.retry}
       onLeave={onLeave}
     />

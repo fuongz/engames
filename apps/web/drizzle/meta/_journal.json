@@ -29,6 +29,20 @@
       "when": 1792832490541,
       "tag": "0003_medical_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794116588861,
+      "tag": "0004_milky_falcon",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794117237121,
+      "tag": "0005_chilly_roulette",
+      "breakpoints": true
     }
   ]
 }

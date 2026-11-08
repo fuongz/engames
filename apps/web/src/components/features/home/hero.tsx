@@ -16,6 +16,7 @@ import {
 } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CoopBadge } from "#/components/shared/games/coop-badge";
+import { PlayCount } from "#/components/shared/games/play-count";
 import { Button } from "#/components/ui/button";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
@@ -282,7 +283,8 @@ function InfoCard({ game }: { game: GameManifest }) {
             {game.description[locale]}
           </motion.p>
           <motion.div variants={piece} className="mt-auto grid gap-3 pt-2">
-            <span className="text-sm font-semibold">{m.home.free}</span>
+            {/* Every game is free, so the line only says how many have played it */}
+            <PlayCount slug={game.slug} className="text-sm font-semibold text-foreground/90" />
             {/* Dark glass on the orange card, as in the reference; an orange button would vanish here */}
             <Button
               size="lg"

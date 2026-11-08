@@ -7,13 +7,15 @@ import {
   MATCH_QUICK_BONUS,
   MATCH_QUICK_MOVES,
   MATCH_WIN_SCORE,
-  MATCH_WINS,
-  MAX_GAMES,
+  type BestOf,
+  DEFAULT_BEST_OF,
   MAX_TIMEOUTS,
   RECONNECT_SECONDS,
   SIZE,
   TURN_SECONDS,
   WIN_LEN,
+  maxGames,
+  winsNeeded,
 } from "./config";
 
 // Caro rules, pure. One `Game` is one board; a `Match` is the online best-of-3
@@ -150,6 +152,8 @@ export type MatchEvent =
   | { type: "over"; winner: number | null; forfeit: boolean };
 
 export interface Match {
+  /** Best of 1, 3 or 5, as the host chose. */
+  bestOf: BestOf;
   seats: Seat[];
   game: Game;
   /** 1-based game number. */
@@ -170,8 +174,9 @@ export interface Match {
 /** Who goes first in game `n`: X in odd games, O in even ones. */
 export const firstOf = (n: number): Side => (n % 2 === 1 ? 1 : 2);
 
-export function createMatch(seed: number, names: string[]): Match {
+export function createMatch(seed: number, names: string[], bestOf: BestOf = DEFAULT_BEST_OF): Match {
   return {
+    bestOf,
     seats: [0, 1].map((i) => ({
       name: names[i] ?? (i === 0 ? "X" : "O"),
       side: (i + 1) as Side,
@@ -219,9 +224,9 @@ function place(m: Match, at: number, auto: boolean) {
     m.seats[seatOf(g.result)].wins++;
     m.events.push({ type: "win", side: g.result, line: g.line ?? [] });
   }
-  const leader = m.seats.findIndex((s) => s.wins >= MATCH_WINS);
+  const leader = m.seats.findIndex((s) => s.wins >= winsNeeded(m.bestOf));
   if (leader >= 0) end(m, leader, false);
-  else if (m.n >= MAX_GAMES) {
+  else if (m.n >= maxGames(m.bestOf)) {
     const [a, b] = m.seats;
     end(m, a.wins === b.wins ? null : a.wins > b.wins ? 0 : 1, false);
   } else {
@@ -269,6 +274,11 @@ export function setAway(m: Match, seat: number, away: boolean) {
   const s = m.seats[seat];
   if (!s) return;
   s.away = away ? (s.away ?? 0) : null;
+}
+
+/** How the match went for a seat, once over. */
+export function outcomeOf(m: Match, seat: number): "win" | "loss" | "draw" {
+  return m.winner === null ? "draw" : m.winner === seat ? "win" : "loss";
 }
 
 /** Leaderboard score for a seat once the match is over. */

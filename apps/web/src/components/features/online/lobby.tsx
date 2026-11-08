@@ -1,4 +1,12 @@
-import { Copy01Icon, Crown02Icon, Logout01Icon, Robot01Icon, Tick02Icon, WifiDisconnected01Icon } from "@hugeicons/core-free-icons";
+import {
+  Copy01Icon,
+  Crown02Icon,
+  Logout01Icon,
+  QrCodeIcon,
+  Robot01Icon,
+  Tick02Icon,
+  WifiDisconnected01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { GameManifest } from "@web-games/core";
 import { type FormEvent, useId, useState } from "react";
@@ -6,11 +14,14 @@ import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
+import { useHistoryConsent } from "#/hooks/use-history-consent";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
-import { onlineMode } from "#/lib/online";
+import { inviteUrl, onlineMode } from "#/lib/online";
 import { cn } from "#/lib/utils";
 import type { ServerMessage } from "@web-games/core/online";
+import { RoomQr } from "./room-qr";
 
 export type RoomPhase = "connecting" | "reconnecting" | "open" | "full" | "failed" | "needs-name";
 export type LobbyState = Extract<ServerMessage, { t: "lobby" }>;
@@ -26,6 +37,7 @@ export function Lobby({
   onName,
   onReady,
   onStart,
+  onSettings,
   onRetry,
   onLeave,
 }: {
@@ -38,16 +50,21 @@ export function Lobby({
   onName: (name: string) => void;
   onReady: (ready: boolean) => void;
   onStart: () => void;
+  /** Host only: change a lobby setting (e.g. Caro's best-of). */
+  onSettings: (settings: Record<string, string>) => void;
   onRetry: () => void;
   onLeave: () => void;
 }) {
   const m = useMessages();
   const locale = useLocale();
   const [copied, setCopied] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const history = useHistoryConsent();
   const max = game.online?.maxPlayers ?? 6;
+  const link = typeof window === "undefined" ? "" : inviteUrl(window.location.origin, game.slug, code);
 
   const copy = () => {
-    void navigator.clipboard?.writeText(window.location.href).then(() => {
+    void navigator.clipboard?.writeText(link).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     });
@@ -56,8 +73,11 @@ export function Lobby({
   const me = lobby?.players.find((p) => p.id === lobby.you);
   const isHost = lobby !== null && lobby.host === lobby.you;
   const versus = onlineMode(game) === "versus";
-  // Versus rooms have no bots: the match waits for enough connected humans
-  const bots = versus ? 0 : Math.max(0, max - (lobby?.players.length ?? 0));
+  // Versus rooms have no bots unless the game says so: the match waits for enough connected humans
+  const fills = !versus || game.online?.bots === true;
+  // A "players" setting (Ludo, Tycoon) is the table size the host picked; bots fill up to it
+  const seats = Number(lobby?.settings?.players) || max;
+  const bots = fills ? Math.max(0, seats - (lobby?.players.length ?? 0)) : 0;
   const short = versus && (lobby?.players.filter((p) => p.connected).length ?? 0) < (game.online?.minPlayers ?? 1);
 
   return (
@@ -93,10 +113,68 @@ export function Lobby({
           </p>
         ) : (
           <>
-            <Button variant="outline" className="h-10" onClick={copy}>
-              <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} data-icon="inline-start" />
-              {copied ? m.online.copied : m.online.invite}
-            </Button>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <Button variant="outline" className="h-10" onClick={copy}>
+                <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} data-icon="inline-start" />
+                {copied ? m.online.copied : m.online.invite}
+              </Button>
+              <Button
+                variant={showQr ? "secondary" : "outline"}
+                size="icon"
+                className="size-10"
+                aria-label={showQr ? m.online.hideQr : m.online.showQr}
+                aria-expanded={showQr}
+                onClick={() => setShowQr((v) => !v)}
+              >
+                <HugeiconsIcon icon={QrCodeIcon} />
+              </Button>
+            </div>
+            {showQr && (
+              <figure className="grid justify-items-center gap-2">
+                <RoomQr url={link} label={m.online.qrTitle} className="size-48 overflow-hidden rounded-2xl p-1" />
+                <figcaption className="text-center text-xs text-muted-foreground">{m.online.qrHint}</figcaption>
+              </figure>
+            )}
+
+            {(game.online?.settings ?? []).map((s) => (
+              <div key={s.key} className="grid gap-2">
+                <p className="flex items-baseline justify-between text-sm font-semibold">
+                  {s.label[locale]}
+                  {!isHost && <span className="text-xs font-normal text-muted-foreground">{m.online.settingsHostOnly}</span>}
+                </p>
+                <ToggleGroup
+                  value={[lobby.settings?.[s.key] ?? s.default]}
+                  onValueChange={(v) => v[0] && onSettings({ [s.key]: v[0] })}
+                  aria-label={s.label[locale]}
+                  variant="outline"
+                  disabled={!isHost}
+                  className="w-full"
+                >
+                  {s.choices.map((c) => (
+                    <ToggleGroupItem key={c.value} value={c.value} className="h-10 flex-1 aria-pressed:border-primary/60 aria-pressed:bg-primary/15 aria-pressed:text-primary">
+                      {c.label[locale]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+            ))}
+
+            {history.value === null && (
+              <section className="grid gap-2 rounded-2xl bg-muted/60 p-3" aria-labelledby="history-ask">
+                <p id="history-ask" className="text-sm font-semibold">
+                  {m.online.historyAsk}
+                </p>
+                <p className="text-xs text-muted-foreground">{m.online.historyAskHint}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="ghost" className="h-9" onClick={() => void history.set(false)}>
+                    {m.online.historyNo}
+                  </Button>
+                  <Button variant="secondary" className="h-9" onClick={() => void history.set(true)}>
+                    {m.online.historyYes}
+                  </Button>
+                </div>
+              </section>
+            )}
 
             <div className="grid gap-2">
               <p className="text-sm font-semibold">{fmt(m.online.players, { n: lobby.players.length, max })}</p>
