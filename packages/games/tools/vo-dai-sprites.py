@@ -13,7 +13,7 @@ import json, os, re, subprocess, sys, tempfile
 # Usage: python3 tools/vo-dai-sprites.py   (needs ImageMagick 7 and cwebp)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "art-src", "vo-dai", "pixel")  # generated sheets (gitignored)
-OUT = os.path.join(ROOT, "src", "vo-dai", "img", "px")
+OUT = os.path.join(ROOT, "archived", "vo-dai", "img", "px")
 TARGET_H = 66          # standing height in true pixels (beast: 74)
 CELL_W, CELL_H = 144, 112
 ANCHOR_X, BASE_Y = 60, 109

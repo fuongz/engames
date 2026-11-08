@@ -138,8 +138,8 @@ Patterns worth knowing, and whether we use them:
 2. **Tween / timeline** — the `t += dt; k = t / DURATION` pattern recurs in every game.
 3. **Input actions** — map keyboard, touch stick and gamepad to named actions once.
 4. **Canvas UI kit** — button, toast, overlay panel: each `art.ts` draws its own.
-5. **Move `tinh-tu` and `phi-doi` to `fixedStep`** — needs play-testing, since
-   their tuning was done against variable dt.
+5. **Move `phi-doi` to `fixedStep`** — needs play-testing, since
+   its tuning was done against variable dt.
 
 Sources: [Phaser vs Kaplay vs Excalibur (Phaser, 2026)](https://phaser.io/news/2026/04/phaser-vs-kaplay-vs-excalibur-2d-web-game-framework),
 [web game engines comparison (Cinevva)](https://app.cinevva.com/zh-CN/guides/web-game-engines-comparison),

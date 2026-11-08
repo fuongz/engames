@@ -22,9 +22,8 @@ packages/core/     @web-games/core — the engine; knows no game by name
 packages/games/    @web-games/games — the games, framework-free TypeScript on <canvas>
   src/registry.ts  discovers every src/<slug>/manifest.ts
   src/online.ts    which games are playable online
-  src/chien-thu/   Chiến Thú Hỗn Chiến (portrait merge-defense), see RE_NOTES.md
-  src/tinh-tu/     Tinh Tú Phi Hành (landscape shoot 'em up), see RE_NOTES.md
   src/tiem-banh-may/  Tiệm Bánh Mây (bakery sim, saved to the account), see DESIGN.md
+  archived/        games pulled from the portal (not discovered, built or tested)
 ```
 
 ## Commands
