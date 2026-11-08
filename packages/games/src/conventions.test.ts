@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 // The folder rules in docs/standards/game-engine.md, checked on every game so a
 // new one can't quietly drift from them.
 // Everything the realtime Worker bundles must stay free of DOM code: a game's
-// rules, its data files and its online adapter.
-const logic = import.meta.glob<string>(["./*/logic.ts", "./*/config.ts", "./*/strings.ts", "./*/online.ts"], {
+// rules (and any computer player they call), its data files and its online adapter.
+const logic = import.meta.glob<string>(["./*/logic.ts", "./*/ai.ts", "./*/config.ts", "./*/strings.ts", "./*/online.ts"], {
   query: "?raw",
   import: "default",
   eager: true,

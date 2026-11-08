@@ -9,9 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "#/components/ui/input";
 import { useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
-import { randomRoomCode } from "#/lib/online";
+import { onlineMode, randomRoomCode } from "#/lib/online";
 
-/** "Play online co-op" on the start screen: make a room, or join one by code. Either way the URL gets ?room=. */
+/** "Play online co-op" (or "Play a friend online") on the start screen: make a room, or join one by code. Either way the URL gets ?room=. */
 export function OnlineEntry({ game }: { game: GameManifest }) {
   const m = useMessages();
   const navigate = useNavigate();
@@ -20,6 +20,8 @@ export function OnlineEntry({ game }: { game: GameManifest }) {
   const [error, setError] = useState<string | null>(null);
   const codeId = useId();
   if (!game.online) return null;
+  const versus = onlineMode(game) === "versus";
+  const title = versus ? m.online.versus : m.online.coop;
 
   const go = (room: string) => {
     setOpen(false);
@@ -37,13 +39,13 @@ export function OnlineEntry({ game }: { game: GameManifest }) {
     <>
       <Button variant="secondary" size="lg" className="h-11 w-full max-w-60 rounded-full" onClick={() => setOpen(true)}>
         <HugeiconsIcon icon={UserGroupIcon} data-icon="inline-start" />
-        {m.online.coop}
+        {title}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{m.online.coop}</DialogTitle>
-            <DialogDescription>{fmt(m.online.coopHint, { max: game.online.maxPlayers })}</DialogDescription>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{versus ? m.online.versusHint : fmt(m.online.coopHint, { max: game.online.maxPlayers })}</DialogDescription>
           </DialogHeader>
           <Button size="lg" className="h-11" onClick={() => go(randomRoomCode())}>
             <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />

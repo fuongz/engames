@@ -1,3 +1,5 @@
+import type { OnlineMode } from "./protocol";
+
 // What a game implements to be played online. The realtime Worker drives any
 // RoomGame the same way, so a new online game needs no server changes.
 
@@ -7,6 +9,8 @@ export interface Seated {
 
 export interface RoomGame<Input = unknown> {
   slug: string;
+  /** Which online board results go to ("<slug>:<mode>"); matches the manifest's `online.modes[0]`. */
+  mode: OnlineMode;
   minPlayers: number;
   maxPlayers: number;
   /** Simulation steps per second; snapshots go out at half this rate. */

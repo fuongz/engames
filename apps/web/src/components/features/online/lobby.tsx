@@ -8,6 +8,7 @@ import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
+import { onlineMode } from "#/lib/online";
 import { cn } from "#/lib/utils";
 import type { ServerMessage } from "@web-games/core/online";
 
@@ -54,7 +55,10 @@ export function Lobby({
 
   const me = lobby?.players.find((p) => p.id === lobby.you);
   const isHost = lobby !== null && lobby.host === lobby.you;
-  const bots = Math.max(0, max - (lobby?.players.length ?? 0));
+  const versus = onlineMode(game) === "versus";
+  // Versus rooms have no bots: the match waits for enough connected humans
+  const bots = versus ? 0 : Math.max(0, max - (lobby?.players.length ?? 0));
+  const short = versus && (lobby?.players.filter((p) => p.connected).length ?? 0) < (game.online?.minPlayers ?? 1);
 
   return (
     <div className="absolute inset-0 grid place-items-center overflow-y-auto overscroll-contain p-5">
@@ -137,7 +141,11 @@ export function Lobby({
               <Button variant={me?.ready ? "secondary" : "outline"} className="h-11" onClick={() => onReady(!me?.ready)}>
                 {me?.ready ? m.online.unsetReady : m.online.setReady}
               </Button>
-              {isHost ? (
+              {short ? (
+                <p className="text-center text-sm text-muted-foreground" role="status">
+                  {m.online.waitingOpponent}
+                </p>
+              ) : isHost ? (
                 <Button className="h-11" onClick={onStart} data-cuelume-emphasis="strong">
                   {m.online.start}
                 </Button>
@@ -147,7 +155,7 @@ export function Lobby({
                 </p>
               )}
             </div>
-            {!signedIn && <p className="text-center text-xs text-muted-foreground">{m.online.signInNote}</p>}
+            {!signedIn && <p className="text-center text-xs text-muted-foreground">{versus ? m.online.signInNoteVersus : m.online.signInNote}</p>}
           </>
         )}
 

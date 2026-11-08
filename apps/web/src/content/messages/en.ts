@@ -156,6 +156,13 @@ export const en: Messages = {
     boardCoop: "Co-op",
     badge: "Co-op",
     badgeLong: "Online co-op, up to {n} players",
+    versus: "Play a friend online",
+    versusHint: "Make a room and send the link to one friend for a 1-on-1 match.",
+    waitingOpponent: "Waiting for an opponent to join...",
+    signInNoteVersus: "Sign in to put your wins on the online board.",
+    boardVersus: "Online",
+    badgeVersus: "1v1 online",
+    badgeLongVersus: "Online 1-on-1",
   },
   leaderboard: {
     emptyTitle: "No one on the board yet",

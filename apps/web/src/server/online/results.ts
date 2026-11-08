@@ -37,7 +37,8 @@ export async function acceptResults(db: Db, raw: string, signature: string | nul
     return { status: 400, error: "bad body" } as const;
   }
   if (Math.abs(now - parsed.at) > MAX_AGE_MS) return { status: 400, error: "stale" } as const;
-  if (!findOnlineGame(parsed.slug) || parsed.board !== boardKey(parsed.slug, "coop")) return { status: 400, error: "bad board" } as const;
+  const game = findOnlineGame(parsed.slug);
+  if (!game || parsed.board !== boardKey(parsed.slug, game.mode)) return { status: 400, error: "bad board" } as const;
   for (const r of parsed.results)
     await saveScore(db, { gameSlug: parsed.board, score: r.score, detail: r.detail, name: r.name.slice(0, 20), userId: r.userId });
   return { status: 200, saved: parsed.results.length } as const;

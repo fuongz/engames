@@ -2,8 +2,8 @@ import { type ReactNode, useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { useMessages } from "#/hooks/use-messages";
 
-/** Solo and co-op boards for a game that plays online. */
-export function BoardTabs({ solo, coop }: { solo: ReactNode; coop: ReactNode }) {
+/** Solo and online (co-op or versus) boards for a game that plays online. */
+export function BoardTabs({ solo, coop, versus = false }: { solo: ReactNode; coop: ReactNode; versus?: boolean }) {
   const m = useMessages();
   const [tab, setTab] = useState<"solo" | "coop">("solo");
   return (
@@ -19,7 +19,7 @@ export function BoardTabs({ solo, coop }: { solo: ReactNode; coop: ReactNode }) 
           {m.online.boardSolo}
         </ToggleGroupItem>
         <ToggleGroupItem value="coop" className="h-9 px-4">
-          {m.online.boardCoop}
+          {versus ? m.online.boardVersus : m.online.boardCoop}
         </ToggleGroupItem>
       </ToggleGroup>
       {tab === "solo" ? solo : coop}

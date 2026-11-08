@@ -7,6 +7,7 @@ together. Read it before adding online play to a game or touching
 
 The first online game is **Ký Túc Xá Đêm / Night Dorm** in **co-op**: up to six
 people share one dorm against the Dream Hunter, and bots fill any empty bed.
+**Caro** is the first in **versus**: two people, one board, best of three.
 
 ---
 
@@ -231,7 +232,8 @@ which has no `import.meta.glob`. A test checks that every manifest with an
    closure, so a snapshot is plain data. Offline stays "one human seat".
 2. **Write `<slug>/online.ts`** implementing `RoomGame`, and add it to
    `online/registry.ts`.
-3. **Declare it** in the manifest: `online: { modes: ["coop"], minPlayers, maxPlayers }`. That alone makes
+3. **Declare it** in the manifest: `online: { modes: ["coop"], minPlayers, maxPlayers }`
+   (or `["versus"]`, see §7b), and set the same `mode` on the adapter. That alone makes
    the portal mark it: the **Co-op badge** (`components/shared/games/coop-badge.tsx`)
    on cards, the hero and the details, the **Online co-op** filter in the library
    (`/library?coop=1`, also a sidebar item), "co-op"/"online" in search, and the
@@ -259,6 +261,25 @@ which has no `import.meta.glob`. A test checks that every manifest with an
 | Disconnect | — | autopilot buys for your room until you return |
 
 Online scores go to the board `ky-tuc-xa:coop` (see §9), separate from solo.
+
+## 7b. Versus mode (Caro)
+
+A game whose manifest says `modes: ["versus"]` plays humans against each other:
+
+| | Co-op | Versus |
+| --- | --- | --- |
+| Empty seats | bots | none: the lobby shows "Waiting for an opponent" and the host's **Start** only appears once `minPlayers` are connected |
+| Portal labels | "Play online co-op", badge "Co-op", board tab "Co-op" | "Play a friend online", badge "1v1 online", board tab "Online" |
+| Board | `<slug>:coop` | `<slug>:versus` |
+
+`RoomGame.mode` tells the room which board to post to, and the portal checks the
+posted board against it. Nothing else in the room changes: a turn-based game
+sends `{ type: "place", at }` actions and ignores `move`.
+
+Caro's rules online: best of three, 30-second turns (the room plays a move for
+you when time runs out), and three timeouts in a row or 30 seconds disconnected
+(`setAutopilot`) forfeits the match. Snapshots are the whole match (a 361-square
+board), at 5 Hz with `tickRate: 10`.
 
 ---
 

@@ -1,4 +1,5 @@
 import type { RoomGame } from "@web-games/core/online";
+import { caroOnline } from "./caro/online";
 import { kyTucXaOnline } from "./ky-tuc-xa/online";
 
 // Every game playable online, by slug. Explicit (not import.meta.glob) because
@@ -6,6 +7,7 @@ import { kyTucXaOnline } from "./ky-tuc-xa/online";
 // step with the manifests' `online` blocks.
 export const onlineGames: Record<string, RoomGame> = {
   "ky-tuc-xa": kyTucXaOnline as RoomGame,
+  caro: caroOnline as RoomGame,
 };
 
 export const findOnlineGame = (slug: string): RoomGame | undefined =>

@@ -8,6 +8,7 @@ import { GameCard } from "#/components/shared/games/game-card";
 import { LeaderboardList } from "#/components/shared/leaderboard/leaderboard-list";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { getLeaderboard } from "#/server/leaderboard";
+import { onlineMode } from "#/lib/online";
 import { socialMeta } from "#/lib/seo";
 import { useLocaleStore } from "#/stores/locale";
 
@@ -23,7 +24,7 @@ export const Route = createFileRoute("/games/$slug")({
     // Offline (installed PWA) or API down: the game still plays, the board just hides
     const [board, coop] = await Promise.all([
       getLeaderboard({ data: { slug: game.slug, limit: 10 } }).catch(() => null),
-      game.online ? getLeaderboard({ data: { slug: game.slug, limit: 10, mode: "coop" } }).catch(() => null) : null,
+      game.online ? getLeaderboard({ data: { slug: game.slug, limit: 10, mode: onlineMode(game) } }).catch(() => null) : null,
     ]);
     return { game, board, coop };
   },
@@ -52,8 +53,8 @@ function GamePage() {
   const others = games.filter((g) => g.slug !== game.slug).slice(0, 6);
   const offline = <p className="text-sm text-muted-foreground">{m.player.boardOffline}</p>;
   const solo = board ? <LeaderboardList entries={board} /> : offline;
-  // Online games keep a separate co-op board
-  const leaderboard = game.online ? <BoardTabs solo={solo} coop={coop ? <LeaderboardList entries={coop} /> : offline} /> : solo;
+  // Online games keep a separate board for online matches
+  const leaderboard = game.online ? <BoardTabs solo={solo} coop={coop ? <LeaderboardList entries={coop} /> : offline} versus={onlineMode(game) === "versus"} /> : solo;
 
   // The player gets the full width; guide + leaderboard, then other games, stack
   // below it. On phones the player is full-screen and both open as dialogs.

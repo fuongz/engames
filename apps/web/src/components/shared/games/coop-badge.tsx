@@ -3,10 +3,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { GameManifest } from "@web-games/core";
 import { useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
+import { onlineMode } from "#/lib/online";
 import { cn } from "#/lib/utils";
 
 /**
- * Marks a game that plays online co-op. `overlay` sits on key art (glass pill),
+ * Marks a game that plays online (co-op, or 1v1 for a versus game). `overlay` sits on key art (glass pill),
  * `inline` reads in a row of badges, `long` spells out the player count.
  * Renders nothing for solo-only games.
  */
@@ -21,7 +22,15 @@ export function CoopBadge({
 }) {
   const m = useMessages();
   if (!game.online) return null;
-  const label = variant === "long" ? fmt(m.online.badgeLong, { n: game.online.maxPlayers }) : m.online.badge;
+  const versus = onlineMode(game) === "versus";
+  const label =
+    variant === "long"
+      ? versus
+        ? m.online.badgeLongVersus
+        : fmt(m.online.badgeLong, { n: game.online.maxPlayers })
+      : versus
+        ? m.online.badgeVersus
+        : m.online.badge;
   return (
     <span
       className={cn(
@@ -40,4 +49,6 @@ export function CoopBadge({
 
 /** Extra search words for a co-op game, in both languages, so "co-op" or "online" finds it. */
 export const coopKeywords = (game: GameManifest) =>
-  game.online ? "co-op coop online multiplayer chơi cùng bạn nhiều người" : "";
+  game.online
+    ? `co-op coop online multiplayer chơi cùng bạn nhiều người${onlineMode(game) === "versus" ? " 1v1 versus đấu đối kháng" : ""}`
+    : "";

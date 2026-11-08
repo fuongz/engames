@@ -1,4 +1,8 @@
-import { CODE_ALPHABET, CODE_LENGTH } from "@web-games/core/online";
+import type { GameManifest } from "@web-games/core";
+import { CODE_ALPHABET, CODE_LENGTH, type OnlineMode } from "@web-games/core/online";
+
+/** How a game plays online; its board is "<slug>:<mode>". */
+export const onlineMode = (game: GameManifest): OnlineMode => game.online?.modes[0] ?? "coop";
 
 // Where online rooms live. Override with VITE_REALTIME_URL; otherwise the local
 // realtime Worker in dev and the production one in a build.

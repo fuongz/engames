@@ -50,6 +50,7 @@ export function snapshotOf(s: GameState): GameState {
 
 export const kyTucXaOnline: RoomGame<SeatInput> = {
   slug: "ky-tuc-xa",
+  mode: "coop",
   minPlayers: 1,
   maxPlayers: 6,
   tickRate: TICK_RATE,

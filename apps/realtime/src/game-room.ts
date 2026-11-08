@@ -28,7 +28,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!first || !game) return null;
     const core = new RoomCore(first.s, first.r, game, {
       setTicking: (ms) => this.setTicking(ms),
-      onResults: (results) => this.ctx.waitUntil(this.postResults(first.s, first.r, results)),
+      onResults: (results) => this.ctx.waitUntil(this.postResults(boardKey(first.s, game.mode), first.s, first.r, results)),
       onLobbyChange: () => this.saveAttachments(),
     });
     this.core = core;
@@ -85,10 +85,10 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /** Members' scores go to the portal, which owns the leaderboard (signed, see docs §8). */
-  private async postResults(slug: string, code: string, results: MatchResult[]) {
+  private async postResults(board: string, slug: string, code: string, results: MatchResult[]) {
     const members = results.filter((r) => r.userId !== null && r.score > 0);
     if (members.length === 0) return;
-    const body = JSON.stringify({ board: boardKey(slug, "coop"), slug, code, at: Date.now(), results: members });
+    const body = JSON.stringify({ board, slug, code, at: Date.now(), results: members });
     try {
       const res = await fetch(`${this.env.PORTAL_URL}/api/online/results`, {
         method: "POST",

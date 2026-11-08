@@ -155,6 +155,13 @@ export const vi = {
     boardCoop: "Co-op",
     badge: "Co-op",
     badgeLong: "Chơi online co-op, tối đa {n} người",
+    versus: "Đấu online với bạn",
+    versusHint: "Tạo phòng rồi gửi link cho một người bạn để đấu 1 chọi 1.",
+    waitingOpponent: "Đợi đối thủ vào phòng...",
+    signInNoteVersus: "Đăng nhập để trận thắng lên bảng xếp hạng online.",
+    boardVersus: "Online",
+    badgeVersus: "1v1 online",
+    badgeLongVersus: "Đấu online 1 chọi 1",
   },
   leaderboard: {
     emptyTitle: "Chưa có ai trên bảng",

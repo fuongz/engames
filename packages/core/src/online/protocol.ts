@@ -2,7 +2,9 @@
 // object with a `t` field; these types are the only definition of the shapes.
 // Pure: imported by the browser, the realtime Worker and the portal server.
 
-export type OnlineMode = "coop";
+/** "coop": everyone on one side, bots fill empty seats. "versus": humans play each other, no bots. */
+export const ONLINE_MODES = ["coop", "versus"] as const;
+export type OnlineMode = (typeof ONLINE_MODES)[number];
 
 /** Room codes: 6 characters with no look-alikes (no 0/O, 1/I/L). */
 export const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

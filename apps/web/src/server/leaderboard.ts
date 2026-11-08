@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { findGame } from "@web-games/games";
-import { boardKey } from "@web-games/core/online";
+import { ONLINE_MODES, boardKey } from "@web-games/core/online";
 import { findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
 import { currentUser } from "#/server/auth";
@@ -32,7 +32,7 @@ const playerName = z
 export const getLeaderboard = createServerFn({ method: "GET" })
   .validator(
     z
-      .object({ slug, limit: z.number().int().min(1).max(50).default(10), mode: z.enum(["coop"]).optional() })
+      .object({ slug, limit: z.number().int().min(1).max(50).default(10), mode: z.enum(ONLINE_MODES).optional() })
       .refine((d) => !d.mode || findOnlineGame(d.slug) !== undefined, "Not an online game"),
   )
   // Online boards live under "<slug>:<mode>" in the same table (online-multiplayer.md §9)
