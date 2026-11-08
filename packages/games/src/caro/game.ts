@@ -1,3 +1,6 @@
+import "@fontsource/baloo-2/800.css";
+import "@fontsource/mali/600.css";
+import "@fontsource/mali/700.css";
 import { type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, clamp, inRect, mulberry32 } from "@web-games/core";
 import type { SeatResult } from "@web-games/core/online";
 import { chooseMove } from "./ai";
@@ -8,6 +11,7 @@ import {
   type Button,
   CELL,
   type Camera,
+  FONT,
   INK,
   INK_SOFT,
   NOTE,
@@ -784,7 +788,7 @@ export function setup(rt: Runtime): GameHooks {
       drawNote(ctx, r, c.side === 1 ? NOTE_PINK : NOTE_BLUE, (i === 0 ? -1 : 1) * 0.012, lift);
       const y = r.y - lift;
       drawMark(ctx, c.side, r.x + 44, y + r.h / 2, 58, c.side * 7);
-      text(ctx, c.name, r.x + 82, y + 34, fitSize(ctx, c.name, 24, r.w - 96, 800), INK, "left", 800);
+      text(ctx, c.name, r.x + 82, y + 34, fitSize(ctx, c.name, 24, r.w - 96, 700), INK, "left", 700);
       if (match) {
         // Games won, as pips
         const s = match.seats[seatOf(c.side)];
@@ -795,7 +799,7 @@ export function setup(rt: Runtime): GameHooks {
           ctx.fill();
         }
       } else {
-        text(ctx, c.sub, r.x + 82, y + 66, 22, markColor(c.side), "left", 800);
+        text(ctx, c.sub, r.x + 82, y + 66, 22, markColor(c.side), "left", 700);
       }
       if (c.active) {
         drawHighlight(
@@ -807,7 +811,7 @@ export function setup(rt: Runtime): GameHooks {
           c.clock !== null && c.clock < 0.34 ? "rgba(230,60,50,0.55)" : "rgba(255,200,0,0.75)",
         );
         if (c.clock !== null)
-          text(ctx, String(Math.ceil((c.clock ?? 0) * TURN_SECONDS)), r.x + r.w - 26, y + 66, 22, c.clock < 0.34 ? RED : INK_SOFT, "center", 800);
+          text(ctx, String(Math.ceil((c.clock ?? 0) * TURN_SECONDS)), r.x + r.w - 26, y + 66, 22, c.clock < 0.34 ? RED : INK_SOFT, "center", 700);
       }
     });
   }
@@ -871,7 +875,7 @@ export function setup(rt: Runtime): GameHooks {
     const s = statusLine();
     const away = cards().find((c) => c.away)?.away;
     if (away) text(ctx, away, W / 2, STATUS_Y, fitSize(ctx, away, 22, W - 40), RED);
-    else if (notice && now < notice.until) text(ctx, notice.text, W / 2, STATUS_Y, fitSize(ctx, notice.text, 24, W - 40, 800), INK, "center", 800);
+    else if (notice && now < notice.until) text(ctx, notice.text, W / 2, STATUS_Y, fitSize(ctx, notice.text, 24, W - 40, 700), INK, "center", 700);
     else if (s) text(ctx, s, W / 2, STATUS_Y, fitSize(ctx, s, 24, W - 40), INK_SOFT);
     else if (match && match.phase === "play") text(ctx, tr().firstTo, W / 2, STATUS_Y, 20, INK_SOFT);
   }
@@ -888,7 +892,7 @@ export function setup(rt: Runtime): GameHooks {
     drawNote(ctx, MENU, PAPER, 0, 2);
     drawTitle(ctx, W / 2, MENU.y + 82, 92);
     text(ctx, t.subtitle, W / 2, MENU.y + 150, fitSize(ctx, t.subtitle, 20, MENU.w - 50), INK_SOFT);
-    text(ctx, t.vsAi, W / 2, MENU.y + 220, 26, INK, "center", 800);
+    text(ctx, t.vsAi, W / 2, MENU.y + 220, 26, INK, "center", 700);
     const list = menuButtons();
     for (const b of list) drawButton(ctx, b);
     // Wins per level under each level button
@@ -915,8 +919,8 @@ export function setup(rt: Runtime): GameHooks {
     dim();
     const t = tr();
     drawNote(ctx, RULES, PAPER, 0, 2);
-    text(ctx, t.rules, W / 2, RULES.y + 48, 32, INK, "center", 800);
-    ctx.font = `600 20px "Baloo 2", system-ui, sans-serif`;
+    text(ctx, t.rules, W / 2, RULES.y + 48, 32, INK, "center", 700);
+    ctx.font = `600 20px ${FONT}`;
     let y = RULES.y + 100;
     for (const line of t.rulesLines) {
       // Wrap by words to the card width
@@ -979,7 +983,7 @@ export function setup(rt: Runtime): GameHooks {
       }
       color = r ? markColor(r) : INK;
     }
-    text(ctx, title, W / 2, RESULT.y + 44, fitSize(ctx, title, 38, RESULT.w - 40, 800), color, "center", 800);
+    text(ctx, title, W / 2, RESULT.y + 44, fitSize(ctx, title, 38, RESULT.w - 40, 700), color, "center", 700);
     if (line) text(ctx, line, W / 2, RESULT.y + 90, fitSize(ctx, line, 21, RESULT.w - 40), INK_SOFT);
     for (const b of resultButtons()) drawButton(ctx, b);
     ctx.restore();
@@ -994,7 +998,7 @@ export function setup(rt: Runtime): GameHooks {
     ctx.save();
     ctx.globalAlpha = clamp((now - decidedAt - 0.8) / 0.3, 0, 1);
     drawNote(ctx, r, NOTE, -0.02, 3);
-    text(ctx, msg, W / 2, r.y + 40, fitSize(ctx, msg, 34, r.w - 30, 800), g.result ? markColor(g.result) : INK, "center", 800);
+    text(ctx, msg, W / 2, r.y + 40, fitSize(ctx, msg, 34, r.w - 30, 700), g.result ? markColor(g.result) : INK, "center", 700);
     text(ctx, `${match.seats[0]?.wins ?? 0} – ${match.seats[1]?.wins ?? 0}`, W / 2, r.y + 76, 20, INK_SOFT);
     ctx.restore();
   }

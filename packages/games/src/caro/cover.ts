@@ -2,7 +2,7 @@
 // the approved "school notebook" sample) with the title baked in. Not imported
 // by the game: `bun run art` renders it to poster.webp / banner.webp.
 import type { Locale } from "@web-games/core";
-import { FONT } from "./art";
+import { TITLE_FONT } from "./art";
 import bannerArt from "./img/banner-art.webp";
 import posterArt from "./img/poster-art.webp";
 
@@ -19,7 +19,7 @@ async function painted(src: string): Promise<HTMLImageElement | null> {
 
 /** The title as on a notebook cover label: red C·A, blue R·O. */
 function title(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
-  ctx.font = `800 ${size}px ${FONT}`;
+  ctx.font = `800 ${size}px ${TITLE_FONT}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   const letters = ["C", "A", "R", "O"];

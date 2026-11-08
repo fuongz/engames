@@ -41,4 +41,4 @@ zoomed. A move that lands off-screen while zoomed glides the camera to it.
 ## Art
 
 Key art from Codex (style A "school notebook", approved 2026-11-08); raw PNGs in the
-git-ignored `art-src/caro/`. The board, marks and buttons are drawn in `art.ts`.
+git-ignored `art-src/caro/`. The board, marks and buttons are drawn in `art.ts`. In-game text is **Mali** (600/700, full Vietnamese, imported in `game.ts`); only the CARO title uses Baloo 2, as on the poster.

@@ -6,7 +6,10 @@ import { SIZE, W } from "./config";
 // sticky-note buttons. Everything is procedural, so it stays sharp at any zoom.
 
 type Ctx = CanvasRenderingContext2D;
-export const FONT = '"Baloo 2", "Trebuchet MS", system-ui, sans-serif';
+/** In-game text: Mali (rounded, handwriting-like, full Vietnamese). Weights 600 and 700 are loaded in game.ts. */
+export const FONT = '"Mali", "Trebuchet MS", system-ui, sans-serif';
+/** The CARO title only, matching the poster. */
+export const TITLE_FONT = '"Baloo 2", "Trebuchet MS", system-ui, sans-serif';
 
 export const INK = "#2a2d38";
 export const INK_SOFT = "#6b6f7d";
@@ -297,21 +300,21 @@ export function drawButton(ctx: Ctx, b: Button, pressed = false) {
     drawIcon(ctx, b.icon, r.x + r.w / 2, r.y + r.h * 0.36, 26, color);
     text(ctx, b.label, r.x + r.w / 2, r.y + r.h * 0.76, fitSize(ctx, b.label, 17, r.w - 12), color);
   } else {
-    text(ctx, b.label, r.x + r.w / 2, r.y + r.h / 2 + 1, fitSize(ctx, b.label, 22, r.w - 20, 800), color, "center", 800);
+    text(ctx, b.label, r.x + r.w / 2, r.y + r.h / 2 + 1, fitSize(ctx, b.label, 22, r.w - 20, 700), color, "center", 700);
   }
   if (b.badge) {
     ctx.fillStyle = RED;
     ctx.beginPath();
     ctx.arc(r.x + r.w - 10, r.y + 10, 11, 0, Math.PI * 2);
     ctx.fill();
-    text(ctx, b.badge, r.x + r.w - 10, r.y + 11, 14, "#fff", "center", 800);
+    text(ctx, b.badge, r.x + r.w - 10, r.y + 11, 14, "#fff", "center", 700);
   }
   ctx.restore();
 }
 
 /** The game's title as on the key art: red C·A, blue R·O. */
 export function drawTitle(ctx: Ctx, x: number, y: number, size: number) {
-  ctx.font = `800 ${size}px ${FONT}`;
+  ctx.font = `800 ${size}px ${TITLE_FONT}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   const letters = ["C", "A", "R", "O"];
