@@ -84,13 +84,23 @@ sooner — Normal/Hard bot games finish in ~100–250 turns).
 
 ## UI
 
-Portrait 540×960 logical. Top: menu, clock (time limit), log. A strip with each
-player's token and cash (tap for their assets). The board (1200 board-px) under
-a camera that follows the moving token, or shows the whole board ("Cả bàn"),
-pinch / drag to look around, a mini-map to jump to the whole board. Below, one
-panel with the decision that matters now; sheets for assets (build / sell /
-mortgage / redeem), the trade builder and deed cards (tap a square). Events play
-back in order: dice tumble, token hops, then toasts and money floaters.
+Landscape, logical 960×540 (`bleed: true`; wide phones fill edge to edge, the
+ring is laid out on `stage.view`). The 40 squares run round the whole screen:
+corners in the corners, 9 squares along the top and bottom, 9 down each side
+(`ringLayout` in `art.ts`). Every square shows its name and price (icons for
+cards, tax, transport, utilities); its inner edge is a strip in the owner's
+colour with house pips (a wide red pip for a hotel); mortgaged squares are
+dimmed with a stroke. Tokens stand on the inner edge of their square, cluster
+when they share it, and hop along the ring. Tap a square for its deed card.
+
+Inside the ring is the dashboard: round buttons (menu, speed 1×/2× offline,
+log), the player on the move (token, name, cash), the dice, everyone's cash
+with ▶ on the current turn (bankrupt players struck through; tap one for
+their assets), the latest event line, and a dark panel with the one decision
+that matters now — or the latest event lines when there is nothing to decide.
+Sheets open for assets, the trade builder, the log, rules and deed cards.
+Events play back in order: dice tumble, token hops, then lines and money
+floaters.
 
 ## Art
 

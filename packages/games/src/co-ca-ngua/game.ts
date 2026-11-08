@@ -3,11 +3,10 @@ import "@fontsource/baloo-2/800.css";
 import { type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, clamp, inRect } from "@web-games/core";
 import type { SeatResult } from "@web-games/core/online";
 import {
-  BUTTON_H,
-  BUTTON_Y,
+  AVATARS,
+  AVATAR_R,
   type Button,
   CELL,
-  CHIPS,
   COLORS,
   DARK,
   DIE,
@@ -17,19 +16,28 @@ import {
   INK,
   INK_SOFT,
   LIGHT,
+  ROLL,
+  ROUND_R,
+  type RoundIcon,
   STATUS_Y,
+  TOP_Y,
   baseSlot,
+  drawAvatar,
   drawBackground,
   drawBoard,
   drawButton,
   drawDie,
   drawPanel,
   drawPointer,
+  drawRollButton,
+  drawRoundButton,
+  drawTag,
   drawTarget,
   drawTitle,
   drawToken,
   fitSize,
   homeSpot,
+  outlined,
   roundRect,
   text,
   toScreen,
@@ -51,6 +59,8 @@ import {
   W,
   WIN_SCORE,
 } from "./config";
+import avatarsUrl from "./img/avatars.webp";
+import propsUrl from "./img/props.webp";
 import tokensUrl from "./img/tokens.webp";
 import { type Anim, type Input, type Match, type MatchEvent, type Phase, clockLeft, createMatch, isAuto, isDoubles, stepMatch } from "./logic";
 import { roomMatch } from "./online";
@@ -117,8 +127,14 @@ export function setup(rt: Runtime): GameHooks {
   const { storage, audio, reportScore } = rt.game;
   const tr = () => STRINGS[rt.locale()];
   const online = rt.game.online ?? null;
-  const tokenImg = new Image();
-  tokenImg.src = tokensUrl;
+  const load = (src: string) => {
+    const img = new Image();
+    img.src = src;
+    return img;
+  };
+  const tokenImg = load(tokensUrl);
+  const propsImg = load(propsUrl);
+  const avatarImg = load(avatarsUrl);
 
   // ---------------------------------------------------------------- state
 
@@ -588,22 +604,17 @@ export function setup(rt: Runtime): GameHooks {
     act({ kind: "roll" });
   }
 
-  function buttons(): Button[] {
+  /** The round buttons along the top (no menu online: the portal has its own). */
+  function buttons(): { id: RoundIcon; label: string; x: number; y: number; rect: Rect }[] {
     const t = tr();
-    const list: Button[] = online
-      ? [{ id: "rules", rect: { x: 0, y: 0, w: 0, h: 0 }, label: t.rules, fill: "#8fd06a", edge: "#5c9d3c" }]
+    const list: { id: RoundIcon; label: string; x: number }[] = online
+      ? [{ id: "rules", label: t.rulesShort, x: W - 44 }]
       : [
-          { id: "menu", rect: { x: 0, y: 0, w: 0, h: 0 }, label: t.menu, fill: "#ffb43c", edge: "#d9851a" },
-          { id: "new", rect: { x: 0, y: 0, w: 0, h: 0 }, label: t.newGame, fill: "#5aa9f0", edge: "#2f78c4" },
-          { id: "rules", rect: { x: 0, y: 0, w: 0, h: 0 }, label: t.rules, fill: "#8fd06a", edge: "#5c9d3c" },
+          { id: "menu", label: t.menu, x: 44 },
+          { id: "new", label: t.newShort, x: W - 116 },
+          { id: "rules", label: t.rulesShort, x: W - 44 },
         ];
-    const gap = 14;
-    const w = online ? 200 : (W - 40 - gap * (list.length - 1)) / list.length;
-    const total = w * list.length + gap * (list.length - 1);
-    list.forEach((b, i) => {
-      b.rect = { x: (W - total) / 2 + i * (w + gap), y: BUTTON_Y, w, h: BUTTON_H };
-    });
-    return list;
+    return list.map((b) => ({ ...b, y: TOP_Y, rect: { x: b.x - 34, y: TOP_Y - 34, w: 68, h: 86 } }));
   }
 
   // Menu layout (shared by draw and tap)
@@ -752,7 +763,10 @@ export function setup(rt: Runtime): GameHooks {
     if (tapBoard(p)) return;
     // Tapping the active player's own card rolls too
     const mine = match.players[match.turn];
-    if (mine && canRoll() && inRect(p, CHIPS[vcOf(mine.corner)])) return roll();
+    if (mine && canRoll()) {
+      const a = AVATARS[vcOf(mine.corner)];
+      if (Math.hypot(p.x - a.x, p.y - a.y) < AVATAR_R + 14) return roll();
+    }
   }
 
   // ---------------------------------------------------------------- update
@@ -799,73 +813,59 @@ export function setup(rt: Runtime): GameHooks {
 
   // ---------------------------------------------------------------- render
 
-  function drawChips() {
+  /** Portrait index: people by their colour, the computer with its own faces. */
+  const faceOf = (pi: number) => {
+    const p = match.players[pi];
+    return p.seat === null ? 4 + p.corner : p.corner;
+  };
+
+  function drawPlayers() {
     const t = tr();
     const clock = clockLeft(match);
+    const pulse = (Math.sin(now * 5) + 1) / 2;
     match.players.forEach((p, pi) => {
-      const r = CHIPS[vcOf(p.corner)];
+      const vc = vcOf(p.corner);
+      const a = AVATARS[vc];
       const active = pi === match.turn && match.phase !== "over";
-      const lift = active ? 3 : 0;
-      const y = r.y - lift;
-      ctx.save();
-      ctx.shadowColor = active ? COLORS[p.corner] : "rgba(90,45,10,0.25)";
-      ctx.shadowBlur = active ? 18 : 8;
-      ctx.shadowOffsetY = active ? 0 : 3;
-      ctx.fillStyle = active ? "#ffffff" : "rgba(255,250,242,0.92)";
-      roundRect(ctx, { x: r.x, y, w: r.w, h: r.h }, 20);
-      ctx.fill();
-      ctx.restore();
-      if (active) {
-        ctx.strokeStyle = COLORS[p.corner];
-        ctx.lineWidth = 4;
-        roundRect(ctx, { x: r.x + 2, y: y + 2, w: r.w - 4, h: r.h - 4 }, 18);
-        ctx.stroke();
-      }
-      // Avatar: the horse in a coloured disc, with the turn clock around it
-      const ax = r.x + 44;
-      const ay = y + r.h / 2;
-      ctx.beginPath();
-      ctx.arc(ax, ay, 33, 0, Math.PI * 2);
-      ctx.fillStyle = LIGHT[p.corner];
-      ctx.fill();
-      if (active && clock !== null) {
-        const k = clock / match.turnSeconds;
-        ctx.beginPath();
-        ctx.arc(ax, ay, 33, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k);
-        ctx.strokeStyle = k < 0.3 ? "#e5453a" : COLORS[p.corner];
-        ctx.lineWidth = 5;
-        ctx.stroke();
-      }
-      drawToken(ctx, tokenImg, p.corner, ax, ay + 27, 1.35);
+      drawAvatar(ctx, avatarImg, faceOf(pi), p.corner, a.x, a.y, AVATAR_R, {
+        glow: active ? pulse : undefined,
+        clock: active && clock !== null ? clock / match.turnSeconds : null,
+        dim: p.away,
+      });
+      // Name, tag and horses home beside the portrait, toward the middle
+      const left = vc === 0 || vc === 1;
+      const tx = left ? a.x + AVATAR_R + 12 : a.x - AVATAR_R - 12;
+      const align = left ? "left" : "right";
+      // Bottom names stop short of the roll button
+      const maxW = vc === 0 ? ROLL.x - 14 - tx : vc === 3 ? tx - (ROLL.x + ROLL.w + 14) : 170;
       const name = nameOf(pi);
-      const tx = r.x + 84;
-      // Leave room for the medal or the clock in the corner
-      const tw = r.w - 92 - (p.place !== null || (active && clock !== null && clock <= 10) ? 40 : 0);
-      text(ctx, name, tx, y + 30, fitSize(ctx, name, 24, tw), INK, "left");
+      outlined(ctx, name, tx, a.y - 20, fitSize(ctx, name, 22, maxW), align);
       const sub = p.away ? t.away : subOf(pi);
-      text(ctx, sub, tx, y + 54, fitSize(ctx, sub, 17, tw, 600), p.away ? "#c0392b" : INK_SOFT, "left", 600);
-      // Horses home, as four pips
+      drawTag(ctx, sub, tx, a.y + 6, fitSize(ctx, sub, 14, maxW - 14), p.away ? "#c0392b" : p.seat === null ? "rgba(10,30,70,0.7)" : DARK[p.corner], align);
       const home = p.tokens.filter((x) => x >= HOME).length;
       for (let k = 0; k < TOKENS; k++) {
+        const cx = left ? tx + 8 + k * 18 : tx - 8 - k * 18;
         ctx.beginPath();
-        ctx.arc(tx + 8 + k * 20, y + 76, 7, 0, Math.PI * 2);
-        ctx.fillStyle = k < home ? COLORS[p.corner] : "rgba(74,44,23,0.14)";
+        ctx.arc(cx, a.y + 30, 6.5, 0, Math.PI * 2);
+        ctx.fillStyle = k < home ? COLORS[p.corner] : "rgba(5,20,50,0.45)";
         ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.8)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
-      if (active && clock !== null && clock <= 10)
-        text(ctx, String(Math.ceil(clock)), r.x + r.w - 24, y + 26, 24, clock <= 5 ? "#e5453a" : INK_SOFT);
+      if (active && clock !== null && clock <= 10) outlined(ctx, String(Math.ceil(clock)), a.x, a.y + AVATAR_R + 16, 18, "center", clock <= 5 ? "#ff8a80" : "#ffffff");
       if (p.place !== null) {
         // A medal with the place
-        const mx = r.x + r.w - 24;
-        const my = y + 24;
+        const mx = a.x + AVATAR_R * 0.72;
+        const my = a.y - AVATAR_R * 0.72;
         ctx.beginPath();
-        ctx.arc(mx, my, 19, 0, Math.PI * 2);
+        ctx.arc(mx, my, 15, 0, Math.PI * 2);
         ctx.fillStyle = p.place === 1 ? "#f6c22e" : p.place === 2 ? "#cfd6dd" : p.place === 3 ? "#e0a165" : "#e9dccb";
         ctx.fill();
-        ctx.strokeStyle = "rgba(74,44,23,0.25)";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
         ctx.stroke();
-        text(ctx, String(p.place), mx, my + 1, 22, INK);
+        text(ctx, String(p.place), mx, my + 1, 18, INK);
       }
     });
   }
@@ -873,33 +873,18 @@ export function setup(rt: Runtime): GameHooks {
   function drawDieArea() {
     const p = match.players[match.turn];
     const color = p ? p.corner : 0;
-    const x = DIE.x;
-    // Tray
-    ctx.save();
-    ctx.globalAlpha = match.phase === "over" ? 0.4 : 1;
-    ctx.beginPath();
-    ctx.ellipse(x, DIE.y + 6, 66, 46, 0, 0, Math.PI * 2);
-    ctx.fillStyle = LIGHT[color];
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = COLORS[color];
-    ctx.stroke();
     const waiting = canRoll() || (online && localTurn() && match.phase === "roll" && !!match.players[match.turn]?.idle);
-    if (waiting) {
-      const k = (Math.sin(now * 5) + 1) / 2;
-      ctx.beginPath();
-      ctx.ellipse(x, DIE.y + 6, 67 + k * 4, 48 + k * 4, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255,255,255,${0.5 + 0.5 * k})`;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
+    const k = (Math.sin(now * 5) + 1) / 2;
+    ctx.save();
+    ctx.globalAlpha = match.phase === "over" ? 0.5 : 1;
+    const lift = drawRollButton(ctx, ROLL, color, waiting ? k : 0, match.phase === "rolling");
     const rolling = match.phase === "rolling" && match.t < ROLL_TIME;
     const choosing = canMove();
     const spending = match.phase === "move" || match.phase === "moving";
     const pop = now - landedAt;
     for (let i = 0; i < 2; i++) {
-      const dx = x + (i === 0 ? -DIE.gap : DIE.gap);
-      let y = DIE.y;
+      const dx = DIE.x + (i === 0 ? -DIE.gap : DIE.gap);
+      let y = DIE.y - lift;
       let value = match.dice[i] || 6;
       let spin = 0;
       let scale = 1;
@@ -907,27 +892,27 @@ export function setup(rt: Runtime): GameHooks {
         const e = match.t / ROLL_TIME;
         value = 1 + ((Math.floor(match.t / 0.07) * 7 + 3 + i * 4) % 6);
         spin = (i === 0 ? 1 : -1) * ((1 - e) * (1 - e) * 9 + Math.sin(match.t * 30 + i) * 0.08);
-        y -= Math.abs(Math.sin(e * Math.PI * (2.5 + i * 0.5))) * 30 * (1 - e);
+        y -= Math.abs(Math.sin(e * Math.PI * (2.5 + i * 0.5))) * 22 * (1 - e);
       } else if (waiting) {
-        y -= Math.abs(Math.sin(now * 3 + i * 0.8)) * 6;
+        y -= Math.abs(Math.sin(now * 3 + i * 0.8)) * 4;
       }
       if (pop >= 0 && pop < 0.25) scale = 1 + 0.18 * Math.sin((pop / 0.25) * Math.PI);
       const spent = spending && match.used[i];
       const selected = choosing && picked() === i;
       // A die you can't play this time (it'll be lost) is greyed too
       const dead = choosing && !spent && !tokensFor(i).length;
-      if (selected) y -= 6;
+      if (selected) y -= 5;
       ctx.save();
-      ctx.globalAlpha *= spent ? 0.32 : dead ? 0.55 : 1;
-      ctx.fillStyle = "rgba(60,30,10,0.25)";
+      ctx.globalAlpha *= spent ? 0.35 : dead ? 0.55 : 1;
+      ctx.fillStyle = "rgba(40,15,0,0.3)";
       ctx.beginPath();
-      ctx.ellipse(dx, DIE.y + 26, 23, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(dx, DIE.y - lift + 24, 20, 5, 0, 0, Math.PI * 2);
       ctx.fill();
       if (selected) {
-        ctx.strokeStyle = COLORS[color];
+        ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 4;
-        roundRect(ctx, { x: dx - 29, y: y - 32, w: 58, h: 58 }, 14);
-        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        roundRect(ctx, { x: dx - 26, y: y - 29, w: 52, h: 52 }, 12);
+        ctx.fillStyle = "rgba(255,255,255,0.28)";
         ctx.fill();
         ctx.stroke();
       }
@@ -935,16 +920,7 @@ export function setup(rt: Runtime): GameHooks {
       ctx.restore();
     }
     ctx.restore();
-    if (waiting) {
-      // "Roll" on a little tag under the tray
-      const label = tr().roll;
-      ctx.font = `800 17px ${FONT}`;
-      const w = ctx.measureText(label).width + 22;
-      ctx.fillStyle = COLORS[color];
-      roundRect(ctx, { x: x - w / 2, y: DIE.y + 46, w, h: 24 }, 12);
-      ctx.fill();
-      text(ctx, label, x, DIE.y + 59, 17, "#ffffff");
-    }
+    if (waiting) drawTag(ctx, tr().roll, DIE.x, ROLL.y + ROLL.h + 4, 16, DARK[color]);
   }
 
   function drawTokens() {
@@ -967,7 +943,8 @@ export function setup(rt: Runtime): GameHooks {
       const p = match.players[d.pi];
       const glow = picking && d.pi === match.turn && tokensFor(picked()).includes(d.t);
       drawToken(ctx, tokenImg, p.corner, d.x, d.y, d.scale, {
-        lift: d.lift + (glow ? 3 + pulse * 5 : 0),
+        // A little hop on the spot for the horses you can move
+        lift: d.lift + (glow ? 2 + Math.abs(Math.sin(now * 5 + d.t)) * 9 : 0),
         glow: glow ? 0.15 + 0.85 * pulse : 0,
         alpha: d.alpha,
       });
@@ -996,23 +973,23 @@ export function setup(rt: Runtime): GameHooks {
   function statusLine(): { str: string; color: string } {
     const t = tr();
     const p = match.players[match.turn];
-    if (match.phase === "over" || !p) return { str: "", color: INK_SOFT };
-    if (online && me < 0) return { str: t.watching, color: INK_SOFT };
-    if (online && p.seat === me && p.idle) return { str: t.idle, color: "#c0392b" };
+    if (match.phase === "over" || !p) return { str: "", color: "#ffffff" };
+    if (online && me < 0) return { str: t.watching, color: "#ffffff" };
+    if (online && p.seat === me && p.idle) return { str: t.idle, color: "#ffb3ad" };
     const name = nameOf(match.turn);
     if (localTurn()) {
       const hot = !online && played.people > 1;
-      if (match.phase === "roll") return { str: hot ? `${t.turnOf(name)} · ${t.roll}!` : t.yourRoll, color: DARK[p.corner] };
+      if (match.phase === "roll") return { str: hot ? `${t.turnOf(name)} · ${t.roll}!` : t.yourRoll, color: LIGHT[p.corner] };
       if (match.phase === "move") {
         // Two dice still to choose between, or just the one
         const both = tokensFor(0).length > 0 && tokensFor(1).length > 0 && match.dice[0] !== match.dice[1];
         const str = both ? t.pickDie : t.pickHorse(match.dice[picked()]);
-        return { str: hot ? `${name} · ${str}` : str, color: DARK[p.corner] };
+        return { str: hot ? `${name} · ${str}` : str, color: LIGHT[p.corner] };
       }
       // Your die is tumbling or your horse is hopping: the board says it all
-      if (!hot) return { str: "", color: INK_SOFT };
+      if (!hot) return { str: "", color: "#ffffff" };
     }
-    return { str: t.turnOf(name), color: INK_SOFT };
+    return { str: t.turnOf(name), color: "#ffffff" };
   }
 
   function drawStatus() {
@@ -1037,12 +1014,12 @@ export function setup(rt: Runtime): GameHooks {
       return;
     }
     const s = statusLine();
-    if (s.str) text(ctx, s.str, W / 2, STATUS_Y, fitSize(ctx, s.str, 23, W - 30), s.color);
+    if (s.str) outlined(ctx, s.str, W / 2, STATUS_Y, fitSize(ctx, s.str, 22, W - 30), "center", s.color);
   }
 
   function dim() {
     const v = stage.view;
-    ctx.fillStyle = "rgba(70,35,10,0.42)";
+    ctx.fillStyle = "rgba(8,22,52,0.6)";
     ctx.fillRect(v.x, v.y, v.w, v.h);
   }
 
@@ -1143,16 +1120,14 @@ export function setup(rt: Runtime): GameHooks {
       const corner = (vc + rot) % 4;
       return match.players.some((p) => p.corner === corner) ? corner : null;
     });
-    drawBoard(ctx, colorOf);
+    drawBoard(ctx, colorOf, rot, propsImg);
     drawTokens();
     drawParticles();
-    drawChips();
+    drawPlayers();
     drawDieArea();
+    for (const b of buttons()) drawRoundButton(ctx, b.id, b.label, b.x, b.y, ROUND_R);
     if (showResult()) drawResult();
-    else {
-      drawStatus();
-      for (const b of buttons()) drawButton(ctx, b);
-    }
+    else drawStatus();
     if (overlay === "menu") drawMenu();
     else if (overlay === "rules") drawRules();
     stage.end();

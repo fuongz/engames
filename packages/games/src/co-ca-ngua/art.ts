@@ -2,9 +2,13 @@ import type { Rect } from "@web-games/core";
 import { TRACK, homeColumn } from "./board";
 import { GRID, STARS, W } from "./config";
 
-// Drawing for Cờ Cá Ngựa: a sunny toy-box look to match the key art — a
-// lacquered wooden board, glossy horse tokens (img/tokens.webp, from the
-// Codex sprite sheet), a chunky 3D-ish die, and candy-coloured buttons.
+// Drawing for Cờ Cá Ngựa: a raised board tray on a deep-blue doodle
+// backdrop; each colour's corner is a little Vietnamese scene (Hội An, the
+// countryside, a pagoda, the bay) built from Codex prop sprites
+// (img/props.webp) around a clean stable inset; round portrait avatars
+// (img/avatars.webp); glossy horse tokens (img/tokens.webp); two chunky dice in
+// a glossy roll button. The track itself is drawn here so it lines up with
+// board.ts exactly.
 
 type Ctx = CanvasRenderingContext2D;
 /** All text: Baloo 2 (full Vietnamese); weights 600 and 800 are loaded in game.ts. */
@@ -18,35 +22,34 @@ export const PANEL = "#fffaf2";
 export const COLORS = ["#e5453a", "#3daa4a", "#f2b31b", "#2f7fe0"];
 export const DARK = ["#a8261d", "#23782f", "#b77d06", "#1d55a6"];
 export const LIGHT = ["#ffd3cc", "#cdeecb", "#ffeaa8", "#cfe2ff"];
-const UNUSED = "#d9cdbb";
-const UNUSED_DARK = "#b3a58f";
+const UNUSED = "#c9c9d6";
+const UNUSED_DARK = "#9b9cb0";
 
 // ---------------------------------------------------------------- layout
 
-export const BOARD: Rect = { x: 10, y: 142, w: W - 20, h: W - 20 };
+export const BOARD: Rect = { x: 16, y: 240, w: W - 32, h: W - 32 };
 export const CELL = BOARD.w / GRID;
-export const CHIP_W = 188;
-export const CHIP_H = 94;
-export const TOP_CHIP_Y = 32;
-export const BOTTOM_CHIP_Y = BOARD.y + BOARD.h + 16;
-/** Where each view corner's player card sits: 0 bottom-left, then clockwise. */
-export const CHIPS: Rect[] = [
-  { x: 12, y: BOTTOM_CHIP_Y, w: CHIP_W, h: CHIP_H },
-  { x: 12, y: TOP_CHIP_Y, w: CHIP_W, h: CHIP_H },
-  { x: W - 12 - CHIP_W, y: TOP_CHIP_Y, w: CHIP_W, h: CHIP_H },
-  { x: W - 12 - CHIP_W, y: BOTTOM_CHIP_Y, w: CHIP_W, h: CHIP_H },
+/** Round buttons along the top: menu on the left, rules and new game on the right. */
+export const TOP_Y = 44;
+export const ROUND_R = 25;
+/** Avatar portraits by view corner (0 bottom-left, then clockwise). */
+export const AVATAR_R = 36;
+export const AVATARS = [
+  { x: 50, y: 836 },
+  { x: 50, y: 152 },
+  { x: W - 50, y: 152 },
+  { x: W - 50, y: 836 },
 ];
-/** The two dice sit side by side between the two bottom cards. */
-export const DIE = { x: W / 2, y: BOTTOM_CHIP_Y + CHIP_H / 2 + 2, size: 40, gap: 31 };
-export const DIE_HIT: Rect = { x: W / 2 - 70, y: BOTTOM_CHIP_Y - 10, w: 140, h: CHIP_H + 24 };
+/** The glossy roll button between the bottom avatars; it holds the two dice. */
+export const ROLL: Rect = { x: W / 2 - 62, y: 778, w: 124, h: 108 };
+export const DIE = { x: W / 2, y: ROLL.y + 52, size: 35, gap: 26 };
+export const DIE_HIT: Rect = { x: ROLL.x - 6, y: ROLL.y - 6, w: ROLL.w + 12, h: ROLL.h + 12 };
 /** Tap areas for die 0 (left) and die 1 (right). */
 export const DIE_HITS: Rect[] = [
   { x: DIE_HIT.x, y: DIE_HIT.y, w: DIE_HIT.w / 2, h: DIE_HIT.h },
   { x: DIE_HIT.x + DIE_HIT.w / 2, y: DIE_HIT.y, w: DIE_HIT.w / 2, h: DIE_HIT.h },
 ];
-export const STATUS_Y = BOTTOM_CHIP_Y + CHIP_H + 50;
-export const BUTTON_Y = STATUS_Y + 28;
-export const BUTTON_H = 64;
+export const STATUS_Y = 924;
 
 // ---------------------------------------------------------------- text
 
@@ -102,42 +105,193 @@ export const toScreen = (x: number, y: number) => ({ x: BOARD.x + x * CELL, y: B
 
 /** Centre of a base's slot `t`, for a base in view corner `vc`, in squares. */
 export function baseSlot(vc: number, t: number) {
-  const dx = t % 2 === 0 ? -1.15 : 1.15;
-  const dy = t < 2 ? -1.15 : 1.15;
-  return rotatePoint(3 + dx, 12 + dy, vc);
+  const dx = t % 2 === 0 ? -0.95 : 0.95;
+  const dy = t < 2 ? -0.95 : 0.95;
+  return rotatePoint(STABLE.x + STABLE.size / 2 + dx, STABLE.y + STABLE.size / 2 + dy, vc);
 }
+
+/** The stable inset of the bottom-left corner, in squares, tucked toward the cross; the scene wraps round it. */
+const STABLE = { x: 1.85, y: 9.45, size: 3.7 };
 
 /** Where finished token `t` stands in the middle triangle of view corner `vc`, in squares. */
 export const homeSpot = (vc: number, t: number) => rotatePoint(6.95 + t * 0.37, 8.45, vc);
 
 // ---------------------------------------------------------------- background
 
-/** A warm sunny backdrop with soft out-of-focus blobs, like the key art. */
+/** Faint line doodles (conical hat, lantern, lotus, boat, star), tiled once into a pattern. */
+let doodles: CanvasPattern | null = null;
+function doodlePattern(ctx: Ctx) {
+  if (doodles) return doodles;
+  const S = 2;
+  const c = document.createElement("canvas");
+  c.width = 220 * S;
+  c.height = 220 * S;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.scale(S, S);
+  g.strokeStyle = "rgba(255,255,255,0.075)";
+  g.lineWidth = 2.2;
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  const hat = (x: number, y: number) => {
+    g.beginPath();
+    g.moveTo(x - 22, y + 10);
+    g.lineTo(x, y - 14);
+    g.lineTo(x + 22, y + 10);
+    g.quadraticCurveTo(x, y + 18, x - 22, y + 10);
+    g.moveTo(x - 10, y - 1);
+    g.lineTo(x + 10, y - 1);
+    g.stroke();
+  };
+  const lantern = (x: number, y: number) => {
+    g.beginPath();
+    g.moveTo(x, y - 24);
+    g.lineTo(x, y - 14);
+    g.ellipse(x, y, 11, 14, 0, -Math.PI / 2, Math.PI * 1.5);
+    g.moveTo(x - 6, y - 12);
+    g.quadraticCurveTo(x - 9, y, x - 6, y + 12);
+    g.moveTo(x + 6, y - 12);
+    g.quadraticCurveTo(x + 9, y, x + 6, y + 12);
+    g.moveTo(x, y + 14);
+    g.lineTo(x, y + 22);
+    g.stroke();
+  };
+  const lotus = (x: number, y: number) => {
+    g.beginPath();
+    for (const a of [-0.9, -0.45, 0, 0.45, 0.9]) {
+      g.moveTo(x, y + 8);
+      g.quadraticCurveTo(x + Math.sin(a) * 26, y - 6 - Math.cos(a) * 8, x + Math.sin(a) * 6, y - 16 * Math.cos(a));
+    }
+    g.moveTo(x - 18, y + 10);
+    g.lineTo(x + 18, y + 10);
+    g.stroke();
+  };
+  const boat = (x: number, y: number) => {
+    g.beginPath();
+    g.moveTo(x - 24, y);
+    g.quadraticCurveTo(x, y + 14, x + 24, y);
+    g.lineTo(x - 24, y);
+    g.moveTo(x - 4, y);
+    g.lineTo(x - 4, y - 26);
+    g.lineTo(x + 14, y - 6);
+    g.lineTo(x - 4, y - 6);
+    g.moveTo(x - 30, y + 14);
+    g.quadraticCurveTo(x - 20, y + 9, x - 10, y + 14);
+    g.moveTo(x + 10, y + 14);
+    g.quadraticCurveTo(x + 20, y + 9, x + 30, y + 14);
+    g.stroke();
+  };
+  const star = (x: number, y: number) => {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 === 0 ? 11 : 4.5;
+      g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.stroke();
+  };
+  hat(40, 40);
+  lantern(150, 50);
+  lotus(95, 120);
+  boat(180, 150);
+  star(30, 170);
+  star(200, 92);
+  lantern(60, 200);
+  hat(150, 215);
+  doodles = ctx.createPattern(c, "repeat");
+  doodles?.setTransform(new DOMMatrix().scale(1 / S));
+  return doodles;
+}
+
+/** Deep blue with a faint doodle pattern, filling the whole visible area. */
 export function drawBackground(ctx: Ctx, view: Rect) {
-  const g = ctx.createLinearGradient(0, view.y, 0, view.y + view.h);
-  g.addColorStop(0, "#ffe6c2");
-  g.addColorStop(0.55, "#ffd7a6");
-  g.addColorStop(1, "#f6bf86");
+  const g = ctx.createRadialGradient(W / 2, 480, 60, W / 2, 480, 760);
+  g.addColorStop(0, "#2a66b0");
+  g.addColorStop(1, "#163f7c");
   ctx.fillStyle = g;
   ctx.fillRect(view.x, view.y, view.w, view.h);
-  ctx.save();
-  for (const [x, y, r, a] of [
-    [40, 90, 70, 0.22],
-    [500, 70, 90, 0.18],
-    [470, 900, 110, 0.16],
-    [70, 880, 80, 0.2],
-    [280, -20, 60, 0.15],
-  ]) {
-    const b = ctx.createRadialGradient(x, y, 0, x, y, r);
-    b.addColorStop(0, `rgba(255,255,240,${a})`);
-    b.addColorStop(1, "rgba(255,255,240,0)");
-    ctx.fillStyle = b;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  const p = doodlePattern(ctx);
+  if (p) {
+    ctx.fillStyle = p;
+    ctx.fillRect(view.x, view.y, view.w, view.h);
   }
-  ctx.restore();
 }
 
 // ---------------------------------------------------------------- board
+
+/** Prop sprites: img/props.webp, cells of PROP px, PROP_COLS across; each prop stands on its cell's bottom centre. */
+export const PROP = 150;
+const PROP_COLS = 6;
+export const P = {
+  shophouse: 0,
+  junk: 1,
+  pagoda: 2,
+  terraces: 3,
+  lotus: 4,
+  bridge: 5,
+  stall: 6,
+  cyclo: 7,
+  gate: 8,
+  palm: 9,
+  bamboo: 10,
+  banana: 11,
+  lanterns: 12,
+  cart: 13,
+  buffalo: 14,
+  pot: 15,
+  baskets: 16,
+  stoneLantern: 17,
+} as const;
+
+/** Each colour's corner scene, by board corner: the floor, and the sprites for the four prop slots (big corner piece first). */
+const SCENES: { floor: string; tile: string; props: number[] }[] = [
+  // Red: Hội An old town
+  { floor: "#f6d9c2", tile: "rgba(190,110,70,0.16)", props: [P.shophouse, P.lanterns, P.stall, P.pot, P.baskets] },
+  // Green: rice terraces in the hills
+  { floor: "#d6ebb0", tile: "rgba(90,140,50,0.16)", props: [P.terraces, P.bamboo, P.buffalo, P.banana, P.bridge] },
+  // Yellow: a pagoda by the lotus pond
+  { floor: "#f1e3bf", tile: "rgba(170,130,50,0.16)", props: [P.pagoda, P.stoneLantern, P.lotus, P.gate, P.banana] },
+  // Blue: the bay
+  { floor: "#d3eef0", tile: "rgba(40,140,170,0.16)", props: [P.junk, P.palm, P.cyclo, P.cart, P.pot] },
+];
+
+/**
+ * Where the five props stand in each view corner (foot point and width, in
+ * squares): the big piece in the outer corner, then along the two outer
+ * strips the stable leaves free. Sprites stay upright, so these are per corner
+ * rather than rotated.
+ */
+const SLOTS: [number, number, number][][] = [
+  [
+    [1.15, 14.85, 2.6],
+    [0.92, 12.55, 1.45],
+    [3.8, 14.9, 1.9],
+    [5.45, 14.9, 1.1],
+    [0.92, 10.8, 1.35],
+  ],
+  [
+    [1.15, 1.95, 2.6],
+    [0.92, 4.65, 1.45],
+    [3.8, 1.75, 1.8],
+    [0.92, 6.0, 1.05],
+    [5.45, 1.75, 1.2],
+  ],
+  [
+    [13.85, 1.95, 2.6],
+    [14.08, 4.65, 1.45],
+    [11.2, 1.75, 1.8],
+    [14.08, 6.0, 1.05],
+    [9.55, 1.75, 1.2],
+  ],
+  [
+    [13.85, 14.85, 2.6],
+    [14.08, 12.55, 1.45],
+    [11.2, 14.9, 1.9],
+    [9.55, 14.9, 1.1],
+    [14.08, 10.8, 1.35],
+  ],
+];
 
 function star(ctx: Ctx, x: number, y: number, r: number) {
   ctx.beginPath();
@@ -149,11 +303,32 @@ function star(ctx: Ctx, x: number, y: number, r: number) {
   ctx.closePath();
 }
 
+/** A little shield (start squares are safe). */
+function shield(ctx: Ctx, x: number, y: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x + r * 0.55, y - r * 0.7, x + r * 0.85, y - r * 0.72);
+  ctx.quadraticCurveTo(x + r * 0.9, y + r * 0.45, x, y + r);
+  ctx.quadraticCurveTo(x - r * 0.9, y + r * 0.45, x - r * 0.85, y - r * 0.72);
+  ctx.quadraticCurveTo(x - r * 0.55, y - r * 0.7, x, y - r);
+  ctx.closePath();
+}
+
+/** A rectangle in squares (bottom-left-corner coordinates) turned to view corner `vc`, in screen px. */
+function cornerRect(x: number, y: number, w: number, h: number, vc: number): Rect {
+  const a = rotatePoint(x, y, vc);
+  const b = rotatePoint(x + w, y + h, vc);
+  const p = toScreen(Math.min(a.x, b.x), Math.min(a.y, b.y));
+  const q = toScreen(Math.max(a.x, b.x), Math.max(a.y, b.y));
+  return { x: p.x, y: p.y, w: q.x - p.x, h: q.y - p.y };
+}
+
 /**
  * The board as seen from view rotation: `colorOf[vc]` is the colour index in
- * view corner vc, or null for a corner nobody plays at this table.
+ * view corner vc, or null for a corner nobody plays at this table (its scene
+ * still shows, its stable greyed). `props` is the prop atlas, if loaded.
  */
-export function drawBoard(ctx: Ctx, colorOf: (number | null)[]) {
+export function drawBoard(ctx: Ctx, colorOf: (number | null)[], rot: number, props: HTMLImageElement | null) {
   const { x, y, w, h } = BOARD;
   const fill = (vc: number) => {
     const c = colorOf[vc];
@@ -163,96 +338,114 @@ export function drawBoard(ctx: Ctx, colorOf: (number | null)[]) {
     const c = colorOf[vc];
     return c === null || c === undefined ? UNUSED_DARK : DARK[c];
   };
-  // Wooden frame
+  // The raised tray: a pale rim over a darker edge, with a soft shadow
   ctx.save();
-  ctx.shadowColor = "rgba(110,60,20,0.35)";
-  ctx.shadowBlur = 18;
-  ctx.shadowOffsetY = 8;
-  const wood = ctx.createLinearGradient(x, y, x + w, y + h);
-  wood.addColorStop(0, "#e2a666");
-  wood.addColorStop(1, "#b9773c");
-  ctx.fillStyle = wood;
-  roundRect(ctx, { x: x - 6, y: y - 6, w: w + 12, h: h + 12 }, 22);
+  ctx.shadowColor = "rgba(5,20,50,0.5)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 10;
+  ctx.fillStyle = "#8e98cf";
+  roundRect(ctx, { x: x - 10, y: y - 8, w: w + 20, h: h + 22 }, 26);
   ctx.fill();
   ctx.restore();
-  ctx.fillStyle = "#f7ead3";
-  roundRect(ctx, { x: x + 2, y: y + 2, w: w - 4, h: h - 4 }, 16);
+  const rim = ctx.createLinearGradient(0, y - 10, 0, y + h + 10);
+  rim.addColorStop(0, "#eef0fb");
+  rim.addColorStop(1, "#c9cfee");
+  ctx.fillStyle = rim;
+  roundRect(ctx, { x: x - 10, y: y - 10, w: w + 20, h: h + 18 }, 26);
+  ctx.fill();
+  ctx.fillStyle = "#b8bfe3";
+  roundRect(ctx, { x: x - 2, y: y - 2, w: w + 4, h: h + 4 }, 18);
   ctx.fill();
 
-  // Path squares
-  const square = (cx: number, cy: number, color: string) => {
-    ctx.fillStyle = color;
-    roundRect(ctx, { x: x + cx * CELL + 1.5, y: y + cy * CELL + 1.5, w: CELL - 3, h: CELL - 3 }, 5);
-    ctx.fill();
-  };
-  for (const [cx, cy] of TRACK) square(cx, cy, CREAM);
+  // Corner scenes: floor, then the stable inset
   for (let vc = 0; vc < 4; vc++) {
-    for (const [cx, cy] of homeColumn(vc)) square(cx, cy, fill(vc));
-    const [sx, sy] = TRACK[vc * 13];
-    square(sx, sy, fill(vc));
-    // An arrow on the start square, pointing the way round
-    const next = TRACK[vc * 13 + 1];
-    const c = { x: x + (sx + 0.5) * CELL, y: y + (sy + 0.5) * CELL };
-    const a = Math.atan2(next[1] - sy, next[0] - sx);
+    const scene = SCENES[(vc + rot) % 4];
+    const floor = cornerRect(0.06, 9.06, 5.88, 5.88, vc);
+    ctx.fillStyle = scene.floor;
+    roundRect(ctx, floor, 14);
+    ctx.fill();
+    // Paving
     ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.rotate(a);
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.beginPath();
-    ctx.moveTo(CELL * 0.28, 0);
-    ctx.lineTo(-CELL * 0.16, -CELL * 0.22);
-    ctx.lineTo(-CELL * 0.16, CELL * 0.22);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-  // Safe stars
-  for (const i of STARS) {
-    const [cx, cy] = TRACK[i];
-    const c = { x: x + (cx + 0.5) * CELL, y: y + (cy + 0.5) * CELL };
-    star(ctx, c.x, c.y, CELL * 0.36);
-    ctx.fillStyle = "#f6c94a";
-    ctx.fill();
-    ctx.strokeStyle = "#c58f12";
+    roundRect(ctx, floor, 14);
+    ctx.clip();
+    ctx.strokeStyle = scene.tile;
     ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let k = 1; k < 6; k++) {
+      ctx.moveTo(floor.x + k * CELL, floor.y);
+      ctx.lineTo(floor.x + k * CELL, floor.y + floor.h);
+      ctx.moveTo(floor.x, floor.y + k * CELL);
+      ctx.lineTo(floor.x + floor.w, floor.y + k * CELL);
+    }
     ctx.stroke();
-  }
-
-  // Bases: a coloured tray with a cream inset and four round sockets
-  for (let vc = 0; vc < 4; vc++) {
-    const o = rotatePoint(0.5, 9.5, vc);
-    const p = rotatePoint(5.5, 14.5, vc);
-    const r: Rect = {
-      x: x + Math.min(o.x, p.x) * CELL - CELL * 0.5 + 3,
-      y: y + Math.min(o.y, p.y) * CELL - CELL * 0.5 + 3,
-      w: CELL * 6 - 6,
-      h: CELL * 6 - 6,
-    };
-    const g = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+    ctx.restore();
+    const inset = cornerRect(STABLE.x, STABLE.y, STABLE.size, STABLE.size, vc);
+    ctx.fillStyle = "rgba(60,40,20,0.18)";
+    roundRect(ctx, { x: inset.x - 4, y: inset.y - 2, w: inset.w + 8, h: inset.h + 9 }, 16);
+    ctx.fill();
+    ctx.fillStyle = "#fff6e4";
+    roundRect(ctx, { x: inset.x - 5, y: inset.y - 5, w: inset.w + 10, h: inset.h + 10 }, 16);
+    ctx.fill();
+    const g = ctx.createLinearGradient(0, inset.y, 0, inset.y + inset.h);
     g.addColorStop(0, fill(vc));
     g.addColorStop(1, dark(vc));
     ctx.fillStyle = g;
-    roundRect(ctx, r, 18);
+    roundRect(ctx, inset, 12);
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    roundRect(ctx, { x: r.x + 6, y: r.y + 5, w: r.w - 12, h: r.h * 0.35 }, 14);
-    ctx.fill();
-    const inset: Rect = { x: r.x + CELL * 0.75, y: r.y + CELL * 0.75, w: r.w - CELL * 1.5, h: r.h - CELL * 1.5 };
-    ctx.fillStyle = "rgba(255,250,240,0.92)";
-    roundRect(ctx, inset, 14);
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    roundRect(ctx, { x: inset.x + 5, y: inset.y + 4, w: inset.w - 10, h: inset.h * 0.32 }, 9);
     ctx.fill();
     for (let t = 0; t < 4; t++) {
       const s = baseSlot(vc, t);
       const c = toScreen(s.x, s.y);
       ctx.beginPath();
-      ctx.arc(c.x, c.y, CELL * 0.62, 0, Math.PI * 2);
-      ctx.fillStyle = fill(vc);
+      ctx.arc(c.x, c.y, CELL * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(c.x, c.y + 2, CELL * 0.5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0,0,0,0.16)";
-      ctx.fill();
+      ctx.arc(c.x, c.y + 2, CELL * 0.6, 0, Math.PI);
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
+  }
+
+  // Path squares
+  const square = (cx: number, cy: number, color: string, shade = "rgba(80,90,150,0.22)") => {
+    const r = { x: x + cx * CELL + 1.5, y: y + cy * CELL + 1.5, w: CELL - 3, h: CELL - 3 };
+    ctx.fillStyle = shade;
+    roundRect(ctx, { x: r.x, y: r.y + 2, w: r.w, h: r.h }, 6);
+    ctx.fill();
+    ctx.fillStyle = color;
+    roundRect(ctx, r, 6);
+    ctx.fill();
+  };
+  const centre = (cx: number, cy: number) => ({ x: x + (cx + 0.5) * CELL, y: y + (cy + 0.5) * CELL });
+  for (const [cx, cy] of TRACK) square(cx, cy, CREAM);
+  for (let vc = 0; vc < 4; vc++) {
+    for (const [cx, cy] of homeColumn(vc)) square(cx, cy, fill(vc), "rgba(0,0,0,0.18)");
+    // The start square: the colour, with a shield (safe)
+    const [sx, sy] = TRACK[vc * 13];
+    square(sx, sy, fill(vc), "rgba(0,0,0,0.18)");
+    const c = centre(sx, sy);
+    shield(ctx, c.x, c.y, CELL * 0.3);
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.fill();
+    ctx.strokeStyle = dark(vc);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  // Safe stars: a pale grey square with a gold star
+  for (const i of STARS) {
+    const [cx, cy] = TRACK[i];
+    square(cx, cy, "#e4e7f4");
+    const c = centre(cx, cy);
+    star(ctx, c.x, c.y, CELL * 0.34);
+    ctx.fillStyle = "#f7c53d";
+    ctx.fill();
+    ctx.strokeStyle = "#b9850c";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   }
 
   // The middle: four triangles, one per colour, pointing in
@@ -267,11 +460,30 @@ export function drawBoard(ctx: Ctx, colorOf: (number | null)[]) {
     ctx.lineTo(pb.x, pb.y);
     ctx.lineTo(mid.x, mid.y);
     ctx.closePath();
-    ctx.fillStyle = fill(vc);
+    const tg = ctx.createLinearGradient(pa.x, pa.y, mid.x, mid.y);
+    tg.addColorStop(0, fill(vc));
+    tg.addColorStop(1, dark(vc));
+    ctx.fillStyle = tg;
     ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
     ctx.lineWidth = 2;
     ctx.stroke();
+  }
+
+  // Props last, back to front, so tall ones overlap the rim like toys on a tray
+  if (props?.complete && props.naturalWidth) {
+    const list: { i: number; x: number; y: number; w: number }[] = [];
+    for (let vc = 0; vc < 4; vc++)
+      SCENES[(vc + rot) % 4].props.forEach((i, k) => {
+        const [px, py, pw] = SLOTS[vc][k];
+        list.push({ i, x: px, y: py, w: pw });
+      });
+    list.sort((a, b) => a.y - b.y);
+    for (const p of list) {
+      const s = toScreen(p.x, p.y);
+      const pw = p.w * CELL;
+      ctx.drawImage(props, (p.i % PROP_COLS) * PROP, Math.floor(p.i / PROP_COLS) * PROP, PROP, PROP, s.x - pw / 2, s.y - pw, pw, pw);
+    }
   }
 }
 
@@ -335,11 +547,20 @@ export function drawToken(
   const lift = opts.lift ?? 0;
   ctx.save();
   ctx.globalAlpha = opts.alpha ?? 1;
-  // Shadow shrinks as it hops
-  ctx.fillStyle = "rgba(60,30,10,0.28)";
+  // A soft drop shadow that shrinks and fades as it hops
+  const k = 1 - Math.min(0.45, lift / 50);
+  const sh = ctx.createRadialGradient(x, y - 1, 0, x, y - 1, w * 0.46 * k);
+  sh.addColorStop(0, `rgba(20,20,50,${0.45 * k})`);
+  sh.addColorStop(1, "rgba(20,20,50,0)");
+  ctx.fillStyle = sh;
+  ctx.save();
+  ctx.translate(x, y - 1);
+  ctx.scale(1, 0.38);
+  ctx.translate(-x, -(y - 1));
   ctx.beginPath();
-  ctx.ellipse(x, y - 1, w * 0.36 * (1 - Math.min(0.4, lift / 60)), w * 0.13, 0, 0, Math.PI * 2);
+  ctx.arc(x, y - 1, w * 0.46 * k, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
   if (opts.glow !== undefined && opts.glow > 0) {
     // A bright halo under a token you can move
     const g = ctx.createRadialGradient(x, y - 2, 2, x, y - 2, w * 0.75);
@@ -575,3 +796,183 @@ export function drawTitle(ctx: Ctx, str: string, x: number, y: number, size: num
     cx += widths[i] + gap;
   });
 }
+
+// ---------------------------------------------------------------- players & buttons
+
+/** Portraits: img/avatars.webp, 8 cells of 128 px — the people by colour (0–3), then the computer's faces (4–7). */
+export const AVATAR_PX = 128;
+
+/**
+ * A round portrait in its colour's ring. `glow` (0..1) pulses the ring for
+ * the player whose turn it is; `clock` (0..1) runs an arc round it online.
+ */
+export function drawAvatar(
+  ctx: Ctx,
+  img: HTMLImageElement | null,
+  face: number,
+  color: number,
+  x: number,
+  y: number,
+  r: number,
+  opts: { glow?: number; clock?: number | null; dim?: boolean } = {},
+) {
+  ctx.save();
+  if (opts.glow !== undefined) {
+    ctx.shadowColor = COLORS[color];
+    ctx.shadowBlur = 16 + 14 * opts.glow;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 7 + opts.glow * 3, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.4 * opts.glow})`;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  // Ring: white rim, then the colour
+  ctx.beginPath();
+  ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+  ctx.fillStyle = COLORS[color];
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r - 1, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = LIGHT[color];
+  ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  if (img?.complete && img.naturalWidth) ctx.drawImage(img, face * AVATAR_PX, 0, AVATAR_PX, AVATAR_PX, x - r - 2, y - r - 2, r * 2 + 4, r * 2 + 4);
+  if (opts.dim) {
+    ctx.fillStyle = "rgba(30,40,60,0.62)";
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+  if (opts.clock !== undefined && opts.clock !== null) {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * opts.clock);
+    ctx.strokeStyle = opts.clock < 0.3 ? "#ff5a4e" : "#ffffff";
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** White text with a dark outline, readable on the blue backdrop. */
+export function outlined(ctx: Ctx, str: string, x: number, y: number, size: number, align: CanvasTextAlign = "center", fill = "#ffffff") {
+  ctx.font = `800 ${size}px ${FONT}`;
+  ctx.textAlign = align;
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(3, size * 0.22);
+  ctx.strokeStyle = "rgba(10,30,70,0.85)";
+  ctx.strokeText(str, x, y);
+  ctx.fillStyle = fill;
+  ctx.fillText(str, x, y);
+}
+
+/** A small rounded tag, e.g. "Máy · Khó". */
+export function drawTag(ctx: Ctx, str: string, x: number, y: number, size: number, fill: string, align: "left" | "right" | "center" = "center") {
+  ctx.font = `800 ${size}px ${FONT}`;
+  const w = ctx.measureText(str).width + size;
+  const left = align === "left" ? x : align === "right" ? x - w : x - w / 2;
+  ctx.fillStyle = fill;
+  roundRect(ctx, { x: left, y: y - size * 0.72, w, h: size * 1.44 }, size * 0.72);
+  ctx.fill();
+  text(ctx, str, left + w / 2, y + 1, size, "#ffffff");
+}
+
+export type RoundIcon = "menu" | "rules" | "new";
+
+/** A small round glossy button with an icon, and its label under it. */
+export function drawRoundButton(ctx: Ctx, icon: RoundIcon, label: string, x: number, y: number, r: number) {
+  ctx.save();
+  ctx.fillStyle = "rgba(5,20,50,0.35)";
+  ctx.beginPath();
+  ctx.arc(x, y + 4, r + 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+  ctx.fillStyle = "#f7c948";
+  ctx.fill();
+  const g = ctx.createLinearGradient(0, y - r, 0, y + r);
+  g.addColorStop(0, "#5cc3ff");
+  g.addColorStop(1, "#1f7ad6");
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x, y - r * 0.45, r * 0.7, r * 0.32, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.fillStyle = "#ffffff";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  const s = r * 0.42;
+  if (icon === "menu") {
+    for (const dy of [-0.55, 0, 0.55]) {
+      ctx.moveTo(x - s, y + dy * s);
+      ctx.lineTo(x + s, y + dy * s);
+    }
+    ctx.stroke();
+  } else if (icon === "new") {
+    // A circular arrow
+    ctx.arc(x, y, s * 0.9, -Math.PI * 0.2, Math.PI * 1.45);
+    ctx.stroke();
+    ctx.beginPath();
+    const ax = x + Math.cos(-Math.PI * 0.2) * s * 0.9;
+    const ay = y + Math.sin(-Math.PI * 0.2) * s * 0.9;
+    ctx.moveTo(ax + s * 0.45, ay - s * 0.05);
+    ctx.lineTo(ax, ay + s * 0.05);
+    ctx.lineTo(ax - s * 0.05, ay - s * 0.5);
+    ctx.stroke();
+  } else {
+    ctx.font = `800 ${r * 1.15}px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("?", x, y + r * 0.08);
+  }
+  ctx.restore();
+  outlined(ctx, label, x, y + r + 17, 15);
+}
+
+/** The glossy square roll button (the dice are drawn into it by the caller). `color` tints the frame. */
+export function drawRollButton(ctx: Ctx, r: Rect, color: number, pulse: number, pressed: boolean) {
+  const lift = pressed ? 0 : 5;
+  ctx.save();
+  if (pulse > 0) {
+    ctx.shadowColor = "#ffffff";
+    ctx.shadowBlur = 14 + 16 * pulse;
+  } else {
+    ctx.shadowColor = "rgba(5,20,50,0.5)";
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 6;
+  }
+  ctx.fillStyle = DARK[color];
+  roundRect(ctx, { x: r.x - 8, y: r.y - 8 + 5, w: r.w + 16, h: r.h + 16 }, 30);
+  ctx.fill();
+  ctx.restore();
+  const g = ctx.createLinearGradient(0, r.y - 8, 0, r.y + r.h);
+  g.addColorStop(0, "#ffffff");
+  g.addColorStop(0.12, COLORS[color]);
+  g.addColorStop(1, DARK[color]);
+  ctx.fillStyle = g;
+  roundRect(ctx, { x: r.x - 8, y: r.y - 8 + 5 - lift, w: r.w + 16, h: r.h + 16 - 5 }, 30);
+  ctx.fill();
+  // The inner well, warm wood
+  const well = { x: r.x + 4, y: r.y + 4 - lift, w: r.w - 8, h: r.h - 12 };
+  const wg = ctx.createLinearGradient(0, well.y, 0, well.y + well.h);
+  wg.addColorStop(0, "#c98a52");
+  wg.addColorStop(1, "#8c5427");
+  ctx.fillStyle = wg;
+  roundRect(ctx, well, 22);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  roundRect(ctx, { x: well.x + 6, y: well.y + 4, w: well.w - 12, h: well.h * 0.3 }, 14);
+  ctx.fill();
+  return lift;
+}
+

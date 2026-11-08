@@ -33,7 +33,7 @@ export const CHANCE: Card[] = [
   { text: { vi: "Đi xe ôm ra Bến xe", en: "Hop on a motorbike taxi to the Bus station" }, effect: { kind: "advance", to: 5 } },
   { text: { vi: "Vé tàu giờ chót: tới bến gần nhất, trả thuê gấp đôi", en: "Last-minute ticket: nearest transport, pay double rent" }, effect: { kind: "nearest", group: 8 } },
   { text: { vi: "Lỡ chuyến: tới bến gần nhất, trả thuê gấp đôi", en: "Missed your ride: nearest transport, pay double rent" }, effect: { kind: "nearest", group: 8 } },
-  { text: { vi: "Mất điện cả phố: tới điện / nước gần nhất, trả 10 × xúc xắc", en: "Street blackout: nearest utility, pay 10 × the dice" }, effect: { kind: "nearest", group: 9 } },
+  { text: { vi: "Mất điện cả phố: tới điện / nước gần nhất, trả 10 × xí ngầu", en: "Street blackout: nearest utility, pay 10 × the dice" }, effect: { kind: "nearest", group: 9 } },
   { text: { vi: "Rẽ nhầm hẻm: lùi 3 ô", en: "Wrong alley: go back 3 squares" }, effect: { kind: "back", steps: 3 } },
   { text: { vi: "Vượt đèn đỏ: vào thẳng trại giam", en: "Ran a red light: go straight to jail" }, effect: { kind: "jail" } },
   { text: { vi: "Người quen giúp đỡ: thẻ Ra tù (giữ lại dùng sau)", en: "A friend vouches for you: Out of jail card (keep it)" }, effect: { kind: "free" } },

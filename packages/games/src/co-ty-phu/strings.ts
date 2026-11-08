@@ -37,8 +37,7 @@ export interface Strings {
   thinking: (name: string) => string;
   passPhone: (name: string) => string;
   ready: string;
-  board: string;
-  follow: string;
+  speed: string;
   log: string;
   menu: string;
   // the decision panel
@@ -177,11 +176,11 @@ export const STRINGS: Localized<Strings> = {
     resume: "Chơi tiếp ván dở",
     rules: "Luật chơi",
     rulesLines: [
-      "Đổ 2 xúc xắc, đi quanh 40 ô. Qua Xuất phát nhận 200K.",
+      "Đổ 2 xí ngầu, đi quanh 40 ô. Qua Xuất phát nhận 200K.",
       "Dừng ở đất trống: mua, hoặc để mọi người đấu giá.",
       "Dừng ở đất người khác: trả tiền thuê. Đủ bộ màu thì thuê gấp đôi.",
       "Đủ bộ màu: xây nhà đều tay, 4 nhà rồi lên khách sạn. Ngân hàng chỉ có 32 nhà, 12 khách sạn.",
-      "Bến xe, ga, cảng, sân bay: thuê theo số bến. Điện, nước: thuê theo xúc xắc.",
+      "Bến xe, ga, cảng, sân bay: thuê theo số bến. Điện, nước: thuê theo xí ngầu.",
       "Cầm cố được nửa giá; chuộc lại thêm 10%. Bán nhà được nửa giá.",
       "Đổ đôi được đổ tiếp; 3 lần đôi liền là vào tù. Ra tù: nộp 50K, dùng thẻ, hoặc đổ đôi (tối đa 3 lượt).",
       "Giao dịch: đổi đất, tiền, thẻ ra tù với người khác.",
@@ -197,11 +196,10 @@ export const STRINGS: Localized<Strings> = {
     thinking: (name) => `${name} đang tính…`,
     passPhone: (name) => `Đưa máy cho ${name}`,
     ready: "Sẵn sàng",
-    board: "Cả bàn",
-    follow: "Theo quân",
+    speed: "Tốc độ",
     log: "Nhật ký",
     menu: "Menu",
-    roll: "Đổ xúc xắc",
+    roll: "Đổ xí ngầu",
     rollAgain: "Đổ tiếp",
     rollJail: "Đổ tìm đôi",
     endTurn: "Hết lượt",
@@ -262,7 +260,7 @@ export const STRINGS: Localized<Strings> = {
     owner: (name) => `Chủ: ${name}`,
     noOwner: "Chưa có chủ",
     transportRent: "Thuê theo số bến: 25K · 50K · 100K · 200K",
-    utilityRent: "Thuê = xúc xắc × 4 (1 cái) hoặc × 10 (cả 2)",
+    utilityRent: "Thuê = xí ngầu × 4 (1 cái) hoặc × 10 (cả 2)",
     cardTitle: { chance: "Cơ hội", chest: "Khí vận" },
     ev: {
       turn: (a) => `Lượt của ${a}`,
@@ -348,8 +346,7 @@ export const STRINGS: Localized<Strings> = {
     thinking: (name) => `${name} is thinking…`,
     passPhone: (name) => `Pass the phone to ${name}`,
     ready: "Ready",
-    board: "Board",
-    follow: "Follow",
+    speed: "Speed",
     log: "Log",
     menu: "Menu",
     roll: "Roll dice",

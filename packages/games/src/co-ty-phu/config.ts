@@ -5,8 +5,9 @@ import type { RoomSetting } from "@web-games/core/online";
 // The board, prices and rents are our own (Vietnamese places, cheap → dear);
 // only the shape of the genre (40 squares, 8 colour groups) is shared.
 
-export const W = 540;
-export const H = 960;
+/** Landscape: the board is a ring round the whole screen, the dashboard inside it. */
+export const W = 960;
+export const H = 540;
 
 export type Difficulty = "easy" | "normal" | "hard";
 export const DIFFICULTIES: Difficulty[] = ["easy", "normal", "hard"];

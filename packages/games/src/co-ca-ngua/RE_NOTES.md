@@ -72,8 +72,21 @@ then lost. Online actions: `{type:"roll"}` and `{type:"move", die: 0|1, token}`.
 
 ## Art
 
-Key art (poster + banner, regenerated 2026-11-08 to show two dice) and the four horse tokens (`img/tokens.webp`, a 4 × 120×150
-strip keyed from a flat-magenta sheet by `art-src/co-ca-ngua/tokens.sh`) from Codex,
-2026-11-08; raw PNGs and prompts in the git-ignored `art-src/co-ca-ngua/`. The board,
-die, cards and buttons are drawn in `art.ts`. All text is **Baloo 2** 600/800 (full
-Vietnamese, imported in `game.ts`).
+- **Key art** (poster + banner, regenerated 2026-11-08 to show two dice) and the
+  four **horse tokens** (`img/tokens.webp`, keyed by `art-src/co-ca-ngua/tokens.sh`)
+  from Codex.
+- **In-game look** (2026-11-08, after a reference screenshot the user liked; the
+  organisation is borrowed, all content is original and Vietnam-themed): a deep-blue
+  backdrop with faint line doodles (conical hats, lanterns, lotus, boats, stars,
+  drawn in code), a raised lavender tray, crisp track squares drawn in `art.ts`
+  (shield on start squares, gold star on the stars), and each colour's corner a
+  little scene around a clean stable inset — red Hội An (shophouse, lanterns, áo
+  dài stall), green rice terraces (stilt house, buffalo, bamboo), yellow a pagoda by
+  the lotus pond, blue the bay (junk boat, palm, xích lô). Props are 18 Codex
+  sprites keyed off magenta into `img/props.webp` (6 × 3 cells of 150 px); round
+  portraits (`img/avatars.webp`, 8 × 128 px: one person per colour, plus four faces
+  for the computer) sit at the four corners. Both atlases are rebuilt by
+  `art-src/co-ca-ngua/scene.sh`; prompts (`props1.txt`, `props2.txt`,
+  `avatars.txt`) and raw PNGs are there too. In-game images total ≈ 215 KB.
+- The board, dice, roll button, round buttons and panels are drawn in `art.ts`.
+  All text is **Baloo 2** 600/800 (full Vietnamese, imported in `game.ts`).

@@ -169,66 +169,102 @@ function cloud(ctx: Ctx, x: number, y: number, r: number) {
   ctx.stroke();
 }
 
-// ---------------------------------------------------------------- the board (board px; 1200 square)
+// ---------------------------------------------------------------- the board: a ring round the whole screen
 
-export const UNIT = 100;
-export const CORNER = 150;
-export const BOARD_PX = CORNER * 2 + UNIT * 9;
-const BAND = 26;
-
-/** Where square `sq` sits on the board, and which side it faces. */
-export function tileRect(sq: number): Rect & { side: 0 | 1 | 2 | 3 } {
-  const S = BOARD_PX;
-  if (sq === 0) return { x: S - CORNER, y: S - CORNER, w: CORNER, h: CORNER, side: 0 };
-  if (sq < 10) return { x: S - CORNER - sq * UNIT, y: S - CORNER, w: UNIT, h: CORNER, side: 0 };
-  if (sq === 10) return { x: 0, y: S - CORNER, w: CORNER, h: CORNER, side: 1 };
-  if (sq < 20) return { x: 0, y: S - CORNER - (sq - 10) * UNIT, w: CORNER, h: UNIT, side: 1 };
-  if (sq === 20) return { x: 0, y: 0, w: CORNER, h: CORNER, side: 2 };
-  if (sq < 30) return { x: CORNER + (sq - 21) * UNIT, y: 0, w: UNIT, h: CORNER, side: 2 };
-  if (sq === 30) return { x: S - CORNER, y: 0, w: CORNER, h: CORNER, side: 3 };
-  return { x: S - CORNER, y: CORNER + (sq - 31) * UNIT, w: CORNER, h: UNIT, side: 3 };
+/** The board's geometry for a given visible area: corners in the corners, 9 squares a side. */
+export interface Ring {
+  /** The whole ring (the visible area). */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Corner (and side-square) width, corner (and top/bottom square) height. */
+  cw: number;
+  ch: number;
+  /** Width of a top/bottom square, height of a side square. */
+  tw: number;
+  sh: number;
+  /** The space inside the ring: the dashboard. */
+  inner: Rect;
 }
 
-export const tileCenter = (sq: number) => {
-  const r = tileRect(sq);
-  return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-};
+/** Strip on each square's inner edge: owner colour and houses. */
+const STRIP = 10;
 
-/** Where tokens stand on a square: low in the tile, so its name stays readable. */
-export const tokenSpot = (sq: number) => {
-  const r = tileRect(sq);
-  if (sq % 10 === 0) return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-  const body = bodyRect(r, BOARD[sq].kind === "prop");
-  return { x: body.x + body.w / 2, y: body.y + body.h - 34 };
-};
+export function ringLayout(view: Rect): Ring {
+  const ch = Math.round(Math.min(84, Math.max(62, view.h * 0.13)));
+  const cw = Math.round(Math.min(150, Math.max(112, view.w * 0.12)));
+  const tw = (view.w - 2 * cw) / 9;
+  const sh = (view.h - 2 * ch) / 9;
+  return { x: view.x, y: view.y, w: view.w, h: view.h, cw, ch, tw, sh, inner: { x: view.x + cw, y: view.y + ch, w: view.w - 2 * cw, h: view.h - 2 * ch } };
+}
 
-/** The colour band of a property, on the side facing the middle of the board. */
-function bandRect(r: Rect & { side: number }): Rect {
+/** Where square `sq` sits, and which edge it is on (0 bottom, 1 left, 2 top, 3 right). */
+export function tileRect(L: Ring, sq: number): Rect & { side: 0 | 1 | 2 | 3 } {
+  const right = L.x + L.w - L.cw;
+  const bottom = L.y + L.h - L.ch;
+  if (sq === 0) return { x: right, y: bottom, w: L.cw, h: L.ch, side: 0 };
+  if (sq < 10) return { x: right - sq * L.tw, y: bottom, w: L.tw, h: L.ch, side: 0 };
+  if (sq === 10) return { x: L.x, y: bottom, w: L.cw, h: L.ch, side: 1 };
+  if (sq < 20) return { x: L.x, y: bottom - (sq - 10) * L.sh, w: L.cw, h: L.sh, side: 1 };
+  if (sq === 20) return { x: L.x, y: L.y, w: L.cw, h: L.ch, side: 2 };
+  if (sq < 30) return { x: L.x + L.cw + (sq - 21) * L.tw, y: L.y, w: L.tw, h: L.ch, side: 2 };
+  if (sq === 30) return { x: right, y: L.y, w: L.cw, h: L.ch, side: 3 };
+  return { x: right, y: L.y + L.ch + (sq - 31) * L.sh, w: L.cw, h: L.sh, side: 3 };
+}
+
+/** The strip along the inner edge (towards the dashboard). */
+function stripRect(r: Rect & { side: number }): Rect {
   switch (r.side) {
     case 0:
-      return { x: r.x, y: r.y, w: r.w, h: BAND };
+      return { x: r.x, y: r.y, w: r.w, h: STRIP };
     case 1:
-      return { x: r.x + r.w - BAND, y: r.y, w: BAND, h: r.h };
+      return { x: r.x + r.w - STRIP, y: r.y, w: STRIP, h: r.h };
     case 2:
-      return { x: r.x, y: r.y + r.h - BAND, w: r.w, h: BAND };
+      return { x: r.x, y: r.y + r.h - STRIP, w: r.w, h: STRIP };
     default:
-      return { x: r.x, y: r.y, w: BAND, h: r.h };
+      return { x: r.x, y: r.y, w: STRIP, h: r.h };
   }
 }
 
-/** The tile's body (everything but the band). */
-function bodyRect(r: Rect & { side: number }, hasBand: boolean): Rect {
-  if (!hasBand) return r;
+/** The square minus its inner strip. */
+function bodyRect(r: Rect & { side: number }): Rect {
   switch (r.side) {
     case 0:
-      return { x: r.x, y: r.y + BAND, w: r.w, h: r.h - BAND };
+      return { x: r.x, y: r.y + STRIP, w: r.w, h: r.h - STRIP };
     case 1:
-      return { x: r.x, y: r.y, w: r.w - BAND, h: r.h };
+      return { x: r.x, y: r.y, w: r.w - STRIP, h: r.h };
     case 2:
-      return { x: r.x, y: r.y, w: r.w, h: r.h - BAND };
+      return { x: r.x, y: r.y, w: r.w, h: r.h - STRIP };
     default:
-      return { x: r.x + BAND, y: r.y, w: r.w - BAND, h: r.h };
+      return { x: r.x + STRIP, y: r.y, w: r.w - STRIP, h: r.h };
   }
+}
+
+/** Where tokens stand: on the square's inner edge, so its name and price stay readable. */
+export function tokenSpot(L: Ring, sq: number, jailed = false): { x: number; y: number } {
+  const r = tileRect(L, sq);
+  if (sq === 10) return jailed ? { x: r.x + r.w * 0.3, y: r.y + r.h * 0.42 } : { x: r.x + r.w * 0.78, y: r.y + r.h * 0.22 };
+  if (sq % 10 === 0) return { x: r.x + r.w / 2, y: r.y + r.h * 0.36 };
+  switch (r.side) {
+    case 0:
+      return { x: r.x + r.w / 2, y: r.y + 2 };
+    case 1:
+      return { x: r.x + r.w - 2, y: r.y + r.h / 2 };
+    case 2:
+      return { x: r.x + r.w / 2, y: r.y + r.h - 2 };
+    default:
+      return { x: r.x + 2, y: r.y + r.h / 2 };
+  }
+}
+
+/** Which square is under a point, or -1. */
+export function squareAt(L: Ring, p: { x: number; y: number }): number {
+  for (let sq = 0; sq < SQUARES; sq++) {
+    const r = tileRect(L, sq);
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return sq;
+  }
+  return -1;
 }
 
 export interface BoardLook {
@@ -240,253 +276,198 @@ export interface BoardLook {
   now: number;
 }
 
-/**
- * The whole board, in board px; the caller has set the transform. `visible`
- * (board px) culls tiles off screen.
- */
-export function drawBoard(ctx: Ctx, look: BoardLook, names: (sq: number) => string, labels: { title: string; chance: string; chest: string; mortgaged: string }, visible: Rect) {
-  const S = BOARD_PX;
-  // Gold frame and jade middle
-  ctx.fillStyle = GOLD_DARK;
-  ctx.fillRect(-10, -10, S + 20, S + 20);
-  ctx.fillStyle = PAPER_DARK;
-  ctx.fillRect(0, 0, S, S);
-  const mid = { x: CORNER, y: CORNER, w: S - 2 * CORNER, h: S - 2 * CORNER };
-  const g = ctx.createRadialGradient(S / 2, S / 2, 60, S / 2, S / 2, mid.w * 0.75);
-  g.addColorStop(0, "#2a8c69");
-  g.addColorStop(1, JADE_DARK);
-  ctx.fillStyle = g;
-  ctx.fillRect(mid.x, mid.y, mid.w, mid.h);
-  drawCentre(ctx, mid, labels);
-  for (let sq = 0; sq < SQUARES; sq++) {
-    const r = tileRect(sq);
-    if (r.x > visible.x + visible.w || r.x + r.w < visible.x || r.y > visible.y + visible.h || r.y + r.h < visible.y) continue;
-    drawTile(ctx, sq, look, names(sq), labels.mortgaged);
-  }
+/** Mix a #rrggbb colour toward paper (k = share of paper). */
+function tint(hex: string, k: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const p = [251, 241, 220];
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v, i) => Math.round(v + (p[i] - v) * k));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
-function drawCentre(ctx: Ctx, mid: Rect, labels: { title: string; chance: string; chest: string }) {
-  const cx = mid.x + mid.w / 2;
-  const cy = mid.y + mid.h / 2;
-  // Gold lotus ring
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.strokeStyle = "rgba(233,185,73,0.35)";
-  ctx.lineWidth = 4;
-  for (let i = 0; i < 12; i++) {
-    ctx.rotate(Math.PI / 6);
-    ctx.beginPath();
-    ctx.ellipse(0, -170, 40, 90, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(-Math.PI / 4);
-  ctx.lineJoin = "round";
-  const size = 120;
-  ctx.font = `800 ${size}px ${TITLE_FONT}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  let s = size;
-  while (s > 40 && ctx.measureText(labels.title).width > 640) {
-    s -= 4;
-    ctx.font = `800 ${s}px ${TITLE_FONT}`;
-  }
-  ctx.lineWidth = s * 0.16;
-  ctx.strokeStyle = "#7a1d14";
-  ctx.strokeText(labels.title, 0, 0);
-  ctx.fillStyle = GOLD;
-  ctx.fillText(labels.title, 0, 0);
-  ctx.restore();
-  // The two decks
-  deck(ctx, cx - 250, cy - 250, "#d9473b", labels.chance, "?");
-  deck(ctx, cx + 250, cy + 250, "#2a6fc2", labels.chest, "★");
+export function drawRing(ctx: Ctx, L: Ring, look: BoardLook, names: (sq: number) => string, labels: { mortgaged: string; salary: string }) {
+  for (let sq = 0; sq < SQUARES; sq++) drawTile(ctx, L, sq, look, names(sq), labels);
 }
 
-function deck(ctx: Ctx, x: number, y: number, color: string, label: string, glyph: string) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-Math.PI / 4);
-  for (let i = 2; i >= 0; i--) {
-    roundRect(ctx, { x: -80 + i * 4, y: -55 + i * 4, w: 160, h: 110 }, 12);
-    ctx.fillStyle = i === 0 ? color : "rgba(0,0,0,0.25)";
-    ctx.fill();
-  }
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 3;
-  roundRect(ctx, { x: -72, y: -47, w: 144, h: 94 }, 8);
-  ctx.stroke();
-  text(ctx, glyph, 0, -12, 44, "#fff3d6", "center", 800, TITLE_FONT);
-  text(ctx, label, 0, 28, 22, "#fff3d6", "center", 700);
-  ctx.restore();
-}
-
-function drawTile(ctx: Ctx, sq: number, look: BoardLook, name: string, mortgagedLabel: string) {
+function drawTile(ctx: Ctx, L: Ring, sq: number, look: BoardLook, name: string, labels: { mortgaged: string; salary: string }) {
   const square = BOARD[sq];
-  const r = tileRect(sq);
-  const hasBand = square.kind === "prop";
-  ctx.fillStyle = sq === look.focus ? "#fff8d8" : PAPER;
+  const r = tileRect(L, sq);
+  const corner = sq % 10 === 0;
+  const prop = square.kind === "prop";
+  ctx.fillStyle = prop ? tint(GROUP_COLORS[square.group], 0.62) : corner ? "#fff4d8" : PAPER;
   ctx.fillRect(r.x, r.y, r.w, r.h);
-  ctx.strokeStyle = "#b99a68";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(r.x, r.y, r.w, r.h);
-  const body = bodyRect(r, hasBand);
-  const cx = body.x + body.w / 2;
-  if (hasBand) {
-    const band = bandRect(r);
-    ctx.fillStyle = GROUP_COLORS[square.group];
-    ctx.fillRect(band.x, band.y, band.w, band.h);
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.strokeRect(band.x, band.y, band.w, band.h);
-    drawHouses(ctx, band, look.houses[sq], r.side);
-  }
-  const owner = look.owner[sq];
-  switch (square.kind) {
-    case "prop":
-    case "transport":
-    case "utility": {
-      const lines = nameLines(ctx, name, body.w - 10);
-      const top = body.y + (square.kind === "prop" ? 22 : 18);
-      for (const [i, l] of lines.entries()) fitText(ctx, l, cx, top + i * 21, lineSize(lines), body.w - 8, INK, "center", 700);
-      if (square.kind !== "prop") icon(ctx, square.kind === "transport" ? transportIcon(sq) : sq === 12 ? "power" : "water", cx, body.y + body.h * 0.6, 26);
-      text(ctx, `${square.price}K`, cx, body.y + body.h - 15, 18, INK_SOFT, "center", 700);
-      break;
+  if (corner) {
+    drawCorner(ctx, r, square.kind, name, labels.salary);
+  } else {
+    const body = bodyRect(r);
+    if (prop) {
+      // A solid band of the group colour along the outer edge
+      ctx.fillStyle = GROUP_COLORS[square.group];
+      if (r.side === 0) ctx.fillRect(r.x, r.y + r.h - 5, r.w, 5);
+      else if (r.side === 1) ctx.fillRect(r.x, r.y, 5, r.h);
+      else if (r.side === 2) ctx.fillRect(r.x, r.y, r.w, 5);
+      else ctx.fillRect(r.x + r.w - 5, r.y, 5, r.h);
     }
-    case "chance":
-    case "chest":
-      icon(ctx, square.kind, cx, body.y + body.h * 0.5, 34);
-      text(ctx, name, cx, body.y + 18, 15, INK, "center", 700);
-      break;
-    case "tax":
-      for (const [i, l] of nameLines(ctx, name, body.w - 10).entries()) text(ctx, l, cx, body.y + 18 + i * 18, 15, INK, "center", 700);
-      icon(ctx, "tax", cx, body.y + body.h * 0.62, 24);
-      text(ctx, `${square.price}K`, cx, body.y + body.h - 14, 16, RED, "center", 700);
-      break;
-    case "start":
-      drawStart(ctx, r, name);
-      break;
-    case "jail":
-      drawJail(ctx, r, name);
-      break;
-    case "rest":
-      icon(ctx, "tea", cx, r.y + r.h * 0.45, 46);
-      text(ctx, name, cx, r.y + r.h - 24, 20, INK, "center", 700);
-      break;
-    case "gotojail":
-      icon(ctx, "whistle", cx, r.y + r.h * 0.42, 46);
-      text(ctx, name, cx, r.y + r.h - 24, 20, RED, "center", 700);
-      break;
+    drawTileText(ctx, sq, body, name, r.side === 1 || r.side === 3);
+    const strip = stripRect(r);
+    const owner = look.owner[sq];
+    ctx.fillStyle = owner >= 0 ? PLAYER_COLORS[owner] : "rgba(70,25,18,0.28)";
+    ctx.fillRect(strip.x, strip.y, strip.w, strip.h);
+    drawPips(ctx, strip, look.houses[sq], r.side === 0 || r.side === 2);
   }
-  if (owner >= 0) {
-    // The owner's colour along the outer edge
-    ctx.fillStyle = PLAYER_COLORS[owner];
-    const e = 9;
-    if (r.side === 0) ctx.fillRect(r.x + 3, r.y + r.h - e - 2, r.w - 6, e);
-    else if (r.side === 1) ctx.fillRect(r.x + 2, r.y + 3, e, r.h - 6);
-    else if (r.side === 2) ctx.fillRect(r.x + 3, r.y + 2, r.w - 6, e);
-    else ctx.fillRect(r.x + r.w - e - 2, r.y + 3, e, r.h - 6);
-  }
+  ctx.strokeStyle = "#8a6a44";
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
   if (look.mortgaged[sq]) {
     ctx.save();
-    ctx.fillStyle = "rgba(60,40,30,0.45)";
+    // Dimmed, with a diagonal stroke; the deed card spells it out
+    ctx.fillStyle = "rgba(40,22,16,0.45)";
     ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
-    ctx.rotate(-0.5);
-    fitText(ctx, mortgagedLabel, 0, 0, 16, Math.max(r.w, r.h) - 10, "#fff1d2", "center", 700);
+    ctx.strokeStyle = "rgba(255,241,210,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(r.x + 4, r.y + r.h - 4);
+    ctx.lineTo(r.x + r.w - 4, r.y + 4);
+    ctx.stroke();
     ctx.restore();
+    void labels;
   }
   if (sq === look.focus) {
     ctx.strokeStyle = GOLD;
-    ctx.lineWidth = 5 + Math.sin(look.now * 6) * 1.5;
+    ctx.lineWidth = 3.5 + Math.sin(look.now * 6) * 1.2;
     ctx.strokeRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
   }
 }
 
-function nameLines(ctx: Ctx, name: string, max: number): string[] {
-  const lines = wrap(ctx, name, max, 19);
-  return lines.length > 2 ? [lines[0], lines.slice(1).join(" ")] : lines;
-}
-const lineSize = (lines: string[]) => (lines.length > 1 ? 18 : 19);
-
-const transportIcon = (sq: number) => (sq === 5 ? "bus" : sq === 15 ? "train" : sq === 25 ? "ship" : "plane");
-
-function drawHouses(ctx: Ctx, band: Rect, h: number, side: number) {
-  if (h <= 0) return;
-  const horizontal = side === 0 || side === 2;
-  if (h === 5) {
-    house(ctx, band.x + band.w / 2, band.y + band.h / 2, 20, "#d0342c");
+/** Name and price (or an icon) of an edge square, as large as its space allows. */
+function drawTileText(ctx: Ctx, sq: number, body: Rect, name: string, sideways: boolean) {
+  const square = BOARD[sq];
+  const cx = body.x + body.w / 2;
+  const glyph: IconName | null =
+    square.kind === "chance" || square.kind === "chest" || square.kind === "tax"
+      ? square.kind
+      : square.kind === "transport"
+        ? transportIcon(sq)
+        : square.kind === "utility"
+          ? sq === 12
+            ? "power"
+            : "water"
+          : null;
+  const price = square.price > 0 ? `${square.price}K` : "";
+  const priceColor = square.kind === "tax" ? RED : "#5a3a24";
+  if (sideways) {
+    // A wide, short square on the left/right edges: icon at the side, name over price
+    let tx = cx;
+    let tw = body.w - 10;
+    if (glyph && square.kind !== "prop") {
+      icon(ctx, glyph, body.x + 18, body.y + body.h / 2, Math.min(22, body.h * 0.5));
+      tx = cx + 14;
+      tw = body.w - 40;
+    }
+    if (square.kind === "chance" || square.kind === "chest") {
+      fitText(ctx, name, tx, body.y + body.h / 2, 17, tw, INK, "center", 700);
+      return;
+    }
+    fitText(ctx, name, tx, body.y + body.h * 0.33, 17, tw, INK, "center", 700);
+    fitText(ctx, price, tx, body.y + body.h * 0.74, 17, tw, priceColor, "center", 800, TITLE_FONT);
     return;
   }
-  for (let i = 0; i < h; i++) {
-    const k = (i - (h - 1) / 2) * 22;
-    const x = horizontal ? band.x + band.w / 2 + k : band.x + band.w / 2;
-    const y = horizontal ? band.y + band.h / 2 : band.y + band.h / 2 + k;
-    house(ctx, x, y, 15, "#36a35f");
+  // A tall square on the top/bottom edges: name (one or two lines), icon, price
+  const lines = wrap(ctx, name, body.w - 8, 16);
+  const two = lines.length > 1;
+  const show = two ? [lines[0], lines.slice(1).join(" ")] : lines;
+  const top = body.y + (two ? 12 : 14);
+  for (const [i, l] of show.entries()) fitText(ctx, l, cx, top + i * 16, 16, body.w - 6, INK, "center", 700);
+  if (square.kind === "chance" || square.kind === "chest") {
+    if (glyph) icon(ctx, glyph, cx, body.y + body.h * 0.64, Math.min(28, body.h * 0.45));
+    return;
   }
+  if (glyph && !two) icon(ctx, glyph, cx, body.y + body.h * 0.5, Math.min(18, body.h * 0.28));
+  fitText(ctx, price, cx, body.y + body.h - 12, 17, body.w - 6, priceColor, "center", 800, TITLE_FONT);
 }
 
-function house(ctx: Ctx, x: number, y: number, s: number, color: string) {
-  ctx.beginPath();
-  ctx.moveTo(x - s / 2, y + s / 2);
-  ctx.lineTo(x - s / 2, y - s * 0.05);
-  ctx.lineTo(x, y - s / 2);
-  ctx.lineTo(x + s / 2, y - s * 0.05);
-  ctx.lineTo(x + s / 2, y + s / 2);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.strokeStyle = "#fff8e6";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-}
+const transportIcon = (sq: number): IconName => (sq === 5 ? "bus" : sq === 15 ? "train" : sq === 25 ? "ship" : "plane");
 
-function drawStart(ctx: Ctx, r: Rect, name: string) {
-  const cx = r.x + r.w / 2;
-  ctx.fillStyle = "#fff0c9";
-  ctx.fillRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
-  // A big arrow pointing the way round (leftwards along the bottom)
+/** Houses as pips in the strip; a hotel as one wide red pip. */
+function drawPips(ctx: Ctx, strip: Rect, h: number, horizontal: boolean) {
+  if (h <= 0) return;
   ctx.save();
-  ctx.translate(cx, r.y + r.h * 0.62);
-  ctx.fillStyle = RED;
-  ctx.beginPath();
-  ctx.moveTo(-58, 0);
-  ctx.lineTo(-22, -28);
-  ctx.lineTo(-22, -12);
-  ctx.lineTo(56, -12);
-  ctx.lineTo(56, 12);
-  ctx.lineTo(-22, 12);
-  ctx.lineTo(-22, 28);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-  text(ctx, name, cx, r.y + 34, 22, INK, "center", 700);
-  text(ctx, "+200K", cx, r.y + r.h - 26, 20, JADE, "center", 800, TITLE_FONT);
-}
-
-function drawJail(ctx: Ctx, r: Rect, name: string) {
-  // The cell sits in the corner; the rest of the square is "just visiting"
-  const cell = { x: r.x + 40, y: r.y + 6, w: r.w - 46, h: r.h - 46 };
-  ctx.fillStyle = "#e8c8a0";
-  ctx.fillRect(cell.x, cell.y, cell.w, cell.h);
-  ctx.strokeStyle = "#5a3a28";
-  ctx.lineWidth = 4;
-  for (let i = 1; i < 5; i++) {
-    const x = cell.x + (cell.w * i) / 5;
-    ctx.beginPath();
-    ctx.moveTo(x, cell.y);
-    ctx.lineTo(x, cell.y + cell.h);
-    ctx.stroke();
+  if (h === 5) {
+    ctx.fillStyle = "#d0342c";
+    const len = horizontal ? strip.w * 0.5 : strip.h * 0.6;
+    if (horizontal) ctx.fillRect(strip.x + (strip.w - len) / 2, strip.y + 1.5, len, strip.h - 3);
+    else ctx.fillRect(strip.x + 1.5, strip.y + (strip.h - len) / 2, strip.w - 3, len);
+    ctx.strokeStyle = "#fff8e6";
+    ctx.lineWidth = 1.5;
+    if (horizontal) ctx.strokeRect(strip.x + (strip.w - len) / 2, strip.y + 1.5, len, strip.h - 3);
+    else ctx.strokeRect(strip.x + 1.5, strip.y + (strip.h - len) / 2, strip.w - 3, len);
+    ctx.restore();
+    return;
   }
-  ctx.strokeRect(cell.x, cell.y, cell.w, cell.h);
-  text(ctx, name, r.x + r.w / 2, r.y + r.h - 20, 18, INK, "center", 700);
+  const s = STRIP - 3;
+  for (let i = 0; i < h; i++) {
+    const k = (i - (h - 1) / 2) * (s + 4);
+    const x = horizontal ? strip.x + strip.w / 2 + k - s / 2 : strip.x + 1.5;
+    const y = horizontal ? strip.y + 1.5 : strip.y + strip.h / 2 + k - s / 2;
+    ctx.fillStyle = "#36a35f";
+    ctx.fillRect(x, y, s, s);
+    ctx.strokeStyle = "#fff8e6";
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(x, y, s, s);
+  }
+  ctx.restore();
 }
 
-/** Jail cell area (for tokens of jailed players). */
-export const jailCell = () => {
-  const r = tileRect(10);
-  return { x: r.x + 40 + (r.w - 46) / 2, y: r.y + 6 + (r.h - 46) / 2 };
-};
+function drawCorner(ctx: Ctx, r: Rect, kind: string, name: string, salary: string) {
+  const cx = r.x + r.w / 2;
+  const s = Math.min(34, r.h * 0.5);
+  switch (kind) {
+    case "start": {
+      ctx.save();
+      ctx.translate(cx, r.y + r.h * 0.4);
+      ctx.fillStyle = RED;
+      ctx.beginPath();
+      ctx.moveTo(-s * 1.3, 0);
+      ctx.lineTo(-s * 0.5, -s * 0.55);
+      ctx.lineTo(-s * 0.5, -s * 0.22);
+      ctx.lineTo(s * 1.3, -s * 0.22);
+      ctx.lineTo(s * 1.3, s * 0.22);
+      ctx.lineTo(-s * 0.5, s * 0.22);
+      ctx.lineTo(-s * 0.5, s * 0.55);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      fitText(ctx, name, cx - 20, r.y + r.h - 14, 16, r.w * 0.55, INK, "center", 700);
+      text(ctx, salary, r.x + r.w - 26, r.y + r.h - 14, 15, JADE, "center", 800, TITLE_FONT);
+      break;
+    }
+    case "jail": {
+      const cell = { x: r.x + 6, y: r.y + 5, w: r.w * 0.5, h: r.h - 26 };
+      ctx.fillStyle = "#e8c8a0";
+      ctx.fillRect(cell.x, cell.y, cell.w, cell.h);
+      ctx.strokeStyle = "#5a3a28";
+      ctx.lineWidth = 3;
+      for (let i = 1; i < 5; i++) {
+        const x = cell.x + (cell.w * i) / 5;
+        ctx.beginPath();
+        ctx.moveTo(x, cell.y);
+        ctx.lineTo(x, cell.y + cell.h);
+        ctx.stroke();
+      }
+      ctx.strokeRect(cell.x, cell.y, cell.w, cell.h);
+      fitText(ctx, name, cx, r.y + r.h - 11, 16, r.w - 10, INK, "center", 700);
+      break;
+    }
+    case "rest":
+      icon(ctx, "tea", cx, r.y + r.h * 0.4, s);
+      fitText(ctx, name, cx, r.y + r.h - 12, 16, r.w - 10, INK, "center", 700);
+      break;
+    default:
+      icon(ctx, "whistle", cx, r.y + r.h * 0.4, s);
+      fitText(ctx, name, cx, r.y + r.h - 12, 16, r.w - 10, RED, "center", 700);
+      break;
+  }
+}
+
 
 // ---------------------------------------------------------------- icons
 

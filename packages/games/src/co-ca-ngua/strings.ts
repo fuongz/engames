@@ -15,6 +15,8 @@ export interface Strings {
   start: string;
   resume: string;
   rules: string;
+  rulesShort: string;
+  newShort: string;
   rulesLines: string[];
   close: string;
   /** By corner: 0 bottom-left, then clockwise. */
@@ -74,6 +76,8 @@ export const STRINGS: Localized<Strings> = {
     start: "Bắt đầu",
     resume: "Chơi tiếp",
     rules: "Luật chơi",
+    rulesShort: "Luật",
+    newShort: "Ván mới",
     rulesLines: [
       "Mỗi lượt gieo hai xí ngầu, đi từng xí ngầu một: chạm xí ngầu, rồi chạm con ngựa (cùng con hay con khác).",
       "Xí ngầu ra 6 mới xuất được một ngựa khỏi chuồng.",
@@ -133,6 +137,8 @@ export const STRINGS: Localized<Strings> = {
     start: "Start",
     resume: "Resume",
     rules: "How to play",
+    rulesShort: "Rules",
+    newShort: "New",
     rulesLines: [
       "Roll two dice and play them one at a time: tap a die, then a horse (the same one or another).",
       "A die showing 6 brings a horse out of its stable.",
