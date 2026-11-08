@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 // new one can't quietly drift from them.
 // Everything the realtime Worker bundles must stay free of DOM code: a game's
 // rules (and any computer player they call), its data files and its online adapter.
-const logic = import.meta.glob<string>(["./*/logic.ts", "./*/ai.ts", "./*/board.ts", "./*/cards.ts", "./*/sim.ts", "./*/config.ts", "./*/strings.ts", "./*/online.ts"], {
+const logic = import.meta.glob<string>(["./*/logic.ts", "./*/ai.ts", "./*/board.ts", "./*/cards.ts", "./*/sim.ts", "./*/physics.ts", "./*/config.ts", "./*/strings.ts", "./*/online.ts"], {
   query: "?raw",
   import: "default",
   eager: true,
