@@ -105,7 +105,7 @@ export const STRINGS: Localized<Strings> = {
     rulesLines: [
       "Bấm BẮN (hoặc phím Space): tốn 1 xu, xu bay lên vòng quay. Ô đối diện ống bắn lúc xu chạm vòng quyết định thưởng.",
       "Ô VÉ: cộng vé ngay, xu không rơi xuống. Ô XU (1, 2, 4, 6, 8): ngần ấy xu rơi rải khắp kệ.",
-      "Thanh đẩy dồn mọi thứ ra mép. Xu rơi mép trước: +1 xu, +1 vé. Rơi hai bên: mất.",
+      "Thanh đẩy dồn mọi thứ ra mép. Hai bên có vách chắn, chỉ rơi ra mép trước: mỗi xu +1 xu, +1 vé.",
       "Ô LÕI: một viên lõi rơi xuống kệ + 1 lượt MINI SPIN (20–50 vé hoặc 20–35 xu).",
       "Chỉ lõi bị đẩy rơi mép trước mới được tính. Đủ 6 lõi: SUPER SPIN 80–500 vé!",
       "Ô THẺ: một thẻ mèo rơi xuống kệ. Đẩy rơi mép trước: +60 vé và vào bộ sưu tập. Đủ 10 thẻ khác nhau: +1000 vé.",
@@ -173,7 +173,7 @@ export const STRINGS: Localized<Strings> = {
     rulesLines: [
       "Press SHOOT (or Space): 1 coin flies up to the wheel. The slot facing the chute when it lands pays.",
       "TICKET slot: tickets at once, and the coin stays up. COIN slot (1, 2, 4, 6, 8): that many coins rain across the shelf.",
-      "The pusher shoves everything forward. Coins off the front: +1 coin, +1 ticket. Off the sides: lost.",
+      "The pusher shoves everything forward. Walls guard both sides, so things only fall off the front: each coin gives +1 coin, +1 ticket.",
       "CORE slot: an energy core drops onto the shelf + 1 MINI SPIN (20–50 tickets or 20–35 coins).",
       "Only cores pushed off the front count. Collect 6: SUPER SPIN for 80–500 tickets!",
       "CARD slot: a cat card drops onto the shelf. Push it off the front: +60 tickets and it joins your album. All 10 different cards: +1000.",

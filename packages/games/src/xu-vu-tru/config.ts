@@ -32,14 +32,15 @@ const c = (value: number): Segment => ({ kind: "coins", value });
 const CORE: Segment = { kind: "core" };
 const CARD: Segment = { kind: "card" };
 /**
- * The target wheel, clockwise from angle 0: 12 ticket slots, 10 coin slots, one
- * energy-core slot and one card slot. Big prizes sit on narrow slots, so
+ * The target wheel, clockwise from angle 0: 14 ticket slots, 8 coin slots, one
+ * energy-core slot and one card slot. The side walls keep every coin on the
+ * shelf, so ticket slots (which keep the shot coin) are the machine's drain. Big prizes sit on narrow slots, so
  * hitting them takes timing.
  */
 export const WHEEL: Segment[] = [
-  t(2), c(1), t(3), c(2), t(5), CORE, t(2), c(1), t(3), c(8),
-  t(2), c(4), t(5), c(1), t(10), c(2), t(2), CARD, t(3), c(6),
-  t(2), c(1), t(3), c(2),
+  t(2), c(1), t(3), t(2), c(2), t(5), CORE, t(2), c(1), t(3),
+  c(8), t(2), t(3), c(4), t(5), t(2), c(1), t(10), t(2), CARD,
+  t(3), c(6), t(2), c(2),
 ];
 /**
  * Slot widths in units (a unit is 1/UNITS of the turn). The coin meets the wheel
@@ -96,7 +97,7 @@ export const MINI_PRIZES: Prize[] = [
   { kind: "tickets", value: 50 },
   { kind: "coins", value: 35 },
 ];
-export const MINI_WEIGHTS = [30, 14, 22, 9, 12, 5, 6, 2];
+export const MINI_WEIGHTS = [30, 8, 22, 5, 12, 3, 6, 1];
 /** The Super spin (six cores collected): tickets only. */
 export const SUPER_PRIZES = [80, 100, 150, 200, 250, 300, 500];
 export const SUPER_WEIGHTS = [26, 26, 20, 13, 8, 5, 2];
@@ -136,8 +137,8 @@ export const SET_TIME = 3.6;
 /** Shelf size in world units (x across, y from the back wall to the front edge). */
 export const SHELF_W = 440;
 export const SHELF_D = 330;
-/** Side walls run from the back to this depth; past it the sides are open gutters. */
-export const SIDE_WALL_D = 200;
+/** Side walls run from the back to this depth. The full shelf: nothing falls off the sides, only the front. */
+export const SIDE_WALL_D = SHELF_D;
 export const COIN_R = 15;
 export const CORE_R = 24;
 /** A capsule weighs as much as this many coins. */

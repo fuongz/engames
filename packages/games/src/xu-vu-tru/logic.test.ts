@@ -60,7 +60,8 @@ const cardAt = (s: State, card: number, x: number, y: number, vx = 0, vy = 0) =>
 /** Pushed off the front edge on the next steps. */
 const atFront = (make: (x: number, y: number, vx: number, vy: number) => Body) => make(SHELF_W / 2, SHELF_D - 2, 0, 200);
 /** Out over the left gutter on the next steps. */
-const atSide = (make: (x: number, y: number, vx: number, vy: number) => Body) => make(4, SIDE_WALL_D + 60, -300, 0);
+/** Something flung at the left wall near the front, where the gutters used to be. */
+const atSide = (make: (x: number, y: number, vx: number, vy: number) => Body) => make(4, SIDE_WALL_D - 60, -300, 0);
 
 /** Shoot once with the wheel turned so the coin meets a slot matching `want`; returns the run just after the hit. */
 const BARE = JSON.stringify(bare(2));
@@ -278,14 +279,13 @@ describe("the shelf", () => {
     expect(s.tickets).toBe(3);
   });
 
-  it("loses a coin over a side gutter", () => {
+  it("never loses a coin off a side: the walls run the whole shelf", () => {
     const s = bare();
     s.coins = 5;
-    coinAt(s, 3, SIDE_WALL_D + 60, -300, 0);
+    coinAt(s, 3, SIDE_WALL_D - 30, -300, 0);
     const ev = run(s, 10);
-    expect(ev).toContainEqual(expect.objectContaining({ type: "fall", edge: "side" }));
-    expect(s.coins).toBe(5);
-    expect(s.tickets).toBe(0);
+    expect(ev.some((e) => e.type === "fall" && e.edge === "side")).toBe(false);
+    expect(s.bodies[0]?.x ?? COIN_R).toBeGreaterThanOrEqual(COIN_R - 1e-6);
   });
 
   it("keeps coins in along the walled back of the sides", () => {
@@ -318,14 +318,12 @@ describe("the shelf", () => {
 });
 
 describe("energy cores and the Super spin", () => {
-  it("a capsule over a side gutter is simply lost: the meter does not move", () => {
+  it("a capsule flung at a side wall stays on the shelf", () => {
     const s = bare();
     atSide((x, y, vx, vy) => capsuleAt(s, x, y, vx, vy));
     const ev = run(s, 30);
-    expect(ev).toContainEqual(expect.objectContaining({ type: "fall", edge: "side", kind: "core" }));
-    expect(ev.some((e) => e.type === "coreIn")).toBe(false);
-    expect(s.cores).toBe(0);
-    expect(run(s, 60 * 4).some((e) => e.type === "land")).toBe(false);
+    expect(ev.some((e) => e.type === "fall" && e.edge === "side")).toBe(false);
+    expect(s.bodies.some((b) => b.kind === "core")).toBe(true);
   });
 
   it("a capsule pushed off the front counts one core, and pays nothing by itself", () => {
@@ -378,13 +376,12 @@ describe("energy cores and the Super spin", () => {
 });
 
 describe("cards and the album", () => {
-  it("a card over a side gutter is lost and pays nothing", () => {
+  it("a card flung at a side wall stays on the shelf", () => {
     const s = bare();
     atSide((x, y, vx, vy) => cardAt(s, 4, x, y, vx, vy));
     const ev = run(s, 30);
-    expect(ev).toContainEqual(expect.objectContaining({ type: "fall", edge: "side", kind: "card", card: 4 }));
-    expect(s.tickets).toBe(0);
-    expect(s.album[4]).toBe(false);
+    expect(ev.some((e) => e.type === "fall" && e.edge === "side")).toBe(false);
+    expect(s.bodies.some((b) => b.kind === "card" && b.card === 4)).toBe(true);
   });
 
   it("a card pushed off the front pays 60 tickets and joins the album", () => {

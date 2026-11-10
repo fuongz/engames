@@ -9,6 +9,7 @@ export type GameCategory =
   | "chien-thuat"
   | "tri-tue"
   | "the-thao"
+  | "arcade"
   | "phieu-luu";
 
 export interface GameManifest {

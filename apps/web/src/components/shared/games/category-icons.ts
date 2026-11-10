@@ -1,4 +1,4 @@
-import { Chess01Icon, Compass01Icon, Fire02Icon, FootballIcon, PuzzleIcon, Sword03Icon } from "@hugeicons/core-free-icons";
+import { Chess01Icon, Compass01Icon, Fire02Icon, FootballIcon, Joystick02Icon, PuzzleIcon, Sword03Icon } from "@hugeicons/core-free-icons";
 
 export const ALL_CATEGORIES = "all";
 
@@ -10,6 +10,7 @@ export const CATEGORY_ICONS: Record<string, typeof Fire02Icon> = {
   "tri-tue": PuzzleIcon,
   "phieu-luu": Compass01Icon,
   "the-thao": FootballIcon,
+  arcade: Joystick02Icon,
 };
 
 export const categoryIcon = (id: string) => CATEGORY_ICONS[id] ?? Fire02Icon;

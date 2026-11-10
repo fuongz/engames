@@ -40,4 +40,5 @@ export const categories: { id: GameCategory; label: Localized<string> }[] = [
   { id: "tri-tue", label: { vi: "Trí tuệ", en: "Puzzle" } },
   { id: "phieu-luu", label: { vi: "Phiêu lưu", en: "Adventure" } },
   { id: "the-thao", label: { vi: "Thể thao", en: "Sports" } },
+  { id: "arcade", label: { vi: "Game thùng", en: "Arcade" } },
 ];

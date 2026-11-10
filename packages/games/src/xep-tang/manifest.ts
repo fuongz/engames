@@ -20,7 +20,7 @@ const manifest: GameManifest = {
     vi: ["Chạm bất kỳ đâu để thả tấm đang trượt.", "Máy tính: [Space] hoặc [Enter] để thả, và để chơi lại."],
     en: ["Tap anywhere to drop the sliding slab.", "Desktop: [Space] or [Enter] to drop, and to play again."],
   },
-  category: "hanh-dong",
+  category: "arcade",
   tags: {
     vi: ["xếp tầng", "xếp khối", "một chạm", "giải trí", "tối giản"],
     en: ["stack", "blocks", "one tap", "casual", "minimal"],

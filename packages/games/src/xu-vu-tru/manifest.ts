@@ -28,7 +28,7 @@ const manifest: GameManifest = {
       "[Esc] pause.",
     ],
   },
-  category: "hanh-dong",
+  category: "arcade",
   tags: {
     vi: ["máy xu", "đẩy xu", "vòng quay", "robot", "vũ trụ", "arcade", "beta"],
     en: ["coin pusher", "coin shooter", "prize wheel", "robots", "space", "arcade", "beta"],
