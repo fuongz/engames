@@ -107,6 +107,9 @@ export function setup(rt: Runtime): GameHooks {
   const hotWins = { 1: 0, 2: 0 };
   let overlay: "menu" | "rules" | null = online ? null : "menu";
   let rulesFrom: "menu" | null = null;
+  /** When the reset button was first tapped; a second tap within RESET_ARM wipes the tally. */
+  let resetArmedAt: number | null = null;
+  const RESET_ARM = 3;
   let aiAt: number | null = null;
   const rand = mulberry32((Date.now() ^ 0x5eed) >>> 0);
 
@@ -517,13 +520,31 @@ export function setup(rt: Runtime): GameHooks {
       label: t.hotseat,
       fill: NOTE_BLUE,
     });
+    const hw = (w - 12) / 2;
     list.push({
       id: "rules",
-      rect: { x: x + w / 2 - 110, y: MENU.y + 540, w: 220, h: 56 },
+      rect: { x, y: MENU.y + 540, w: hw, h: 56 },
       label: t.rules,
       fill: "#f1ece0",
     });
+    const armed = resetArmed();
+    list.push({
+      id: "reset",
+      rect: { x: x + hw + 12, y: MENU.y + 540, w: hw, h: 56 },
+      label: armed ? t.resetConfirm : t.resetStats,
+      fill: armed ? NOTE_PINK : "#f1ece0",
+      disabled: !hasStats(),
+    });
     return list;
+  }
+  const hasStats = () => hotWins[1] + hotWins[2] > 0 || DIFFICULTIES.some((d) => tally[d].w + tally[d].l > 0);
+  const resetArmed = () => resetArmedAt !== null && now - resetArmedAt < RESET_ARM;
+  function resetStats() {
+    for (const d of DIFFICULTIES) tally[d] = { w: 0, l: 0 };
+    hotWins[1] = 0;
+    hotWins[2] = 0;
+    storage.set("tally", tally);
+    storage.set(SUMMARY_KEY, null);
   }
   const canResume = () => !online && game.result === null && game.moves.length > 0;
   const CLOSE: Rect = { x: MENU.x + MENU.w - 56, y: MENU.y + 12, w: 44, h: 44 };
@@ -591,9 +612,16 @@ export function setup(rt: Runtime): GameHooks {
         return;
       }
       const b = menuButtons().find((b) => inRect(p, b.rect));
+      if (b?.id !== "reset") resetArmedAt = null;
       if (!b) return;
+      if (b.disabled) return sfx.nope();
       sfx.pick();
-      if (b.id === "rules") {
+      if (b.id === "reset") {
+        if (resetArmed()) {
+          resetStats();
+          resetArmedAt = null;
+        } else resetArmedAt = now;
+      } else if (b.id === "rules") {
         rulesFrom = "menu";
         overlay = "rules";
       } else if (b.id === "hot") startGame("hot");

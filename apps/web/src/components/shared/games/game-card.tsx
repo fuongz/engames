@@ -84,6 +84,7 @@ export function GameCard({ game, className }: { game: GameManifest; className?: 
           className="size-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
         />
         <CoopBadge game={game} variant="overlay" className="absolute top-2 left-2" />
+        <PlayCount slug={game.slug} variant="overlay" className="absolute bottom-2 left-2" />
         {tilt && (
           <motion.div
             aria-hidden
@@ -101,11 +102,7 @@ export function GameCard({ game, className }: { game: GameManifest; className?: 
               {summary}
             </>
           ) : (
-            <>
-              {category?.label[locale]}
-              <span aria-hidden className="h-3 w-px bg-border" />
-              <PlayCount slug={game.slug} iconless />
-            </>
+            category?.label[locale]
           )}
         </p>
       </div>

@@ -1,4 +1,5 @@
 import {
+  CARD_MASS,
   CORE_MASS,
   DAMPING,
   FRICTION,
@@ -25,10 +26,12 @@ import {
 
 export interface Body {
   id: number;
-  kind: "coin" | "core";
-  /** Which energy core (0-5) a capsule is; -1 for coins. */
+  kind: "coin" | "core" | "card";
+  /** A capsule's colour (0-5); -1 for anything else. */
   core: number;
-  /** Coins in this pile (a coin dropped on a coin stacks); 1 for capsules. */
+  /** A card's index in CARD_IDS; -1 for anything else. */
+  card: number;
+  /** Coins in this pile (a coin dropped on a coin stacks); 1 for capsules and cards. */
   stack: number;
   x: number;
   y: number;
@@ -42,7 +45,7 @@ export interface Exit {
   edge: "front" | "side";
 }
 
-export const massOf = (b: Body) => (b.kind === "core" ? CORE_MASS : b.stack);
+export const massOf = (b: Body) => (b.kind === "core" ? CORE_MASS : b.kind === "card" ? CARD_MASS : b.stack);
 
 /** Candidate pairs from a sweep along x (bodies sorted by left edge, ties by id). */
 function pairs(bodies: Body[], margin: number): number[] {

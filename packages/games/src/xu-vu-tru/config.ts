@@ -8,30 +8,49 @@ export const H = 960;
 
 /**
  * Coins every run starts with. BETA value: generous on purpose so testers see a
- * few Bonus Spins and a Super Bonus; tune it down once the machine is balanced.
+ * few Super spins; tune it down once the machine is balanced.
  */
 export const BETA_START_COINS = 200;
-/** Tickets for lighting all six energy cores. */
-export const SUPER_TICKETS = 250;
 /** Each coin (or each coin in a stack) pushed over the front edge comes back, plus this many tickets. */
 export const FRONT_TICKETS = 1;
 
 // ---------------------------------------------------------------- the wheel
 
+/** What a wheel slot pays. Expected values per shot are worked out in RE_NOTES.md. */
 export type Segment =
+  /** Tickets straight to the counter; the shot coin stays in the wheel. */
   | { kind: "tickets"; value: number }
+  /** This many coins rain onto the shelf instead of the shot coin. */
+  | { kind: "coins"; value: number }
+  /** An energy capsule drops onto the shelf, and a Mini spin starts. */
   | { kind: "core" }
-  | { kind: "bonus" };
+  /** A cat card (one of CARD_IDS, picked at random) drops onto the shelf. */
+  | { kind: "card" };
 
 const t = (value: number): Segment => ({ kind: "tickets", value });
-/** The target wheel, clockwise from angle 0. One narrow core slot and one narrow BONUS slot: hitting them takes timing. */
+const c = (value: number): Segment => ({ kind: "coins", value });
+const CORE: Segment = { kind: "core" };
+const CARD: Segment = { kind: "card" };
+/**
+ * The target wheel, clockwise from angle 0: 12 ticket slots, 10 coin slots, one
+ * energy-core slot and one card slot. Big prizes sit on narrow slots, so
+ * hitting them takes timing.
+ */
 export const WHEEL: Segment[] = [
-  t(2), t(3), t(2), t(6), t(2), t(3), { kind: "core" }, t(2), t(3), t(12),
-  t(2), t(3), t(6), t(2), { kind: "bonus" }, t(3), t(2), t(6), t(2), t(3),
+  t(2), c(1), t(3), c(2), t(5), CORE, t(2), c(1), t(3), c(8),
+  t(2), c(4), t(5), c(1), t(10), c(2), t(2), CARD, t(3), c(6),
+  t(2), c(1), t(3), c(2),
 ];
-/** Ticket slots are twice as wide as the core and BONUS slots. */
-const widthOf = (s: Segment) => (s.kind === "tickets" ? 2 : 1);
-const UNITS = WHEEL.reduce((a, s) => a + widthOf(s), 0);
+/**
+ * Slot widths in units (a unit is 1/UNITS of the turn). The coin meets the wheel
+ * at an effectively random angle, so a slot's chance is its width over UNITS.
+ */
+export function widthOf(s: Segment) {
+  if (s.kind === "tickets") return 2;
+  if (s.kind === "coins") return s.value === 1 ? 2 : s.value === 2 ? 1.5 : s.value === 4 ? 1 : 0.75;
+  return s.kind === "core" ? 1.25 : 0.75;
+}
+export const UNITS = WHEEL.reduce((a, s) => a + widthOf(s), 0);
 /** Where each segment starts and how wide it is, in radians from the wheel's zero mark. */
 export const SEG_START: number[] = [];
 export const SEG_SIZE: number[] = [];
@@ -55,25 +74,62 @@ export const POINTER_ANGLE = 0;
 export const FLIGHT_UP = 0.42;
 /** Seconds from the wheel down onto the shelf. */
 export const FLIGHT_DOWN = 0.4;
+/** Seconds between the coins of a coin slot's drop. */
+export const COIN_DROP_GAP = 0.06;
 /** Holding SHOOT fires this often (seconds). */
 export const FIRE_INTERVAL = 0.24;
 
-// ---------------------------------------------------------------- bonus
+// ---------------------------------------------------------------- spins
 
-/** The Bonus Spin reel: prizes and their weights. */
-export const SPIN_PRIZES = [10, 30, 65, 100] as const;
-export const SPIN_WEIGHTS = [52, 30, 13, 5] as const;
-/** Seconds a Bonus Spin reel runs before it lands. */
+export interface Prize {
+  kind: "tickets" | "coins";
+  value: number;
+}
+/** The Mini spin (an energy-core slot): mostly tickets, sometimes a pile of coins. */
+export const MINI_PRIZES: Prize[] = [
+  { kind: "tickets", value: 20 },
+  { kind: "coins", value: 20 },
+  { kind: "tickets", value: 30 },
+  { kind: "coins", value: 25 },
+  { kind: "tickets", value: 40 },
+  { kind: "coins", value: 30 },
+  { kind: "tickets", value: 50 },
+  { kind: "coins", value: 35 },
+];
+export const MINI_WEIGHTS = [30, 14, 22, 9, 12, 5, 6, 2];
+/** The Super spin (six cores collected): tickets only. */
+export const SUPER_PRIZES = [80, 100, 150, 200, 250, 300, 500];
+export const SUPER_WEIGHTS = [26, 26, 20, 13, 8, 5, 2];
+/** Seconds a spin's reel runs before it lands. */
 export const SPIN_TIME = 2.4;
-/** Seconds of Super Bonus celebration before the cores reset. */
-export const SUPER_TIME = 3.4;
-/** Free coins showered onto the shelf by a Super Bonus. */
-export const SUPER_SHOWER = 12;
-/** Seconds between coins of the shower. */
-export const SHOWER_GAP = 0.09;
+/** The Super spin runs longer, for the drama. */
+export const SUPER_SPIN_TIME = 3.4;
+/** Capsules pushed off the front needed for a Super spin. */
 export const CORE_COUNT = 6;
-/** A capsule lost into a gutter comes back after this long (if its core is still dark). */
-export const CORE_RESPAWN = 2.5;
+
+// ---------------------------------------------------------------- cards
+
+/** The album: ten cat cards (art in img/cards/<id>.webp, names in strings.ts). */
+export const CARD_IDS = [
+  "persian",
+  "british",
+  "siamese",
+  "maine-coon",
+  "scottish-fold",
+  "ragdoll",
+  "bengal",
+  "sphynx",
+  "munchkin",
+  "tabby",
+] as const;
+export type CardId = (typeof CARD_IDS)[number];
+export const CARD_COUNT = CARD_IDS.length;
+/** Tickets for every card pushed off the front (new or a duplicate). */
+export const CARD_TICKETS = 60;
+/** Tickets for owning all ten; the album then starts over. */
+export const SET_TICKETS = 1000;
+/** Seconds of set-complete celebration (display only). */
+export const SET_TIME = 3.6;
 
 // ---------------------------------------------------------------- the shelf (physics.ts)
 
@@ -86,6 +142,11 @@ export const COIN_R = 15;
 export const CORE_R = 24;
 /** A capsule weighs as much as this many coins. */
 export const CORE_MASS = 6;
+/** A card's footprint (a disc for the physics; drawn as a small tilted card). */
+export const CARD_R = 19;
+export const CARD_MASS = 2;
+/** Capsules already on the shelf when a run starts. */
+export const PREFILL_CORES = 2;
 /** Coins per pile at most (a dropped coin landing on a coin stacks on it). */
 export const MAX_STACK = 3;
 /** Bodies on the shelf at most; past it the oldest coin is merged into a neighbour's stack. */

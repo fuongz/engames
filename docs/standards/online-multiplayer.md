@@ -337,9 +337,12 @@ demand) and accepts an invite link from any host or a bare room code.
 
 ## 9. Leaderboard
 
-Online results use the existing `score` table with a **board key** in
-`game_slug`: `"<slug>:<mode>"` (e.g. `ky-tuc-xa:coop`). Solo keeps the bare slug.
-No migration is needed and the best-per-player rule keeps working per board.
+Online results use the existing `score` table under a **board key**:
+`"<slug>:<mode>"` (e.g. `ky-tuc-xa:coop`). Solo keeps the bare slug. Each board
+key is its own row in the `game` table and `score.game_id` points at it
+([`database.md`](database.md)); the row is made the first time the board gets a
+score, so no migration is needed and the best-per-player rule keeps working per
+board.
 Only signed-in players are saved; guests see their result in the match but not
 on the board. `boardKey(slug, mode)` in `packages/core/src/online/protocol.ts`
 is the one place that builds the key.

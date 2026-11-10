@@ -2,6 +2,7 @@ import "@fontsource/baloo-2/800.css";
 import "@fontsource/handjet/700.css";
 import { type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, clamp, easeOutCubic, inRect } from "@web-games/core";
 import {
+  ALBUM_BTN,
   AMBER,
   CHUTE,
   COINS_BOX,
@@ -22,11 +23,16 @@ import {
   WHEEL_C,
   INK,
   along,
+  AUTO_BTN,
+  type ReelCell,
   betaTag,
   button,
+  drawAlbumButton,
+  drawAutoButton,
   drawBackground,
   drawBody,
   drawCabinet,
+  drawCardFace,
   drawChute,
   drawCoreLamps,
   drawCounter,
@@ -49,20 +55,84 @@ import {
   proj,
   text,
 } from "./art";
-import { CORE_COUNT, FLIGHT_DOWN, FLIGHT_UP, H, SHELF_D, SPIN_PRIZES, SPIN_TIME, SUPER_TICKETS, SUPER_TIME, W } from "./config";
+import {
+  CARD_COUNT,
+  CARD_IDS,
+  CARD_TICKETS,
+  CORE_COUNT,
+  FLIGHT_DOWN,
+  FLIGHT_UP,
+  H,
+  MINI_PRIZES,
+  SET_TICKETS,
+  SET_TIME,
+  SHELF_D,
+  SPIN_TIME,
+  SUPER_PRIZES,
+  SUPER_SPIN_TIME,
+  W,
+} from "./config";
+import bengalImg from "./img/cards/bengal.webp";
+import britishImg from "./img/cards/british.webp";
+import maineCoonImg from "./img/cards/maine-coon.webp";
+import munchkinImg from "./img/cards/munchkin.webp";
+import persianImg from "./img/cards/persian.webp";
+import ragdollImg from "./img/cards/ragdoll.webp";
+import scottishFoldImg from "./img/cards/scottish-fold.webp";
+import siameseImg from "./img/cards/siamese.webp";
+import sphynxImg from "./img/cards/sphynx.webp";
+import tabbyImg from "./img/cards/tabby.webp";
 import robotsImg from "./img/robots.webp";
-import { type GameEvent, type State, createRun, pusherAt, segmentAt, update } from "./logic";
+import {
+  type GameEvent,
+  RULES_VERSION,
+  type SpinKind,
+  type State,
+  createRun,
+  grantCoins,
+  normalizeAlbum,
+  ownedCount,
+  pusherAt,
+  segmentAt,
+  update,
+} from "./logic";
 import { STRINGS } from "./strings";
 
 // The imperative shell: turns the SHOOT button into inputs for logic.ts, plays
 // its events as sound, light and particles, and draws the cabinet. Solo only.
 
 const RUN_KEY = "run";
+const PENDING_KEY = "pendingCoins";
+/** The card album, kept across runs. */
+const ALBUM_KEY = "album";
+/** Card art in CARD_IDS order. */
+const CARD_SRC: Record<(typeof CARD_IDS)[number], string> = {
+  persian: persianImg,
+  british: britishImg,
+  siamese: siameseImg,
+  "maine-coon": maineCoonImg,
+  "scottish-fold": scottishFoldImg,
+  ragdoll: ragdollImg,
+  bengal: bengalImg,
+  sphynx: sphynxImg,
+  munchkin: munchkinImg,
+  tabby: tabbyImg,
+};
+/** What the two reels show. */
+const MINI_CELLS: ReelCell[] = MINI_PRIZES.map((p) => ({ value: p.value, coin: p.kind === "coins" }));
+const SUPER_CELLS: ReelCell[] = SUPER_PRIZES.map((value) => ({ value, coin: false }));
+const cellsOf = (kind: SpinKind) => (kind === "mini" ? MINI_CELLS : SUPER_CELLS);
+const spinTimeOf = (kind: SpinKind) => (kind === "mini" ? SPIN_TIME : SUPER_SPIN_TIME);
+/** Seconds of Super spin win celebration. */
+const SUPER_FX = 3.2;
+/** Seconds a won card takes to fly to the album button. */
+const CARD_FLY = 0.9;
 /** Toasts sit on the pusher's top plate, the one calm strip in the machine. */
 const TOAST_Y = 522;
 const SAVE_EVERY = 8;
 
-type Overlay = "start" | "rules" | "pause" | "over" | null;
+type ButtonId = "go" | "new" | "rules" | "code";
+type Overlay = "start" | "rules" | "pause" | "over" | "album" | null;
 
 interface Best {
   tickets: number;
@@ -95,7 +165,17 @@ interface Faller {
   y: number;
   edge: "front" | "side";
   stack: number;
+  kind: "coin" | "core" | "card";
   core: number;
+  card: number;
+  t: number;
+}
+
+/** A card just pushed off the front, flying up to the album button. */
+interface CardFly {
+  card: number;
+  x: number;
+  y: number;
   t: number;
 }
 
@@ -113,6 +193,7 @@ function parseRun(raw: unknown): State | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Partial<State>;
   if (
+    r.v !== RULES_VERSION ||
     typeof r.seed !== "number" ||
     typeof r.coins !== "number" ||
     typeof r.tickets !== "number" ||
@@ -120,9 +201,10 @@ function parseRun(raw: unknown): State | null {
     typeof r.pusherT !== "number" ||
     !Array.isArray(r.bodies) ||
     !Array.isArray(r.flights) ||
-    !Array.isArray(r.respawns) ||
-    !Array.isArray(r.cores) ||
-    r.cores.length !== CORE_COUNT
+    !Array.isArray(r.queue) ||
+    typeof r.cores !== "number" ||
+    !Array.isArray(r.album) ||
+    r.album.length !== CARD_COUNT
   )
     return null;
   return r as State;
@@ -145,25 +227,40 @@ function wrap(ctx: CanvasRenderingContext2D, str: string, maxW: number, size: nu
 
 export function setup(rt: Runtime): GameHooks {
   const { stage, ctx } = rt;
-  const { storage, audio, reportScore } = rt.game;
+  const { storage, audio, reportScore, coupons } = rt.game;
   const tr = () => STRINGS[rt.locale()];
-  const sp = makeSprites();
+  const cardImgs = CARD_IDS.map((id) => {
+    const img = new Image();
+    img.src = CARD_SRC[id];
+    return img;
+  });
+  const sp = makeSprites(cardImgs);
   const robots = new Image();
   robots.src = robotsImg;
   const robotsReady = () => (robots.complete && robots.naturalWidth > 0 ? robots : null);
 
   let best: Best = storage.get<Best>("best", { tickets: 0, supers: 0 });
+  /** The album outlives runs: storage is its home, the run carries a copy while it plays. */
+  let album = normalizeAlbum(storage.get<unknown>(ALBUM_KEY, null));
   const saved = parseRun(storage.get<unknown>(RUN_KEY, null));
-  let s: State = saved && !saved.over ? saved : createRun(newSeed());
+  let s: State = saved && !saved.over ? saved : createRun(newSeed(), undefined, album);
+  s.album = [...album];
   let resumable = !!saved && !saved.over && saved.shots > 0;
+  /** Coupon coins that arrived while no run was in play; they join the next run. */
+  let pendingCoins = Math.max(0, Math.floor(Number(storage.get<unknown>(PENDING_KEY, 0)) || 0));
   let overlay: Overlay = "start";
   let rulesFrom: "start" | "pause" = "start";
+  /** Where the album was opened from, so closing it goes back there. */
+  let albumFrom: Overlay = null;
   let reported = false;
   let newBest = false;
   let overAt = -1;
 
   // Input
-  let pointerHeld: number | null = null;
+  /** Every pointer currently pressing SHOOT (a Set: a second finger must not overwrite the first). */
+  const pointersHeld = new Set<number>();
+  /** Auto-fire toggle: fires every FIRE_INTERVAL while coins remain. */
+  let autoOn = false;
   let spaceHeld = false;
   /** A press that hasn't fired yet (a quick tap between two steps still counts). */
   let tap = false;
@@ -174,6 +271,9 @@ export function setup(rt: Runtime): GameHooks {
   let shake = 0;
   let cheer = 0;
   let superFx = 0;
+  let superWon = 0;
+  let setFx = 0;
+  let albumPulse = 0;
   let chuteGlow = 0;
   let saveT = 0;
   let shownCoins = s.coins;
@@ -190,7 +290,9 @@ export function setup(rt: Runtime): GameHooks {
   let pops: Pop[] = [];
   let bits: Bit[] = [];
   let fallers: Faller[] = [];
-  /** The Bonus Spin reel: where the strip is, and the run it is making. */
+  let cardFlies: CardFly[] = [];
+  /** The spin reel: which prize list it shows, where the strip is, and the run it is making. */
+  let reelKind: SpinKind = "mini";
   let reelPos = 0;
   let reel: { from: number; to: number } | null = null;
   let lastReelCell = 0;
@@ -251,6 +353,18 @@ export function setup(rt: Runtime): GameHooks {
     reset() {
       audio.tone({ freq: 880, to: 220, dur: 0.4, type: "triangle", vol: 0.04 });
     },
+    card(fresh: boolean) {
+      const notes = fresh ? [988, 1319, 1568, 1976] : [988, 1319];
+      for (const [i, f] of notes.entries()) audio.tone({ freq: f, dur: 0.12, type: "triangle", vol: 0.05, delay: i * 0.07 });
+    },
+    setDone() {
+      const tune = [659, 784, 988, 1319, 988, 1319, 1568, 1976, 2637];
+      for (const [i, f] of tune.entries()) {
+        audio.tone({ freq: f, dur: 0.14, type: "triangle", vol: 0.055, delay: i * 0.09 });
+        audio.tone({ freq: f / 2, dur: 0.14, type: "square", vol: 0.03, delay: i * 0.09 });
+      }
+      audio.noise(0.5, 0.05);
+    },
     dry() {
       audio.tone({ freq: 110, dur: 0.18, type: "square", vol: 0.05 });
     },
@@ -289,6 +403,17 @@ export function setup(rt: Runtime): GameHooks {
 
   const pointerTip = CHUTE[CHUTE.length - 1];
 
+  /** Start the reel strip on a run that ends on prize `idx`. */
+  function aimReel(kind: SpinKind, idx: number) {
+    reelKind = kind;
+    const n = cellsOf(kind).length;
+    const from = reelPos;
+    const at = ((Math.round(from) % n) + n) % n;
+    reel = { from, to: Math.round(from) + n * 5 + ((idx - at + n) % n) };
+  }
+
+  const lampX = (i: number) => W / 2 - (58 * (CORE_COUNT - 1)) / 2 + i * 58;
+
   function onEvent(e: GameEvent) {
     const l = tr();
     switch (e.type) {
@@ -303,15 +428,26 @@ export function setup(rt: Runtime): GameHooks {
           say(l.noCoins, PINK);
         }
         break;
-      case "hit":
+      case "hit": {
         hit = { seg: e.seg, t: 0 };
         sfx.clink(1.2);
         burst(pointerTip.x - 10, pointerTip.y, 10, ["#ffffff", GOLD, NEON], 200);
-        if (e.segment.kind === "bonus") {
-          pop("BONUS!", pointerTip.x - 40, pointerTip.y - 34, PINK, 36);
+        const seg = e.segment;
+        if (seg.kind === "coins") {
+          pop(l.coinRain(seg.value), pointerTip.x - 50, pointerTip.y - 30, GOLD, seg.value >= 6 ? 34 : 28);
+          if (seg.value >= 6) cheer = Math.max(cheer, 1);
+          sfx.win(seg.value * 2);
+        } else if (seg.kind === "core") {
+          burst(pointerTip.x - 20, pointerTip.y, 24, CORE_COLORS, 260);
+          sfx.core();
+          cheer = Math.max(cheer, 1.2);
+        } else if (seg.kind === "card") {
+          burst(pointerTip.x - 20, pointerTip.y, 24, [PINK, "#ffffff", "#ffd6ea"], 260);
+          sfx.card(true);
           cheer = Math.max(cheer, 1.2);
         }
         break;
+      }
       case "tickets":
         bumpTickets = 1;
         if (e.source === "wheel") {
@@ -319,22 +455,34 @@ export function setup(rt: Runtime): GameHooks {
             `+${e.amount}`,
             pointerTip.x - 34 + (Math.random() - 0.5) * 36,
             pointerTip.y - 26 - Math.random() * 20,
-            e.amount >= 12 ? GOLD : "#ffffff",
-            e.amount >= 12 ? 40 : 30,
+            e.amount >= 10 ? GOLD : "#ffffff",
+            e.amount >= 10 ? 40 : 30,
           );
           sfx.win(e.amount);
-          if (e.amount >= 12) cheer = Math.max(cheer, 1);
+          if (e.amount >= 10) cheer = Math.max(cheer, 1);
         }
+        break;
+      case "coinsWon":
+        bumpCoins = 1;
+        sfx.back(3);
+        pop(l.coinsWon(e.amount), REEL.x + REEL.w - 80, REEL.y - 16, MINT, 34);
         break;
       case "land":
         landed.set(e.id, 0);
-        sfx.clink(e.core >= 0 ? 0.5 : 0.6);
+        sfx.clink(e.kind === "coin" ? 0.6 : 0.5);
         break;
       case "fall":
-        fallers.push({ x: e.x, y: e.y, edge: e.edge, stack: e.stack, core: e.core, t: 0 });
+        if (e.edge === "front" && e.kind === "card") {
+          const p = proj(e.x, SHELF_D);
+          cardFlies.push({ card: e.card, x: p.x, y: p.y, t: 0 });
+          burst(p.x, p.y, 26, [PINK, "#ffffff", GOLD], 300);
+          pop(`+${CARD_TICKETS}`, p.x, p.y - 30, GOLD, 34);
+          break;
+        }
+        fallers.push({ x: e.x, y: e.y, edge: e.edge, stack: e.stack, kind: e.kind, core: e.core, card: e.card, t: 0 });
         if (e.edge === "front") {
           const p = proj(e.x, SHELF_D);
-          if (e.core >= 0) {
+          if (e.kind === "core") {
             burst(p.x, p.y, 30, [CORE_COLORS[e.core], "#ffffff", GOLD], 320);
             cheer = Math.max(cheer, 2);
           } else {
@@ -344,39 +492,56 @@ export function setup(rt: Runtime): GameHooks {
           }
         } else sfx.lost();
         break;
-      case "coreLit": {
-        lampPulse[e.core] = 1;
+      case "coreIn": {
+        const i = Math.min(e.count, CORE_COUNT) - 1;
+        lampPulse[i] = 1;
         sfx.core();
-        say(l.coreLit, CORE_COLORS[e.core]);
-        const x = W / 2 - (58 * (CORE_COUNT - 1)) / 2 + e.core * 58;
-        burst(x, LAMPS_Y, 22, [CORE_COLORS[e.core], "#ffffff"], 240);
+        say(l.coreIn(Math.min(e.count, CORE_COUNT), CORE_COUNT), CORE_COLORS[i]);
+        burst(lampX(i), LAMPS_Y, 22, [CORE_COLORS[i], "#ffffff"], 240);
         break;
       }
-      case "spinStart": {
+      case "card": {
+        albumPulse = 1;
+        sfx.card(e.fresh);
+        const name = l.cards[CARD_IDS[e.card]];
+        say(`${name} · ${e.fresh ? l.cardNew : l.cardDupe}`, e.fresh ? PINK : "#ffd6ea");
+        cheer = Math.max(cheer, 1.2);
+        break;
+      }
+      case "setComplete":
+        setFx = SET_TIME;
+        shake = Math.max(shake, 0.6);
+        cheer = SET_TIME;
+        sfx.setDone();
+        for (let i = 0; i < 6; i++) burst(60 + i * 84, 300 + (i % 2) * 200, 26, [PINK, GOLD, NEON, MINT], 380);
+        break;
+      case "spinStart":
         sfx.spinStart();
-        const idx = SPIN_PRIZES.indexOf(e.prize as (typeof SPIN_PRIZES)[number]);
-        const n = SPIN_PRIZES.length;
-        const from = reelPos;
-        const at = ((Math.round(from) % n) + n) % n;
-        reel = { from, to: Math.round(from) + n * 5 + ((idx - at + n) % n) };
-        say(l.bonusSpin, GOLD);
+        aimReel(e.kind, e.idx);
+        if (e.kind === "super") {
+          say(l.superSpin, PINK);
+          shake = Math.max(shake, 0.4);
+          cheer = Math.max(cheer, 2);
+        } else say(l.miniSpin, GOLD);
+        break;
+      case "spinWin": {
+        const big = e.kind === "super" || e.prize.value >= 40;
+        sfx.spinWin(e.kind === "super" ? 100 : e.prize.value);
+        if (e.prize.kind === "tickets") pop(`+${e.prize.value}`, REEL.x + REEL.w - 70, REEL.y - 16, GOLD, big ? 46 : 38);
+        burst(REEL.x + REEL.w - 70, REEL.y + REEL.h / 2, big ? 40 : 22, [GOLD, "#ffffff", PINK], 300);
+        cheer = Math.max(cheer, 1.5);
+        if (big) shake = Math.max(shake, 0.3);
+        if (e.kind === "super") {
+          superFx = SUPER_FX;
+          superWon = e.prize.value;
+          shake = 0.9;
+          cheer = SUPER_FX;
+          sfx.superBonus();
+          for (let i = 0; i < 6; i++) burst(60 + i * 84, 300 + (i % 2) * 200, 26, CORE_COLORS, 380);
+        }
         break;
       }
-      case "spinWin":
-        sfx.spinWin(e.prize);
-        pop(`+${e.prize}`, REEL.x + REEL.w - 70, REEL.y - 16, GOLD, e.prize >= 65 ? 46 : 38);
-        burst(REEL.x + REEL.w - 70, REEL.y + REEL.h / 2, e.prize >= 65 ? 40 : 22, [GOLD, "#ffffff", PINK], 300);
-        cheer = Math.max(cheer, 1.5);
-        if (e.prize >= 65) shake = Math.max(shake, 0.3);
-        break;
-      case "super":
-        superFx = SUPER_TIME;
-        shake = 0.9;
-        cheer = SUPER_TIME;
-        sfx.superBonus();
-        for (let i = 0; i < 6; i++) burst(60 + i * 84, 300 + (i % 2) * 200, 26, CORE_COLORS, 380);
-        break;
-      case "reset":
+      case "superReset":
         sfx.reset();
         break;
       case "over":
@@ -406,18 +571,40 @@ export function setup(rt: Runtime): GameHooks {
     storage.set(RUN_KEY, s);
   }
 
+  /** Keep the album's home copy in step with the run (and the run saved with it). */
+  function storeAlbum() {
+    album = [...s.album];
+    storage.set(ALBUM_KEY, album);
+    save();
+  }
+
+  /** Move stored coupon coins into a run that has not started shooting yet. */
+  function claimPending() {
+    if (pendingCoins <= 0 || s.over || s.shots > 0) return;
+    const added = grantCoins(s, pendingCoins);
+    pendingCoins = 0;
+    storage.set(PENDING_KEY, null);
+    shownCoins = s.coins - added;
+    if (added > 0) bumpCoins = 1;
+  }
+
   function newRun() {
-    s = createRun(newSeed());
+    autoOn = false;
+    pointersHeld.clear();
+    s = createRun(newSeed(), undefined, album);
+    claimPending();
     reported = false;
     newBest = false;
     overAt = -1;
     shownCoins = s.coins;
     shownTickets = s.tickets;
     fallers = [];
+    cardFlies = [];
     pops = [];
     landed.clear();
     reel = null;
     superFx = 0;
+    setFx = 0;
     storage.set(RUN_KEY, null);
     resumable = false;
     overlay = null;
@@ -426,16 +613,17 @@ export function setup(rt: Runtime): GameHooks {
   // ---------------------------------------------------------------- overlay buttons
 
   const PANEL: Rect = { x: 40, y: 236, w: 460, h: 428 };
-  const startButtons = (): { rect: Rect; id: "go" | "new" | "rules" }[] => {
-    const list: { rect: Rect; id: "go" | "new" | "rules" }[] = [{ rect: { x: 100, y: 500, w: 340, h: 66 }, id: "go" }];
+  const startButtons = (): { rect: Rect; id: ButtonId }[] => {
+    const list: { rect: Rect; id: ButtonId }[] = [{ rect: { x: 100, y: 500, w: 340, h: 66 }, id: "go" }];
     if (resumable) list.push({ rect: { x: 100, y: 578, w: 164, h: 56 }, id: "new" }, { rect: { x: 276, y: 578, w: 164, h: 56 }, id: "rules" });
     else list.push({ rect: { x: 140, y: 578, w: 260, h: 56 }, id: "rules" });
     return list;
   };
-  const pauseButtons = (): { rect: Rect; id: "go" | "new" | "rules" }[] => [
+  const pauseButtons = (): { rect: Rect; id: ButtonId }[] => [
     { rect: { x: 100, y: 390, w: 340, h: 66 }, id: "go" },
     { rect: { x: 100, y: 470, w: 164, h: 56 }, id: "rules" },
     { rect: { x: 276, y: 470, w: 164, h: 56 }, id: "new" },
+    ...(coupons ? [{ rect: { x: 100, y: 538, w: 340, h: 56 }, id: "code" as const }] : []),
   ];
   const RULE_LINE = 28;
   const RULE_GAP = 14;
@@ -452,9 +640,12 @@ export function setup(rt: Runtime): GameHooks {
   };
   const AGAIN: Rect = { x: 110, y: 600, w: 320, h: 66 };
 
-  function press(id: "go" | "new" | "rules", from: "start" | "pause") {
+  function press(id: ButtonId, from: "start" | "pause") {
     audio.tone({ freq: 660, dur: 0.06, type: "square", vol: 0.04 });
-    if (id === "go") overlay = null;
+    if (id === "go") {
+      claimPending();
+      overlay = null;
+    } else if (id === "code") coupons?.open();
     else if (id === "new") newRun();
     else {
       rulesFrom = from;
@@ -473,12 +664,19 @@ export function setup(rt: Runtime): GameHooks {
     t += dt;
     // A resumed run waits behind the menu; a fresh one idles there (wheel and pusher moving)
     const frozen =
-      overlay === "pause" || (overlay === "rules" && rulesFrom === "pause") || (overlay !== null && overlay !== "over" && resumable);
+      overlay === "pause" ||
+      overlay === "album" ||
+      (overlay === "rules" && rulesFrom === "pause") ||
+      (overlay !== null && overlay !== "over" && resumable);
     if (!frozen) {
       const live = overlay === null;
-      const shoot = live && (pointerHeld !== null || spaceHeld || tap);
-      if (tap && s.cooldown <= 0) tap = false;
-      for (const e of update(s, { shoot }, dt)) onEvent(e);
+      const shoot = live && (pointersHeld.size > 0 || spaceHeld || tap || (autoOn && s.coins > 0));
+      const evs = update(s, { shoot }, dt);
+      // A tap is spent once the machine has answered it (a shot, or the dry click)
+      if (evs.some((e) => e.type === "shoot" || e.type === "dry")) tap = false;
+      for (const e of evs) onEvent(e);
+      if (evs.some((e) => e.type === "card" || e.type === "setComplete")) storeAlbum();
+      if (autoOn && (s.coins <= 0 || s.over || !live)) autoOn = false;
       const seg = segmentAt(s.wheel);
       if (seg !== lastSeg) {
         lastSeg = seg;
@@ -496,10 +694,12 @@ export function setup(rt: Runtime): GameHooks {
 
     // Lights and counters
     const busyReels = s.spin !== null;
-    chase += dt * (superFx > 0 ? 24 : busyReels ? 14 : 5);
+    chase += dt * (superFx > 0 || setFx > 0 ? 24 : busyReels ? 14 : 5);
     shake = Math.max(0, shake - dt);
     cheer = Math.max(0, cheer - dt);
     superFx = Math.max(0, superFx - dt);
+    setFx = Math.max(0, setFx - dt);
+    albumPulse = Math.max(0, albumPulse - dt * 1.2);
     chuteGlow = Math.max(0, chuteGlow - dt * 4);
     bumpCoins = Math.max(0, bumpCoins - dt * 4);
     bumpTickets = Math.max(0, bumpTickets - dt * 4);
@@ -524,14 +724,10 @@ export function setup(rt: Runtime): GameHooks {
       else landed.set(id, k + dt);
     }
 
-    // The Bonus Spin reel
-    if (s.spin && !reel) {
-      const n = SPIN_PRIZES.length;
-      const idx = SPIN_PRIZES.indexOf(s.spin.prize as (typeof SPIN_PRIZES)[number]);
-      reel = { from: reelPos, to: Math.round(reelPos) + n * 5 + ((idx - (Math.round(reelPos) % n) + n) % n) };
-    }
+    // The spin reel (a resumed run may come back mid-spin)
+    if (s.spin && !reel) aimReel(s.spin.kind, s.spin.idx);
     if (s.spin && reel) {
-      const k = clamp(s.spin.t / SPIN_TIME, 0, 1);
+      const k = clamp(s.spin.t / spinTimeOf(s.spin.kind), 0, 1);
       reelPos = reel.from + (reel.to - reel.from) * reelEase(k);
       const cell = Math.floor(reelPos);
       if (cell !== lastReelCell) {
@@ -551,7 +747,9 @@ export function setup(rt: Runtime): GameHooks {
     for (const p of pops) p.t += dt;
     pops = pops.filter((p) => p.t < 1);
     for (const f of fallers) f.t += dt;
-    fallers = fallers.filter((f) => f.t < (f.edge === "front" && f.core < 0 ? 0.8 : 0.55));
+    fallers = fallers.filter((f) => f.t < (f.edge === "front" && f.kind === "coin" ? 0.8 : 0.55));
+    for (const c of cardFlies) c.t += dt;
+    cardFlies = cardFlies.filter((c) => c.t < CARD_FLY);
     if (bits.length > 400) bits.splice(0, bits.length - 400);
   }
 
@@ -579,7 +777,7 @@ export function setup(rt: Runtime): GameHooks {
       }
       const k = clamp(f.t / FLIGHT_DOWN, 0, 1);
       const end = proj(f.x, py + 16);
-      if (f.core >= 0) {
+      if (f.kind === "core") {
         const y = lerpN(330, end.y, k * k);
         const img = sp.cores[f.core];
         const w = 48 * end.s;
@@ -590,7 +788,21 @@ export function setup(rt: Runtime): GameHooks {
         ctx.restore();
         continue;
       }
-      const from = f.from === "hub" ? WHEEL_C : f.from === "wheel" ? pointerTip : { x: end.x, y: 330 };
+      if (f.kind === "card") {
+        // Flutters down, flipping, to where it will land
+        const y = lerpN(330, end.y, k * k);
+        const w = 40 * end.s;
+        ctx.save();
+        ctx.translate(end.x, y - w * 0.6);
+        ctx.rotate(Math.sin(f.t * 9) * 0.25);
+        ctx.scale(Math.max(0.2, Math.abs(Math.cos(f.t * 7))), 1);
+        ctx.shadowColor = PINK;
+        ctx.shadowBlur = 18;
+        drawCardFace(ctx, sp.cards[f.card] ?? null, -w / 2, (-w * 2) / 3, w, (w * 4) / 3, true);
+        ctx.restore();
+        continue;
+      }
+      const from = pointerTip;
       const cx = (from.x + end.x) / 2;
       const cy = Math.min(from.y, end.y) - 60;
       const x = (1 - k) * (1 - k) * from.x + 2 * (1 - k) * k * cx + k * k * end.x;
@@ -610,12 +822,12 @@ export function setup(rt: Runtime): GameHooks {
         const y = p.y + 200 * k + 900 * k * k;
         if (f.t < 0.35) {
           ctx.globalAlpha = 1 - k / 0.5;
-          if (f.core >= 0) {
+          if (f.kind === "core") {
             const img = sp.cores[f.core];
             ctx.drawImage(img, x - 26, y - 40, 52, 52 * (img.height / img.width));
           } else for (let i = 0; i < f.stack; i++) drawFlyingCoin(ctx, sp, x + i * 8, y - i * 6, 30, f.t * 20 + i);
           ctx.globalAlpha = 1;
-        } else if (f.core < 0) {
+        } else if (f.kind === "coin") {
           // Back to the coin counter
           const q = easeOutCubic((f.t - 0.35) / 0.45);
           const tx = COINS_BOX.x + COINS_BOX.w / 2;
@@ -630,9 +842,15 @@ export function setup(rt: Runtime): GameHooks {
         const x = p.x + dir * 90 * f.t;
         const y = p.y + 500 * f.t * f.t;
         ctx.globalAlpha = Math.max(0, 1 - f.t / 0.55);
-        if (f.core >= 0) {
+        if (f.kind === "core") {
           const img = sp.cores[f.core];
           ctx.drawImage(img, x - 22, y - 34, 44, 44 * (img.height / img.width));
+        } else if (f.kind === "card") {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(dir * f.t * 6);
+          drawCardFace(ctx, sp.cards[f.card] ?? null, -16, -21, 32, 43, true);
+          ctx.restore();
         } else drawFlyingCoin(ctx, sp, x, y, 26 * p.s, 1.2 + f.t * 8);
         ctx.globalAlpha = 1;
       }
@@ -642,12 +860,12 @@ export function setup(rt: Runtime): GameHooks {
   function drawMachine() {
     const l = tr();
     const v = view();
-    const rainbow = superFx > 0;
+    const rainbow = superFx > 0 || setFx > 0 || s.spin?.kind === "super";
     drawBackground(ctx, sp, v, t);
     drawCabinet(ctx, v, t, chase, rainbow);
     // Title on the cabinet's crown when the phone is tall enough to show it
     if (v.y < -50) neon(ctx, l.title, W / 2, v.y / 2, fitSize(ctx, l.title, 40, 380), NEON, 1);
-    drawMarquee(ctx, l.marquee(SUPER_TICKETS), t, rainbow);
+    drawMarquee(ctx, l.marquee(Math.max(...SUPER_PRIZES)), t, rainbow);
     // Menu button
     ctx.save();
     ctx.fillStyle = "rgba(10,8,32,0.85)";
@@ -661,16 +879,18 @@ export function setup(rt: Runtime): GameHooks {
     for (let i = 0; i < 3; i++) ctx.fillRect(MENU_BTN.x + 27, MENU_BTN.y + 12 + i * 6, 24, 3);
     text(ctx, l.menu, MENU_BTN.x + MENU_BTN.w / 2, MENU_BTN.y + 41, 14, "#ffffff", "center", null);
     ctx.restore();
-    betaTag(ctx, 492, 35, l.beta);
-    drawCoreLamps(ctx, sp, s.cores, t, rainbow, lampPulse);
+    drawAlbumButton(ctx, ALBUM_BTN, l.album, ownedCount(s.album), CARD_COUNT, albumPulse);
+    betaTag(ctx, 488, 86, l.beta);
+    drawCoreLamps(ctx, sp, s.cores, CORE_COUNT, t, superFx > 0, lampPulse);
     drawRobots(ctx, robotsReady(), t, cheer);
     drawWheel(ctx, sp, s.wheel, t, chase, hit);
     drawGlass(ctx, { x: 120, y: 112, w: 300, h: 300 }, t);
 
     // Reels and the spins counter
     const spinning = s.spin !== null;
-    drawReels(ctx, l.youWin, SPIN_PRIZES, reelPos, spinning, !!s.spin?.paid, t);
-    drawCounter(ctx, SPINS_BOX, l.spins, s.queued, PINK, 2, 0);
+    const reelLabel = !s.spin ? l.youWin : s.spin.kind === "super" ? "SUPER" : "MINI";
+    drawReels(ctx, reelLabel, cellsOf(reelKind), reelPos, spinning, !!s.spin?.paid, t, s.spin?.kind === "super");
+    drawCounter(ctx, SPINS_BOX, l.spins, s.queue.length, PINK, 2, 0);
 
     // The shelf
     drawShelf(ctx, t);
@@ -680,7 +900,7 @@ export function setup(rt: Runtime): GameHooks {
     for (const b of order) drawShadow(ctx, b);
     for (const b of order) {
       const k = landed.get(b.id);
-      drawBody(ctx, sp, b, t, k === undefined ? 0 : Math.max(0, 1 - k / 0.18), b.core >= 0 && s.cores[b.core] ? 1 : 0);
+      drawBody(ctx, sp, b, t, k === undefined ? 0 : Math.max(0, 1 - k / 0.18));
     }
     drawFrontLip(ctx, chase, rainbow);
     drawFallers();
@@ -691,8 +911,9 @@ export function setup(rt: Runtime): GameHooks {
     // Controls
     drawCounter(ctx, COINS_BOX, l.coins, shownCoins, MINT, 4, bumpCoins);
     drawCounter(ctx, TICKETS_BOX, l.tickets, shownTickets, AMBER, 5, bumpTickets);
-    const pressed = pointerHeld !== null || spaceHeld;
+    const pressed = pointersHeld.size > 0 || spaceHeld;
     drawShootButton(ctx, l.shoot, pressed, t, s.coins > 0 && !s.over);
+    drawAutoButton(ctx, AUTO_BTN, l.auto, autoOn ? l.on : l.off, autoOn, s.coins > 0 && !s.over);
     drawTray(ctx, sp, shownCoins, view());
     if (s.shots < 6 && overlay === null)
       text(ctx, l.holdHint, W / 2, SHELF_BOTTOM + 38, 15, "#cfd6ff", "center", INK);
@@ -726,8 +947,26 @@ export function setup(rt: Runtime): GameHooks {
       text(ctx, toast.text, W / 2, TOAST_Y + 1, fitSize(ctx, toast.text, 26, 280), toast.color);
       ctx.globalAlpha = 1;
     }
+    for (const c of cardFlies) {
+      // Pop up off the front edge, then arc into the album button
+      const k = c.t / CARD_FLY;
+      const q = easeOutCubic(clamp((k - 0.25) / 0.75, 0, 1));
+      const tx = ALBUM_BTN.x + 20;
+      const ty = ALBUM_BTN.y + 20;
+      const x = lerpN(c.x, tx, q);
+      const y = lerpN(c.y - 40 * Math.min(1, k / 0.25), ty, q) - Math.sin(q * Math.PI) * 80;
+      const w = lerpN(64, 18, q);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate((1 - q) * 0.2 - 0.12 * q);
+      ctx.shadowColor = PINK;
+      ctx.shadowBlur = 20;
+      drawCardFace(ctx, sp.cards[c.card] ?? null, -w / 2, (-w * 2) / 3, w, (w * 4) / 3, true);
+      ctx.restore();
+    }
+    if (setFx > 0) drawSetCelebration();
     if (superFx > 0) {
-      const k = SUPER_TIME - superFx;
+      const k = SUPER_FX - superFx;
       const l = tr();
       const pop = k < 0.3 ? easeOutCubic(k / 0.3) : 1;
       const fade = superFx < 0.4 ? superFx / 0.4 : 1;
@@ -738,14 +977,81 @@ export function setup(rt: Runtime): GameHooks {
       ctx.translate(W / 2, WHEEL_C.y - 18);
       ctx.scale(pop, pop);
       ctx.rotate(Math.sin(t * 6) * 0.03);
-      neon(ctx, l.superBonus, 0, 0, fitSize(ctx, l.superBonus, 62, 480), CORE_COLORS[Math.floor(t * 10) % 6], 1.8);
+      neon(ctx, l.superSpin, 0, 0, fitSize(ctx, l.superSpin, 62, 480), CORE_COLORS[Math.floor(t * 10) % 6], 1.8);
       ctx.restore();
       ctx.save();
       ctx.globalAlpha = fade;
-      neon(ctx, `+${SUPER_TICKETS} ${l.tickets}`, W / 2, WHEEL_C.y + 44, 40, GOLD, 1.4);
+      neon(ctx, `+${superWon} ${l.tickets}`, W / 2, WHEEL_C.y + 44, 40, GOLD, 1.4);
       ctx.restore();
       if (Math.random() < 0.5) burst(Math.random() * W, WHEEL_C.y - 70, 3, CORE_COLORS, 160);
     }
+  }
+
+  /** All ten cards fanned out over the wheel, with the set bonus. */
+  function drawSetCelebration() {
+    const l = tr();
+    const k = SET_TIME - setFx;
+    const grow = k < 0.4 ? easeOutCubic(k / 0.4) : 1;
+    const fade = setFx < 0.5 ? setFx / 0.5 : 1;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = "rgba(10,4,30,0.8)";
+    ctx.fillRect(0, WHEEL_C.y - 150, W, 330);
+    for (let i = 0; i < CARD_COUNT; i++) {
+      const a = (i - (CARD_COUNT - 1) / 2) * 0.13 * grow;
+      ctx.save();
+      ctx.translate(W / 2, WHEEL_C.y + 330);
+      ctx.rotate(a);
+      ctx.translate(0, -360 - Math.sin(t * 5 + i) * 4);
+      ctx.shadowColor = CORE_COLORS[i % 6];
+      ctx.shadowBlur = 16;
+      drawCardFace(ctx, sp.cards[i] ?? null, -36, -48, 72, 96, true);
+      ctx.restore();
+    }
+    ctx.translate(W / 2, WHEEL_C.y + 70);
+    ctx.scale(grow, grow);
+    ctx.rotate(Math.sin(t * 6) * 0.03);
+    neon(ctx, l.setDone, 0, 0, fitSize(ctx, l.setDone, 52, 480), PINK, 1.8);
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = fade;
+    neon(ctx, l.setBonus(SET_TICKETS), W / 2, WHEEL_C.y + 128, 40, GOLD, 1.4);
+    ctx.restore();
+    if (Math.random() < 0.5) burst(Math.random() * W, WHEEL_C.y - 120, 3, [PINK, GOLD, NEON, MINT], 160);
+  }
+
+  // The album card: a 5×2 grid of cards with their names
+  const ALBUM: Rect = { x: 16, y: H / 2 - 272, w: 508, h: 544 };
+  const ALBUM_CARD = { w: 86, h: 115, gap: 9, row: 158 };
+  const albumClose = (): Rect => ({ x: 150, y: ALBUM.y + ALBUM.h - 82, w: 240, h: 58 });
+
+  function drawAlbum() {
+    const l = tr();
+    const r = ALBUM;
+    panel(ctx, r, 24);
+    neon(ctx, l.albumTitle, W / 2, r.y + 46, fitSize(ctx, l.albumTitle, 36, r.w - 60), PINK);
+    text(ctx, l.albumNote(CARD_TICKETS, SET_TICKETS), W / 2, r.y + 86, fitSize(ctx, l.albumNote(CARD_TICKETS, SET_TICKETS), 18, r.w - 40), "#d6dcff", "center", null);
+    const x0 = W / 2 - (5 * ALBUM_CARD.w + 4 * ALBUM_CARD.gap) / 2;
+    for (let i = 0; i < CARD_COUNT; i++) {
+      const col = i % 5;
+      const row = Math.floor(i / 5);
+      const x = x0 + col * (ALBUM_CARD.w + ALBUM_CARD.gap);
+      const y = r.y + 112 + row * ALBUM_CARD.row;
+      const owned = s.album[i];
+      ctx.save();
+      if (owned) {
+        ctx.shadowColor = CORE_COLORS[i % 6];
+        ctx.shadowBlur = 12;
+      }
+      drawCardFace(ctx, sp.cards[i] ?? null, x, y, ALBUM_CARD.w, ALBUM_CARD.h, owned);
+      ctx.restore();
+      const lines = wrap(ctx, l.cards[CARD_IDS[i]], ALBUM_CARD.w + 6, 13).slice(0, 2);
+      for (const [j, ln] of lines.entries())
+        text(ctx, ln, x + ALBUM_CARD.w / 2, y + ALBUM_CARD.h + 13 + j * 15, 13, owned ? "#ffffff" : "#7d7aa8", "center", null);
+    }
+    const owned = ownedCount(s.album);
+    text(ctx, `${owned}/${CARD_COUNT}`, W / 2, r.y + 112 + 2 * ALBUM_CARD.row + 4, 26, owned > 0 ? GOLD : "#bfc6ff", "center", null, LED_FONT, 700);
+    button(ctx, albumClose(), l.close, ["#ff7eb6", "#c0306e"], 26);
   }
 
   function drawOverlay() {
@@ -754,7 +1060,8 @@ export function setup(rt: Runtime): GameHooks {
     const v = view();
     ctx.fillStyle = "rgba(4,3,14,0.66)";
     ctx.fillRect(v.x, v.y, v.w, v.h);
-    if (overlay === "start") {
+    if (overlay === "album") drawAlbum();
+    else if (overlay === "start") {
       panel(ctx, PANEL, 26);
       neon(ctx, l.title, W / 2, 300, fitSize(ctx, l.title, 58, 400), NEON, 1.3);
       text(ctx, l.subtitle, W / 2, 352, 22, "#d6dcff", "center", null);
@@ -766,10 +1073,10 @@ export function setup(rt: Runtime): GameHooks {
         button(ctx, b.rect, label, b.id === "go" ? ["#ffb03a", "#e0560e"] : ["#3a8bff", "#2340b0"], b.id === "go" ? 30 : 22);
       }
     } else if (overlay === "pause") {
-      panel(ctx, { x: 60, y: 290, w: 420, h: 270 }, 24);
+      panel(ctx, { x: 60, y: 290, w: 420, h: coupons ? 322 : 270 }, 24);
       neon(ctx, l.paused, W / 2, 344, 40, NEON);
       for (const b of pauseButtons()) {
-        const label = b.id === "go" ? l.resume : b.id === "new" ? l.newRun : l.rules;
+        const label = b.id === "go" ? l.resume : b.id === "new" ? l.newRun : b.id === "code" ? l.enterCode : l.rules;
         button(ctx, b.rect, label, b.id === "go" ? ["#ffb03a", "#e0560e"] : ["#3a8bff", "#2340b0"], b.id === "go" ? 28 : 20);
       }
     } else if (overlay === "rules") {
@@ -803,18 +1110,31 @@ export function setup(rt: Runtime): GameHooks {
       ctx.fillStyle = AMBER;
       ctx.fillText(String(Math.round(shownTickets)), W / 2, 448);
       ctx.restore();
-      text(ctx, l.supersLine(s.supers), W / 2, 518, 22, s.supers > 0 ? GOLD : "#bfc6ff", "center", null);
-      if (newBest) neon(ctx, l.newBest, W / 2, 560, 28, MINT);
-      else text(ctx, l.best(best.tickets), W / 2, 560, 20, AMBER, "center", null);
+      text(ctx, l.supersLine(s.supers), W / 2, 510, 22, s.supers > 0 ? GOLD : "#bfc6ff", "center", null);
+      if (s.sets > 0) text(ctx, l.setsLine(s.sets), W / 2, 540, 20, PINK, "center", null);
+      if (newBest) neon(ctx, l.newBest, W / 2, 574, 28, MINT);
+      else text(ctx, l.best(best.tickets), W / 2, 574, 20, AMBER, "center", null);
       button(ctx, AGAIN, l.again, ["#ffb03a", "#e0560e"], 30);
     }
   }
 
   // ---------------------------------------------------------------- input
 
+  function inShoot(p: PointerInfo) {
+    return Math.hypot(p.x - SHOOT.x, p.y - SHOOT.y) < SHOOT.r + 26;
+  }
+
+  function openAlbum(from: Overlay) {
+    audio.tone({ freq: 880, dur: 0.06, type: "triangle", vol: 0.04 });
+    pointersHeld.clear();
+    albumFrom = from;
+    overlay = "album";
+  }
+
   function down(p: PointerInfo) {
     if (overlay === "start") {
       for (const b of startButtons()) if (inRect(p, b.rect)) return press(b.id, "start");
+      if (inRect(p, ALBUM_BTN)) openAlbum("start");
       return;
     }
     if (overlay === "pause") {
@@ -823,6 +1143,10 @@ export function setup(rt: Runtime): GameHooks {
     }
     if (overlay === "rules") {
       if (inRect(p, rulesClose()) || !inRect(p, rulesRect())) overlay = rulesFrom;
+      return;
+    }
+    if (overlay === "album") {
+      if (inRect(p, albumClose()) || !inRect(p, ALBUM)) overlay = albumFrom;
       return;
     }
     if (overlay === "over") {
@@ -834,11 +1158,41 @@ export function setup(rt: Runtime): GameHooks {
       save();
       return;
     }
-    if (Math.hypot(p.x - SHOOT.x, p.y - SHOOT.y) < SHOOT.r + 26) {
-      pointerHeld = p.id;
+    if (inRect(p, { x: ALBUM_BTN.x - 6, y: ALBUM_BTN.y - 6, w: ALBUM_BTN.w + 12, h: ALBUM_BTN.h + 6 })) {
+      openAlbum(null);
+      return;
+    }
+    if (inShoot(p)) {
+      pointersHeld.add(p.id);
       tap = true;
+      return;
+    }
+    if (inRect(p, { x: AUTO_BTN.x - 8, y: AUTO_BTN.y - 8, w: AUTO_BTN.w + 16, h: AUTO_BTN.h + 16 })) {
+      if (autoOn) autoOn = false;
+      else if (s.coins > 0 && !s.over) autoOn = true;
+      audio.tone({ freq: autoOn ? 740 : 520, dur: 0.05, type: "square", vol: 0.04 });
     }
   }
+
+  // Coupons: coins only, never tickets, never a score report. A run in play gets
+  // them at once; otherwise they wait in storage for the next run.
+  const offGrant = coupons?.onGrant((grant) => {
+    let coins = 0;
+    for (const r of grant.rewards) if (r.kind === "coins" && r.amount > 0) coins += Math.floor(r.amount);
+    if (coins <= 0) return;
+    const live = !s.over && s.shots > 0;
+    if (live) {
+      grantCoins(s, coins);
+      save();
+    } else {
+      pendingCoins += coins;
+      storage.set(PENDING_KEY, pendingCoins);
+    }
+    bumpCoins = 1;
+    audio.tone({ freq: 880, dur: 0.1, type: "triangle", vol: 0.05 });
+    pop(tr().couponCoins(coins), COINS_BOX.x + COINS_BOX.w / 2, COINS_BOX.y + COINS_BOX.h + 30, MINT, 34);
+    say(tr().couponCoins(coins), MINT);
+  });
 
   return {
     update: step,
@@ -858,7 +1212,7 @@ export function setup(rt: Runtime): GameHooks {
     pointer: {
       down,
       up(p) {
-        if (p.id === pointerHeld) pointerHeld = null;
+        pointersHeld.delete(p.id);
       },
     },
     keydown(e) {
@@ -868,6 +1222,7 @@ export function setup(rt: Runtime): GameHooks {
         if (overlay === "start" || overlay === "pause") press("go", overlay);
         else if (overlay === "over") newRun();
         else if (overlay === "rules") overlay = rulesFrom;
+        else if (overlay === "album") overlay = albumFrom;
         else onSpace(true);
       } else if (e.code === "Escape") {
         if (overlay === null) {
@@ -875,19 +1230,22 @@ export function setup(rt: Runtime): GameHooks {
           save();
         } else if (overlay === "pause") overlay = null;
         else if (overlay === "rules") overlay = rulesFrom;
+        else if (overlay === "album") overlay = albumFrom;
       }
     },
     keyup(e) {
       if (e.code === "Space" || e.code === "Enter") onSpace(false);
     },
     suspend() {
-      pointerHeld = null;
+      pointersHeld.clear();
+      autoOn = false;
       spaceHeld = false;
       tap = false;
       if (overlay === null) overlay = "pause";
       save();
     },
     dispose() {
+      offGrant?.();
       save();
     },
   };

@@ -16,6 +16,7 @@ import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/
 import {
   audioBus,
   type CloudSave,
+  type CouponGrant,
   createStorage,
   type GameManifest,
   type GameModule,
@@ -38,6 +39,7 @@ import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
 import { OnlineEntry } from "#/components/features/online/online-entry";
 import { OnlineSession } from "#/components/features/online/online-session";
+import { CouponDialog } from "./coupon-dialog";
 import { FavoriteButton } from "./favorite-button";
 import { ScoreDialog, takePendingScore } from "./score-dialog";
 
@@ -76,6 +78,8 @@ export function GamePlayer({
   const [muted, setMuted] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [couponOpen, setCouponOpen] = useState(false);
+  const grantListeners = useRef(new Set<(g: CouponGrant) => void>());
   const [report, setReport] = useState<ScoreReport | null>(null);
   const reportTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -144,6 +148,12 @@ export function GamePlayer({
     else instanceRef.current?.resume?.();
   }, [needsRotate]);
 
+  const toggleCoupon = useCallback((open: boolean) => {
+    setCouponOpen(open);
+    if (open) instanceRef.current?.pause?.();
+    else instanceRef.current?.resume?.();
+  }, []);
+
   const mount = useCallback((match?: OnlineMatch) => {
     const stage = stageRef.current;
     if (!module || !stage) return;
@@ -181,13 +191,24 @@ export function GamePlayer({
       audio: audioBus,
       // Read live: games redraw every frame, so a language switch shows at once
       locale: () => useLocaleStore.getState().locale,
+      // Not in online matches: the room owns the state
+      coupons:
+        game.coupons && !match
+          ? {
+              open: () => toggleCoupon(true),
+              onGrant: (cb) => {
+                grantListeners.current.add(cb);
+                return () => void grantListeners.current.delete(cb);
+              },
+            }
+          : undefined,
       reportScore: (r) => {
         if (r.score <= 0) return;
         clearTimeout(reportTimer.current);
         reportTimer.current = setTimeout(() => setReport(r), REPORT_DELAY);
       },
     });
-  }, [module, game.slug, game.requiresAccount, userId, userName]);
+  }, [module, game.slug, game.requiresAccount, game.coupons, userId, userName, toggleCoupon]);
 
   const unmount = useCallback(() => {
     instanceRef.current?.destroy();
@@ -352,6 +373,16 @@ export function GamePlayer({
           {leaderboard}
         </DialogContent>
       </Dialog>
+
+      {couponOpen && (
+        <CouponDialog
+          game={game}
+          onClose={() => toggleCoupon(false)}
+          onGrant={(grant) => {
+            for (const cb of [...grantListeners.current]) cb(grant);
+          }}
+        />
+      )}
 
       {report && <ScoreDialog game={game} report={report} onClose={() => setReport(null)} onReplay={replay} />}
     </div>

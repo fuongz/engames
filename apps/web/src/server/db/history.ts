@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { gameIdOf } from "./games";
 import type { Db } from "./leaderboard";
-import { historyConsent, onlineMatch, onlineMatchPlayer } from "./schema";
+import { game, historyConsent, onlineMatch, onlineMatchPlayer } from "./schema";
 
 // SERVER-ONLY implementation behind server/history.ts: signed-in players'
 // online match history, kept only for those who said yes.
@@ -59,7 +60,7 @@ export async function recordMatch(db: Db, input: MatchInput): Promise<number | n
   const [row] = await db
     .insert(onlineMatch)
     .values({
-      gameSlug: input.gameSlug,
+      gameId: await gameIdOf(db, input.gameSlug),
       mode: input.mode,
       roomCode: input.roomCode,
       settings: JSON.stringify(input.settings),
@@ -110,7 +111,7 @@ export async function historyFor(db: Db, userId: string, limit: number, before?:
   const mine = await db
     .select({
       id: onlineMatch.id,
-      gameSlug: onlineMatch.gameSlug,
+      gameSlug: game.slug,
       mode: onlineMatch.mode,
       settings: onlineMatch.settings,
       playedAt: onlineMatch.playedAt,
@@ -121,6 +122,7 @@ export async function historyFor(db: Db, userId: string, limit: number, before?:
     })
     .from(onlineMatchPlayer)
     .innerJoin(onlineMatch, eq(onlineMatch.id, onlineMatchPlayer.matchId))
+    .innerJoin(game, eq(game.id, onlineMatch.gameId))
     .where(and(eq(onlineMatchPlayer.userId, userId), before === undefined ? undefined : lt(onlineMatch.id, before)))
     .orderBy(desc(onlineMatch.id))
     .limit(limit);

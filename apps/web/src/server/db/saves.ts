@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import { gameIdOf } from "./games";
 import type { Db } from "./leaderboard";
 import { gameSave } from "./schema";
 
@@ -15,10 +16,10 @@ export type WriteResult =
   | { ok: true; version: number }
   | { ok: false; conflict: StoredSave };
 
-const where = (userId: string, gameSlug: string, slot: number) =>
+const where = async (db: Db, userId: string, gameSlug: string, slot: number) =>
   and(
     eq(gameSave.userId, userId),
-    eq(gameSave.gameSlug, gameSlug),
+    eq(gameSave.gameId, await gameIdOf(db, gameSlug)),
     eq(gameSave.slot, slot),
   );
 
@@ -31,7 +32,7 @@ export async function readSave(
   const [row] = await db
     .select({ json: gameSave.data, version: gameSave.version })
     .from(gameSave)
-    .where(where(userId, gameSlug, slot))
+    .where(await where(db, userId, gameSlug, slot))
     .limit(1);
   return row ?? null;
 }
@@ -49,7 +50,12 @@ export async function listSaves(
       version: gameSave.version,
     })
     .from(gameSave)
-    .where(and(eq(gameSave.userId, userId), eq(gameSave.gameSlug, gameSlug)))
+    .where(
+      and(
+        eq(gameSave.userId, userId),
+        eq(gameSave.gameId, await gameIdOf(db, gameSlug)),
+      ),
+    )
     .orderBy(gameSave.slot);
 }
 
@@ -60,7 +66,7 @@ export async function deleteSave(
   gameSlug: string,
   slot: number,
 ) {
-  await db.delete(gameSave).where(where(userId, gameSlug, slot));
+  await db.delete(gameSave).where(await where(db, userId, gameSlug, slot));
 }
 
 /**
@@ -85,7 +91,7 @@ export async function writeSave(
       .insert(gameSave)
       .values({
         userId: input.userId,
-        gameSlug: input.gameSlug,
+        gameId: await gameIdOf(db, input.gameSlug),
         slot,
         data: json,
         version: 1,
@@ -100,7 +106,7 @@ export async function writeSave(
       .set({ data: json, version: next, updatedAt: sql`(unixepoch())` })
       .where(
         and(
-          where(input.userId, input.gameSlug, slot),
+          await where(db, input.userId, input.gameSlug, slot),
           eq(gameSave.version, input.expected),
         ),
       )

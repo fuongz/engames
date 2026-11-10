@@ -12,6 +12,8 @@ export interface Strings {
   hotseatHint: string;
   level: Record<Difficulty, string>;
   rules: string;
+  resetStats: string;
+  resetConfirm: string;
   rulesLines: string[];
   close: string;
   you: string;
@@ -67,6 +69,8 @@ export const STRINGS: Localized<Strings> = {
     hotseatHint: "Thay nhau chạm trên cùng một máy",
     level: { easy: "Dễ", normal: "Vừa", hard: "Khó" },
     rules: "Luật chơi",
+    resetStats: "Xoá thắng thua",
+    resetConfirm: "Chạm lần nữa",
     rulesLines: [
       "X đi trước, hai bên thay nhau đánh vào một ô trống.",
       "Ai có 5 dấu liền nhau (ngang, dọc hoặc chéo) là thắng.",
@@ -123,6 +127,8 @@ export const STRINGS: Localized<Strings> = {
     hotseatHint: "Take turns tapping on the same device",
     level: { easy: "Easy", normal: "Normal", hard: "Hard" },
     rules: "How to play",
+    resetStats: "Reset scores",
+    resetConfirm: "Tap to confirm",
     rulesLines: [
       "X goes first; take turns marking an empty square.",
       "Five of your marks in a row (across, down or diagonal) wins.",

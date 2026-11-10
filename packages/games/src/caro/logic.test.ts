@@ -117,7 +117,7 @@ describe("the computer", () => {
     }
     expect(hard).toBeGreaterThanOrEqual(8);
     expect(normal).toBeGreaterThanOrEqual(9);
-  });
+  }, 30_000); // a full AI-vs-AI tournament: slow under the parallel test run
 
   it("thinks fast enough for a phone on Hard", () => {
     const g = newGame();

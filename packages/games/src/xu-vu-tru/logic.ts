@@ -1,34 +1,39 @@
 import { nextRandom } from "@web-games/core/math";
 import {
   BETA_START_COINS,
+  CARD_COUNT,
+  CARD_R,
+  CARD_TICKETS,
+  COIN_DROP_GAP,
+  COIN_R,
   CORE_COUNT,
   CORE_R,
-  CORE_RESPAWN,
-  COIN_R,
   FIRE_INTERVAL,
   FLIGHT_DOWN,
   FLIGHT_UP,
   FRONT_TICKETS,
   MAX_BODIES,
   MAX_STACK,
+  MINI_PRIZES,
+  MINI_WEIGHTS,
   POINTER_ANGLE,
+  PREFILL_CORES,
   PREFILL_FILL,
   PREFILL_STACK2,
   PREFILL_STACK3,
+  type Prize,
   PUSH_MAX,
   PUSH_MIN,
   PUSH_PERIOD,
   SEG_START,
   SETTLE_TIME,
+  SET_TICKETS,
   SHELF_D,
   SHELF_W,
-  SHOWER_GAP,
-  SPIN_PRIZES,
   SPIN_TIME,
-  SPIN_WEIGHTS,
-  SUPER_SHOWER,
-  SUPER_TICKETS,
-  SUPER_TIME,
+  SUPER_PRIZES,
+  SUPER_SPIN_TIME,
+  SUPER_WEIGHTS,
   type Segment,
   WHEEL,
   WHEEL_SPEED,
@@ -38,41 +43,53 @@ import {
 import { type Body, stepShelf } from "./physics";
 
 // The rules of the machine: spend a coin, the wheel decides a prize when it
-// arrives, the coin drops onto the shelf, the shelf pushes things off. Pure and
-// seeded: the random state is a number in the state, so a run replays exactly
-// and the whole state can be saved as JSON.
+// arrives (tickets, a rain of coins, an energy capsule or a cat card), anything
+// dropped lands on the shelf, and the shelf pushes things off. Pure and seeded:
+// the random state is a number in the state, so a run replays exactly and the
+// whole state (the card album included) can be saved as JSON.
 
 const TAU = Math.PI * 2;
-/** Seconds a landed Bonus Spin result stays on the reels before the next one starts. */
+/** Seconds a landed spin result stays on the reels before the next one starts. */
 export const SPIN_HOLD = 0.9;
+/** Bumped when the State shape changes, so an old saved run is not resumed. */
+export const RULES_VERSION = 2;
 
 export interface Flight {
   id: number;
-  /** Seconds into the current phase; negative = still waiting its turn (a shower). */
+  /** Seconds into the current phase; negative = still waiting its turn (a coin rain). */
   t: number;
-  /** "up": the chute to the wheel. "down": from the wheel (or the top) onto the shelf. */
+  /** "up": the chute to the wheel. "down": from the wheel onto the shelf. */
   phase: "up" | "down";
-  /** Where it falls from: the chute's mouth (a shot coin), the wheel hub (a Super Bonus shower) or the top (a capsule). */
-  from: "wheel" | "hub" | "top";
   /** Where on the shelf it lands (world x). */
   x: number;
-  /** An energy capsule (0-5) or -1 for a coin. */
+  /** What lands: a coin, a capsule (`core` = its colour) or a card (`card` = its index). */
+  kind: "coin" | "core" | "card";
   core: number;
+  card: number;
 }
 
+export type SpinKind = "mini" | "super";
+
 export interface Spin {
+  kind: SpinKind;
+  /** Index into MINI_PRIZES or SUPER_PRIZES. */
+  idx: number;
   t: number;
-  prize: number;
   paid: boolean;
 }
 
 export interface State {
+  v: number;
   seed: number;
   t: number;
   nextId: number;
   coins: number;
   tickets: number;
   supers: number;
+  /** Albums completed this run. */
+  sets: number;
+  /** Cards pushed off the front this run. */
+  cardsWon: number;
   shots: number;
   /** Coins pushed off the front (and given back). */
   returned: number;
@@ -80,13 +97,15 @@ export interface State {
   pusherT: number;
   bodies: Body[];
   flights: Flight[];
-  cores: boolean[];
-  /** Bonus Spins waiting their turn on the reels. */
-  queued: number;
+  /** Capsules pushed off the front toward the next Super spin (can pass 6 while one waits). */
+  cores: number;
+  /** Which of the ten cards the player owns (persists across runs through game.ts). */
+  album: boolean[];
+  /** Spins waiting their turn on the reels. */
+  queue: SpinKind[];
   spin: Spin | null;
-  /** Seconds left of a Super Bonus celebration; the cores reset when it ends. */
-  superT: number;
-  respawns: { core: number; t: number }[];
+  /** Capsules dropped so far, to colour the next one. */
+  capsules: number;
   cooldown: number;
   /** Seconds since anything landed, fell or was shot. */
   quiet: number;
@@ -100,15 +119,17 @@ export interface Input {
 export type GameEvent =
   | { type: "shoot" }
   | { type: "dry" }
-  | { type: "hit"; seg: number; segment: Segment; core: number }
-  | { type: "tickets"; amount: number; source: "wheel" | "front" | "spin" | "super" }
-  | { type: "land"; id: number; x: number; y: number; core: number; stacked: boolean }
-  | { type: "fall"; x: number; y: number; edge: "front" | "side"; stack: number; core: number }
-  | { type: "coreLit"; core: number; via: "wheel" | "capsule" }
-  | { type: "spinStart"; prize: number }
-  | { type: "spinWin"; prize: number }
-  | { type: "super" }
-  | { type: "reset" }
+  | { type: "hit"; seg: number; segment: Segment }
+  | { type: "tickets"; amount: number; source: "wheel" | "front" | "mini" | "super" | "card" | "set" }
+  | { type: "coinsWon"; amount: number }
+  | { type: "land"; id: number; x: number; y: number; kind: Body["kind"]; stacked: boolean }
+  | { type: "fall"; x: number; y: number; edge: "front" | "side"; stack: number; kind: Body["kind"]; core: number; card: number }
+  | { type: "coreIn"; count: number }
+  | { type: "spinStart"; kind: SpinKind; idx: number }
+  | { type: "spinWin"; kind: SpinKind; idx: number; prize: Prize }
+  | { type: "superReset" }
+  | { type: "card"; card: number; fresh: boolean; owned: number }
+  | { type: "setComplete" }
   | { type: "over"; tickets: number; supers: number };
 
 const rand = (s: State) => nextRandom(s);
@@ -132,61 +153,68 @@ export function segmentAt(wheel: number) {
   return 0;
 }
 
-const coin = (s: State, x: number, y: number, stack = 1): Body => ({
-  id: s.nextId++,
-  kind: "coin",
-  core: -1,
-  stack,
-  x,
-  y,
-  vx: 0,
-  vy: 0,
-  r: COIN_R,
-});
+/** The prize a spin of this kind pays at reel index `idx`. */
+export function prizeOf(kind: SpinKind, idx: number): Prize {
+  return kind === "mini" ? MINI_PRIZES[idx] : { kind: "tickets", value: SUPER_PRIZES[idx] };
+}
 
-const capsule = (s: State, core: number, x: number, y: number): Body => ({
+export const ownedCount = (album: boolean[]) => album.reduce((n, o) => n + (o ? 1 : 0), 0);
+
+/** A clean album, or a copy of a saved one if it has the right shape. */
+export function normalizeAlbum(album: unknown): boolean[] {
+  const out = Array.from({ length: CARD_COUNT }, () => false);
+  if (Array.isArray(album)) for (let i = 0; i < CARD_COUNT; i++) out[i] = album[i] === true;
+  return out;
+}
+
+const body = (s: State, kind: Body["kind"], x: number, y: number, extra: Partial<Body> = {}): Body => ({
   id: s.nextId++,
-  kind: "core",
-  core,
+  kind,
+  core: -1,
+  card: -1,
   stack: 1,
   x,
   y,
   vx: 0,
   vy: 0,
-  r: CORE_R,
+  r: kind === "coin" ? COIN_R : kind === "core" ? CORE_R : CARD_R,
+  ...extra,
 });
 
-/** A fresh run: the shelf pre-filled with coins and six capsules, then left to settle. */
-export function createRun(seed: number, startCoins = BETA_START_COINS): State {
+/** A fresh run: the shelf pre-filled with coins and a couple of capsules, then left to settle. */
+export function createRun(seed: number, startCoins = BETA_START_COINS, album: unknown = null): State {
   const s: State = {
+    v: RULES_VERSION,
     seed: seed | 0,
     t: 0,
     nextId: 1,
     coins: startCoins,
     tickets: 0,
     supers: 0,
+    sets: 0,
+    cardsWon: 0,
     shots: 0,
     returned: 0,
     wheel: 0,
     pusherT: 0,
     bodies: [],
     flights: [],
-    cores: Array.from({ length: CORE_COUNT }, () => false),
-    queued: 0,
+    cores: 0,
+    album: normalizeAlbum(album),
+    queue: [],
     spin: null,
-    superT: 0,
-    respawns: [],
+    capsules: 0,
     cooldown: 0,
     quiet: 0,
     over: false,
   };
   s.wheel = rand(s) * TAU;
-  // Six capsules across the middle of the shelf, alternating rows
+  // A couple of capsules in the middle of the shelf
   const cores: Body[] = [];
-  for (let i = 0; i < CORE_COUNT; i++) {
-    const x = 44 + i * ((SHELF_W - 88) / (CORE_COUNT - 1)) + (rand(s) - 0.5) * 16;
-    const y = (i % 2 === 0 ? 178 : 238) + (rand(s) - 0.5) * 20;
-    cores.push(capsule(s, i, x, y));
+  for (let i = 0; i < PREFILL_CORES; i++) {
+    const x = SHELF_W * ((i + 1) / (PREFILL_CORES + 1)) + (rand(s) - 0.5) * 40;
+    const y = 200 + (rand(s) - 0.5) * 40;
+    cores.push(body(s, "core", x, y, { core: s.capsules++ % CORE_COUNT }));
   }
   // A hex layer of coins from the pusher to the front edge, some of them piles
   const gap = COIN_R * 2 + 2;
@@ -200,7 +228,7 @@ export function createRun(seed: number, startCoins = BETA_START_COINS): State {
       if (cores.some((c) => Math.hypot(c.x - jx, c.y - jy) < c.r + COIN_R - 2)) continue;
       const roll = rand(s);
       const stack = roll < PREFILL_STACK3 ? 3 : roll < PREFILL_STACK3 + PREFILL_STACK2 ? 2 : 1;
-      s.bodies.push(coin(s, jx, jy, stack));
+      s.bodies.push(body(s, "coin", jx, jy, { stack }));
     }
   }
   s.bodies.push(...cores);
@@ -210,68 +238,62 @@ export function createRun(seed: number, startCoins = BETA_START_COINS): State {
     stepShelf(s.bodies, p.y, p.v, 1 / 60);
     s.pusherT += 1 / 60;
   }
-  // Anything that left during settling would be a missing capsule: put it back
-  for (let i = 0; i < CORE_COUNT; i++) {
-    if (!s.bodies.some((b) => b.core === i)) s.respawns.push({ core: i, t: 0.3 + i * 0.2 });
-  }
   return s;
 }
 
-/** Light a core; all six lit starts the Super Bonus. */
-function lightCore(s: State, core: number, via: "wheel" | "capsule", ev: GameEvent[]) {
-  if (!s.cores[core]) {
-    s.cores[core] = true;
-    ev.push({ type: "coreLit", core, via });
-  }
-  if (s.superT <= 0 && s.cores.every(Boolean)) {
-    s.superT = SUPER_TIME;
-    s.supers++;
-    s.tickets += SUPER_TICKETS;
-    ev.push({ type: "super" }, { type: "tickets", amount: SUPER_TICKETS, source: "super" });
-    for (let i = 0; i < SUPER_SHOWER; i++) {
-      s.flights.push({
-        id: s.nextId++,
-        t: -0.6 - i * SHOWER_GAP,
-        phase: "down",
-        from: "hub",
-        x: COIN_R + 20 + rand(s) * (SHELF_W - 2 * COIN_R - 40),
-        core: -1,
-      });
-    }
-  }
-}
+const dropX = (s: State, r: number) => r + 6 + rand(s) * (SHELF_W - 2 * r - 12);
 
-function hitWheel(s: State, ev: GameEvent[]) {
+/** The shot coin meets the wheel. Returns true if the flight carries on down to the shelf (as a capsule or a card). */
+function hitWheel(s: State, f: Flight, ev: GameEvent[]) {
   const seg = segmentAt(s.wheel);
   const segment = WHEEL[seg];
-  let core = -1;
+  ev.push({ type: "hit", seg, segment });
   if (segment.kind === "tickets") {
     s.tickets += segment.value;
-    ev.push({ type: "hit", seg, segment, core });
     ev.push({ type: "tickets", amount: segment.value, source: "wheel" });
-  } else if (segment.kind === "core") {
-    core = s.cores.indexOf(false);
-    ev.push({ type: "hit", seg, segment, core });
-    if (core >= 0) lightCore(s, core, "wheel", ev);
-    else {
-      // Every core already lit (the Super Bonus is playing): a consolation prize
-      s.tickets += 6;
-      ev.push({ type: "tickets", amount: 6, source: "wheel" });
-    }
-  } else {
-    s.queued++;
-    ev.push({ type: "hit", seg, segment, core });
+    return false;
   }
+  if (segment.kind === "coins") {
+    // Spread across the shelf: one coin per equal band, at a random spot in it
+    const n = segment.value;
+    const lo = COIN_R + 6;
+    const band = (SHELF_W - 2 * lo) / n;
+    for (let i = 0; i < n; i++) {
+      s.flights.push({
+        id: s.nextId++,
+        t: -i * COIN_DROP_GAP,
+        phase: "down",
+        x: lo + (i + rand(s)) * band,
+        kind: "coin",
+        core: -1,
+        card: -1,
+      });
+    }
+    return false;
+  }
+  // A capsule or a card takes the shot coin's place on its way down
+  f.phase = "down";
+  if (segment.kind === "core") {
+    f.kind = "core";
+    f.core = s.capsules++ % CORE_COUNT;
+    f.x = dropX(s, CORE_R);
+    s.queue.push("mini");
+  } else {
+    f.kind = "card";
+    f.card = Math.min(CARD_COUNT - 1, Math.floor(rand(s) * CARD_COUNT));
+    f.x = dropX(s, CARD_R);
+  }
+  return true;
 }
 
 function land(s: State, f: Flight, ev: GameEvent[]) {
   const p = pusherAt(s.pusherT);
   s.quiet = 0;
-  if (f.core >= 0) {
-    const b = capsule(s, f.core, f.x, p.y + CORE_R + 2);
-    b.vy = 40;
+  if (f.kind !== "coin") {
+    const r = f.kind === "core" ? CORE_R : CARD_R;
+    const b = body(s, f.kind, f.x, p.y + r + 2, { core: f.core, card: f.card, vy: 40 });
     s.bodies.push(b);
-    ev.push({ type: "land", id: b.id, x: b.x, y: b.y, core: f.core, stacked: false });
+    ev.push({ type: "land", id: b.id, x: b.x, y: b.y, kind: b.kind, stacked: false });
     return;
   }
   const y = p.y + COIN_R + rand(s) * 26;
@@ -288,13 +310,12 @@ function land(s: State, f: Flight, ev: GameEvent[]) {
   }
   if (onto) {
     onto.stack++;
-    ev.push({ type: "land", id: onto.id, x: onto.x, y: onto.y, core: -1, stacked: true });
+    ev.push({ type: "land", id: onto.id, x: onto.x, y: onto.y, kind: "coin", stacked: true });
     return;
   }
-  const b = coin(s, f.x, y);
-  b.vy = 60;
+  const b = body(s, "coin", f.x, y, { vy: 60 });
   s.bodies.push(b);
-  ev.push({ type: "land", id: b.id, x: b.x, y: b.y, core: -1, stacked: false });
+  ev.push({ type: "land", id: b.id, x: b.x, y: b.y, kind: "coin", stacked: false });
 }
 
 /** Over the body cap: fold the oldest single coins into their nearest neighbour's pile. */
@@ -323,35 +344,57 @@ function capBodies(s: State) {
   }
 }
 
-const capsulePresent = (s: State, core: number) =>
-  s.bodies.some((b) => b.core === core) ||
-  s.flights.some((f) => f.core === core) ||
-  s.respawns.some((r) => r.core === core);
-
-function dropCapsule(s: State, core: number, delay: number) {
-  s.flights.push({
-    id: s.nextId++,
-    t: -delay,
-    phase: "down",
-    from: "top",
-    x: CORE_R + 10 + rand(s) * (SHELF_W - 2 * CORE_R - 20),
-    core,
-  });
-}
-
-function pickPrize(s: State) {
-  const total = SPIN_WEIGHTS.reduce((a, b) => a + b, 0);
+function pick(s: State, weights: readonly number[]) {
+  const total = weights.reduce((a, b) => a + b, 0);
   let r = rand(s) * total;
-  for (let i = 0; i < SPIN_PRIZES.length; i++) {
-    r -= SPIN_WEIGHTS[i];
-    if (r < 0) return SPIN_PRIZES[i];
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r < 0) return i;
   }
-  return SPIN_PRIZES[0];
+  return 0;
 }
+
+/** A capsule over the front edge: one more core toward the Super spin. */
+function collectCore(s: State, ev: GameEvent[]) {
+  s.cores++;
+  ev.push({ type: "coreIn", count: s.cores });
+  // Queue the Super spin the moment the sixth arrives (a second one only after the first resets the meter)
+  if (s.cores === CORE_COUNT) s.queue.unshift("super");
+}
+
+/** A card over the front edge: its tickets, the album, and the set bonus. */
+function collectCard(s: State, card: number, ev: GameEvent[]) {
+  const fresh = !s.album[card];
+  s.album[card] = true;
+  s.cardsWon++;
+  s.tickets += CARD_TICKETS;
+  ev.push({ type: "card", card, fresh, owned: ownedCount(s.album) });
+  ev.push({ type: "tickets", amount: CARD_TICKETS, source: "card" });
+  if (s.album.every(Boolean)) {
+    s.sets++;
+    s.tickets += SET_TICKETS;
+    s.album = s.album.map(() => false);
+    ev.push({ type: "setComplete" }, { type: "tickets", amount: SET_TICKETS, source: "set" });
+  }
+}
+
+const spinTime = (kind: SpinKind) => (kind === "super" ? SUPER_SPIN_TIME : SPIN_TIME);
 
 /** Whether the run can still change: something in the air, on the reels, or coins left. */
-export const busy = (s: State) =>
-  s.coins > 0 || s.flights.length > 0 || s.spin !== null || s.queued > 0 || s.superT > 0;
+export const busy = (s: State) => s.coins > 0 || s.flights.length > 0 || s.spin !== null || s.queue.length > 0;
+
+/**
+ * Add coupon coins to a run still in play. Returns the coins added (0 when the
+ * run is over or the amount is not a positive whole number). Tickets, the
+ * leaderboard score, are never touched.
+ */
+export function grantCoins(s: State, n: number): number {
+  if (s.over || !Number.isFinite(n)) return 0;
+  const add = Math.floor(n);
+  if (add <= 0) return 0;
+  s.coins += add;
+  return add;
+}
 
 export function update(s: State, input: Input, dt: number): GameEvent[] {
   const ev: GameEvent[] = [];
@@ -369,25 +412,21 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
       s.coins--;
       s.shots++;
       s.quiet = 0;
-      s.flights.push({
-        id: s.nextId++,
-        t: 0,
-        phase: "up",
-        from: "wheel",
-        x: COIN_R + 6 + rand(s) * (SHELF_W - 2 * COIN_R - 12),
-        core: -1,
-      });
+      s.flights.push({ id: s.nextId++, t: 0, phase: "up", x: SHELF_W / 2, kind: "coin", core: -1, card: -1 });
       ev.push({ type: "shoot" });
     } else ev.push({ type: "dry" });
   }
 
-  // Coins and capsules in the air
+  // Coins, capsules and cards in the air
   for (let i = 0; i < s.flights.length; i++) {
     const f = s.flights[i];
     f.t += dt;
     if (f.phase === "up" && f.t >= FLIGHT_UP) {
-      hitWheel(s, ev);
-      f.phase = "down";
+      s.quiet = 0;
+      if (!hitWheel(s, f, ev)) {
+        s.flights.splice(i--, 1);
+        continue;
+      }
       f.t -= FLIGHT_UP;
     }
     if (f.phase === "down" && f.t >= FLIGHT_DOWN) {
@@ -401,58 +440,47 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
   for (const x of stepShelf(s.bodies, p.y, p.v, dt)) {
     const b = x.body;
     s.quiet = 0;
-    ev.push({ type: "fall", x: b.x, y: b.y, edge: x.edge, stack: b.stack, core: b.core });
+    ev.push({ type: "fall", x: b.x, y: b.y, edge: x.edge, stack: b.stack, kind: b.kind, core: b.core, card: b.card });
+    if (x.edge !== "front") continue;
     if (b.kind === "coin") {
-      if (x.edge === "front") {
-        s.coins += b.stack;
-        s.returned += b.stack;
-        s.tickets += b.stack * FRONT_TICKETS;
-        ev.push({ type: "tickets", amount: b.stack * FRONT_TICKETS, source: "front" });
-      }
-    } else if (x.edge === "front") {
-      s.queued++;
-      lightCore(s, b.core, "capsule", ev);
-    } else if (!s.cores[b.core]) {
-      s.respawns.push({ core: b.core, t: CORE_RESPAWN });
-    }
+      s.coins += b.stack;
+      s.returned += b.stack;
+      s.tickets += b.stack * FRONT_TICKETS;
+      ev.push({ type: "tickets", amount: b.stack * FRONT_TICKETS, source: "front" });
+    } else if (b.kind === "core") collectCore(s, ev);
+    else collectCard(s, b.card, ev);
   }
   capBodies(s);
 
-  // Bonus Spin reels
-  if (!s.spin && s.queued > 0) {
-    s.queued--;
-    s.spin = { t: 0, prize: pickPrize(s), paid: false };
-    ev.push({ type: "spinStart", prize: s.spin.prize });
+  // The reels: Mini and Super spins, one at a time
+  if (!s.spin && s.queue.length > 0) {
+    const kind = s.queue.shift() as SpinKind;
+    s.spin = { kind, idx: pick(s, kind === "mini" ? MINI_WEIGHTS : SUPER_WEIGHTS), t: 0, paid: false };
+    ev.push({ type: "spinStart", kind, idx: s.spin.idx });
   }
   if (s.spin) {
-    s.spin.t += dt;
-    if (!s.spin.paid && s.spin.t >= SPIN_TIME) {
-      s.spin.paid = true;
-      s.tickets += s.spin.prize;
-      ev.push({ type: "spinWin", prize: s.spin.prize }, { type: "tickets", amount: s.spin.prize, source: "spin" });
+    const sp = s.spin;
+    sp.t += dt;
+    const time = spinTime(sp.kind);
+    if (!sp.paid && sp.t >= time) {
+      sp.paid = true;
+      const prize = prizeOf(sp.kind, sp.idx);
+      ev.push({ type: "spinWin", kind: sp.kind, idx: sp.idx, prize });
+      if (prize.kind === "tickets") {
+        s.tickets += prize.value;
+        ev.push({ type: "tickets", amount: prize.value, source: sp.kind });
+      } else {
+        s.coins += prize.value;
+        ev.push({ type: "coinsWon", amount: prize.value });
+      }
+      if (sp.kind === "super") {
+        s.supers++;
+        s.cores = Math.max(0, s.cores - CORE_COUNT);
+        ev.push({ type: "superReset" });
+        if (s.cores >= CORE_COUNT) s.queue.unshift("super");
+      }
     }
-    if (s.spin.t >= SPIN_TIME + SPIN_HOLD) s.spin = null;
-  }
-
-  // Super Bonus: when the celebration ends the cores go dark and fresh capsules drop in
-  if (s.superT > 0) {
-    s.superT -= dt;
-    if (s.superT <= 0) {
-      s.superT = 0;
-      s.cores = s.cores.map(() => false);
-      s.respawns = [];
-      ev.push({ type: "reset" });
-      let n = 0;
-      for (let c = 0; c < CORE_COUNT; c++) if (!capsulePresent(s, c)) dropCapsule(s, c, 0.3 * n++);
-    }
-  }
-  for (let i = 0; i < s.respawns.length; i++) {
-    const r = s.respawns[i];
-    r.t -= dt;
-    if (r.t <= 0) {
-      s.respawns.splice(i--, 1);
-      if (!capsulePresent(s, r.core)) dropCapsule(s, r.core, 0);
-    }
+    if (sp.t >= time + SPIN_HOLD) s.spin = null;
   }
 
   if (!busy(s) && s.quiet >= SETTLE_TIME) {

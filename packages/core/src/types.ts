@@ -65,6 +65,12 @@ export interface GameManifest {
   requiresAccount?: boolean;
   /** How many separate saves an account keeps for this game (default 1). */
   saveSlots?: number;
+  /**
+   * Accepts portal coupons (docs/standards/coupons.md): `kinds` are the reward
+   * kinds the game knows how to grant, e.g. ["coins"]. Rewards of any other kind
+   * are dropped before redemption.
+   */
+  coupons?: { kinds: string[] };
 }
 
 /**
@@ -119,6 +125,35 @@ export interface GameContext {
    * nobody is signed in (or outside the portal).
    */
   cloud?: CloudSave;
+  /**
+   * The portal's coupon redeem dialog, for games with `manifest.coupons`. Missing
+   * otherwise, outside the portal, and always in an online match: coupons never
+   * apply there (the room owns the state).
+   */
+  coupons?: GameCoupons;
+}
+
+/** One reward a coupon carries. `kind` is game-defined, e.g. "coins". */
+export interface CouponReward {
+  kind: string;
+  amount: number;
+}
+
+/** A redeemed coupon: only the rewards of the kinds this game accepts. */
+export interface CouponGrant {
+  code: string;
+  rewards: CouponReward[];
+}
+
+export interface GameCoupons {
+  /** Show the portal's redeem dialog (the player must be signed in). */
+  open(): void;
+  /**
+   * Called once per successful redemption; returns an unsubscribe. The server
+   * has already marked the code used, so persist the grant IMMEDIATELY (storage
+   * or cloud save): a grant lost to a reload is never sent again.
+   */
+  onGrant(cb: (grant: CouponGrant) => void): () => void;
 }
 
 /** A saved game on the server: the game's own data plus a version for conflicts. */

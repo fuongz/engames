@@ -1,10 +1,11 @@
 // Drawing for Xu Vũ Trụ: the cabinet, wheel, shelf and LED counters are drawn
 // here (static parts cached to offscreen canvases); the two robot mascots are
-// generated art (img/robots.webp, see art-src/xu-vu-tru/). The shelf is 2D
+// generated art (img/robots.webp, see art-src/xu-vu-tru/), and so are the cat
+// cards (img/cards/<id>.webp), loaded by game.ts and handed in. The shelf is 2D
 // physics seen from above; `proj` tilts it into a 3/4 view and every disc is
 // drawn squashed, with a rim, a shadow and a size that grows toward the front.
 import { type Rect, clamp, lerp, mulberry32 } from "@web-games/core";
-import { PUSH_MAX, SEG_SIZE, SEG_START, SHELF_D, SHELF_W, SIDE_WALL_D, W, WHEEL } from "./config";
+import { PUSH_MAX, SEG_SIZE, SEG_START, SHELF_D, SHELF_W, SIDE_WALL_D, type Segment, W, WHEEL } from "./config";
 import type { Body } from "./physics";
 
 type Ctx = CanvasRenderingContext2D;
@@ -30,9 +31,13 @@ export const LAMPS_Y = 86;
 export const REEL: Rect = { x: 104, y: 420, w: 292, h: 52 };
 export const SPINS_BOX: Rect = { x: 404, y: 420, w: 104, h: 52 };
 export const MENU_BTN: Rect = { x: 8, y: 8, w: 78, h: 54 };
-export const COINS_BOX: Rect = { x: 14, y: 858, w: 168, h: 62 };
-export const TICKETS_BOX: Rect = { x: 358, y: 858, w: 150, h: 62 };
+/** The card album, opposite the menu button. */
+export const ALBUM_BTN: Rect = { x: 454, y: 8, w: 78, h: 54 };
+export const COINS_BOX: Rect = { x: 14, y: 852, w: 168, h: 60 };
+export const TICKETS_BOX: Rect = { x: 358, y: 852, w: 150, h: 60 };
 export const SHOOT = { x: 270, y: 886, r: 60 };
+/** AUTO toggle under the tickets counter: clear of the SHOOT bezel (ends at x 340) and 8 px inside the canvas bottom. */
+export const AUTO_BTN: Rect = { x: 358, y: 920, w: 150, h: 32 };
 /** Screen rows of the shelf's back wall line and front edge, and the front's screen span. */
 export const SHELF_TOP = 494;
 export const SHELF_BOTTOM = 802;
@@ -189,6 +194,8 @@ export interface Sprites {
   cores: HTMLCanvasElement[];
   wheel: HTMLCanvasElement;
   stars: { x: number; y: number; r: number; tw: number }[];
+  /** The ten cat cards, in CARD_IDS order (they may still be loading). */
+  cards: HTMLImageElement[];
 }
 
 const COIN_PX = 64;
@@ -321,12 +328,122 @@ export function shade(hex: string, k: number) {
   return `rgb(${r},${g},${b})`;
 }
 
-const SEG_COLORS: Record<number, [string, string]> = {
-  2: ["#19b8c9", "#0c6f7d"],
-  3: ["#3a7bff", "#1d3fa8"],
-  6: ["#9a5bff", "#5420b0"],
-  12: ["#ffc93a", "#e07a10"],
-};
+/** Segment colours, outer→inner: cool for tickets, warm gold for coins. */
+function segColors(seg: Segment): [string, string] {
+  if (seg.kind === "tickets")
+    return seg.value >= 10 ? ["#ff5fc0", "#9a1070"] : seg.value >= 5 ? ["#9a5bff", "#5420b0"] : seg.value >= 3 ? ["#3a7bff", "#1d3fa8"] : ["#19b8c9", "#0c6f7d"];
+  if (seg.kind === "coins") return seg.value >= 6 ? ["#ffe066", "#d08a00"] : seg.value >= 4 ? ["#ffc23a", "#c06a00"] : ["#ff9f3c", "#a8460a"];
+  if (seg.kind === "core") return ["#2a2f5a", "#0d1030"];
+  return ["#ff7eb6", "#a8205e"];
+}
+
+/** A paper ticket stub, centred at (0,0), `w` wide. */
+export function ticketIcon(g: Ctx, w: number) {
+  const h = w * 0.58;
+  g.save();
+  g.fillStyle = "#ffb43c";
+  g.strokeStyle = "rgba(10,8,32,0.9)";
+  g.lineWidth = Math.max(1.5, w * 0.08);
+  g.beginPath();
+  g.moveTo(-w / 2, -h / 2);
+  g.lineTo(w / 2, -h / 2);
+  g.arc(w / 2, 0, h * 0.22, -Math.PI / 2, Math.PI / 2, true);
+  g.lineTo(w / 2, h / 2);
+  g.lineTo(-w / 2, h / 2);
+  g.arc(-w / 2, 0, h * 0.22, Math.PI / 2, -Math.PI / 2, true);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.setLineDash([w * 0.08, w * 0.08]);
+  g.lineWidth = Math.max(1, w * 0.05);
+  g.beginPath();
+  g.moveTo(w * 0.18, -h / 2 + 2);
+  g.lineTo(w * 0.18, h / 2 - 2);
+  g.stroke();
+  g.restore();
+}
+
+/** A flat gold coin with a star, centred at (0,0). */
+export function coinIcon(g: Ctx, r: number) {
+  g.save();
+  g.fillStyle = "#a8640a";
+  g.beginPath();
+  g.arc(0, r * 0.12, r, 0, Math.PI * 2);
+  g.fill();
+  const face = g.createLinearGradient(-r, -r, r, r);
+  face.addColorStop(0, "#fff3a8");
+  face.addColorStop(0.5, "#ffcc33");
+  face.addColorStop(1, "#e08a10");
+  g.fillStyle = face;
+  g.beginPath();
+  g.arc(0, 0, r, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = "rgba(10,8,32,0.85)";
+  g.lineWidth = Math.max(1.2, r * 0.14);
+  g.stroke();
+  g.fillStyle = "rgba(255,250,210,0.95)";
+  g.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+    const rr = i % 2 === 0 ? r * 0.6 : r * 0.2;
+    g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  g.fill();
+  g.restore();
+}
+
+/** A glowing energy orb in a hex cage, centred at (0,0). */
+export function coreIcon(g: Ctx, r: number, color = "#4dd8ff") {
+  g.save();
+  const orb = g.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
+  orb.addColorStop(0, "#ffffff");
+  orb.addColorStop(0.35, color);
+  orb.addColorStop(1, shade(color, 0.4));
+  g.shadowColor = color;
+  g.shadowBlur = r * 0.8;
+  g.fillStyle = orb;
+  g.beginPath();
+  g.arc(0, 0, r, 0, Math.PI * 2);
+  g.fill();
+  g.shadowBlur = 0;
+  g.strokeStyle = "rgba(240,248,255,0.85)";
+  g.lineWidth = Math.max(1.2, r * 0.12);
+  g.beginPath();
+  for (let i = 0; i <= 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    g.lineTo(Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.55);
+  }
+  g.stroke();
+  g.restore();
+}
+
+/** A little card with a paw print, centred at (0,0), `w` wide (3:4). */
+export function cardIcon(g: Ctx, w: number, fill = "#fff4fa") {
+  const h = (w * 4) / 3;
+  g.save();
+  g.fillStyle = fill;
+  g.strokeStyle = "rgba(10,8,32,0.9)";
+  g.lineWidth = Math.max(1.4, w * 0.09);
+  g.beginPath();
+  g.roundRect(-w / 2, -h / 2, w, h, w * 0.16);
+  g.fill();
+  g.stroke();
+  g.fillStyle = "#ff4fa3";
+  g.beginPath();
+  g.ellipse(0, h * 0.1, w * 0.2, w * 0.16, 0, 0, Math.PI * 2);
+  g.fill();
+  for (const [dx, dy] of [
+    [-0.24, -0.1],
+    [-0.08, -0.2],
+    [0.08, -0.2],
+    [0.24, -0.1],
+  ]) {
+    g.beginPath();
+    g.arc(dx * w, dy * h, w * 0.075, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+}
 
 /** The wheel face at 2× (it is rotated as one image each frame). */
 function wheelSprite() {
@@ -341,10 +458,7 @@ function wheelSprite() {
     const a0 = SEG_START[i];
     const a1 = a0 + SEG_SIZE[i];
     const seg = WHEEL[i];
-    let cols: [string, string];
-    if (seg.kind === "tickets") cols = SEG_COLORS[seg.value] ?? SEG_COLORS[2];
-    else if (seg.kind === "core") cols = ["#2a2f5a", "#0d1030"];
-    else cols = ["#ff3d6e", "#a3103a"];
+    const cols = segColors(seg);
     const grad = g.createRadialGradient(cx, cy, R * 0.2, cx, cy, R);
     grad.addColorStop(0, cols[1]);
     grad.addColorStop(0.7, cols[0]);
@@ -358,51 +472,51 @@ function wheelSprite() {
     g.strokeStyle = "rgba(255,255,255,0.55)";
     g.lineWidth = 3;
     g.stroke();
-    // Label along the radius, reading outward
+    // Icon and value along the radius, reading outward
     const mid = (a0 + a1) / 2;
+    const arc = (r: number) => SEG_SIZE[i] * r;
     g.save();
     g.translate(cx, cy);
     g.rotate(mid);
-    if (seg.kind === "tickets") {
-      g.font = `800 ${seg.value >= 10 ? 46 : 52}px ${FONT}`;
+    if (seg.kind === "tickets" || seg.kind === "coins") {
+      const size = Math.min(48, arc(R * 0.78) * 1.25);
+      g.font = `800 ${size}px ${FONT}`;
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.lineWidth = 8;
       g.strokeStyle = "rgba(10,8,32,0.85)";
       g.save();
-      g.translate(R * 0.74, 0);
+      g.translate(R * 0.8, 0);
       g.rotate(Math.PI / 2);
       g.strokeText(String(seg.value), 0, 0);
-      g.fillStyle = seg.value === 12 ? "#fff6c8" : "#ffffff";
+      g.fillStyle = seg.kind === "coins" ? "#fffbe6" : "#ffffff";
       g.fillText(String(seg.value), 0, 0);
       g.restore();
+      g.save();
+      g.translate(R * 0.6, 0);
+      g.rotate(Math.PI / 2);
+      if (seg.kind === "tickets") ticketIcon(g, Math.min(34, arc(R * 0.6) * 0.85));
+      else coinIcon(g, Math.min(15, arc(R * 0.6) * 0.42));
+      g.restore();
     } else if (seg.kind === "core") {
-      // Six little orbs in a ring: the core slot
+      const r = Math.min(17, arc(R * 0.76) * 0.42);
+      g.save();
+      g.translate(R * 0.76, 0);
       for (let k = 0; k < 6; k++) {
         const a = (k / 6) * Math.PI * 2;
         g.fillStyle = CORE_COLORS[k];
         g.beginPath();
-        g.arc(R * 0.76 + Math.cos(a) * 14, Math.sin(a) * 14, 7, 0, Math.PI * 2);
+        g.arc(Math.cos(a) * r * 1.5, Math.sin(a) * r * 1.5, r * 0.32, 0, Math.PI * 2);
         g.fill();
       }
-      g.fillStyle = "#ffffff";
-      g.beginPath();
-      g.arc(R * 0.76, 0, 6, 0, Math.PI * 2);
-      g.fill();
+      coreIcon(g, r * 0.95);
+      g.restore();
     } else {
-      // A star for BONUS
-      g.fillStyle = GOLD;
-      g.strokeStyle = "#6a0820";
-      g.lineWidth = 4;
-      g.beginPath();
-      for (let k = 0; k < 10; k++) {
-        const a = (k / 10) * Math.PI * 2 - Math.PI / 2;
-        const rr = k % 2 === 0 ? 22 : 9;
-        g.lineTo(R * 0.76 + Math.cos(a) * rr, Math.sin(a) * rr);
-      }
-      g.closePath();
-      g.fill();
-      g.stroke();
+      g.save();
+      g.translate(R * 0.76, 0);
+      g.rotate(Math.PI / 2);
+      cardIcon(g, Math.min(24, arc(R * 0.76) * 0.85));
+      g.restore();
     }
     g.restore();
   }
@@ -415,7 +529,7 @@ function wheelSprite() {
   return c;
 }
 
-export function makeSprites(): Sprites {
+export function makeSprites(cards: HTMLImageElement[]): Sprites {
   const rnd = mulberry32(0xc0115);
   const stars = Array.from({ length: 90 }, () => ({
     x: rnd() * W,
@@ -423,7 +537,7 @@ export function makeSprites(): Sprites {
     r: 0.6 + rnd() * 1.8,
     tw: rnd() * Math.PI * 2,
   }));
-  return { coin: coinSprite(), cores: CORE_COLORS.map(coreSprite), wheel: wheelSprite(), stars };
+  return { coin: coinSprite(), cores: CORE_COLORS.map(coreSprite), wheel: wheelSprite(), stars, cards };
 }
 
 // ---------------------------------------------------------------- background and cabinet
@@ -543,14 +657,14 @@ export function drawMarquee(ctx: Ctx, label: string, t: number, hot: boolean) {
   ctx.restore();
 }
 
-/** Six core lamps under the marquee. `flash` blinks them all (Super Bonus). */
-export function drawCoreLamps(ctx: Ctx, sp: Sprites, cores: boolean[], t: number, flash: boolean, pulse: number[]) {
+/** The core meter under the marquee: `slots` sockets, the first `count` lit. `flash` blinks them all (Super spin). */
+export function drawCoreLamps(ctx: Ctx, sp: Sprites, count: number, slots: number, t: number, flash: boolean, pulse: number[]) {
   const gap = 58;
-  const x0 = W / 2 - (gap * (cores.length - 1)) / 2;
-  for (let i = 0; i < cores.length; i++) {
+  const x0 = W / 2 - (gap * (slots - 1)) / 2;
+  for (let i = 0; i < slots; i++) {
     const x = x0 + i * gap;
     const y = LAMPS_Y;
-    const lit = flash ? Math.floor(t * 10 + i) % 2 === 0 : cores[i];
+    const lit = flash ? Math.floor(t * 10 + i) % 2 === 0 : i < count;
     const p = pulse[i] ?? 0;
     ctx.save();
     // Socket
@@ -766,30 +880,37 @@ export function drawCounter(ctx: Ctx, r: Rect, label: string, value: number, col
   ctx.restore();
 }
 
-/** The "YOU WIN" reels window for the Bonus Spin. `offset` scrolls the strip (in prizes). */
+export interface ReelCell {
+  value: number;
+  coin: boolean;
+}
+
+/** The reels window for the Mini and Super spins. `offset` scrolls the strip (in cells); `hot` is the Super spin. */
 export function drawReels(
   ctx: Ctx,
   label: string,
-  prizes: readonly number[],
+  cells: readonly ReelCell[],
   offset: number,
   active: boolean,
   won: boolean,
   t: number,
+  hot = false,
 ) {
   const r = REEL;
+  const accent = hot ? PINK : GOLD;
   ctx.save();
-  ctx.shadowColor = active ? GOLD : NEON;
-  ctx.shadowBlur = active ? 24 : 8;
+  ctx.shadowColor = active ? accent : NEON;
+  ctx.shadowBlur = active ? (hot ? 34 : 24) : 8;
   ctx.fillStyle = "#07061a";
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.w, r.h, 12);
   ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = active ? GOLD : "rgba(79,243,255,0.6)";
+  ctx.strokeStyle = active ? (hot ? CORE_COLORS[Math.floor(t * 10) % 6] : GOLD) : "rgba(79,243,255,0.6)";
   ctx.lineWidth = 3;
   ctx.stroke();
   const split = r.x + 122;
-  text(ctx, label, r.x + 62, r.y + r.h / 2 + 2, fitSize(ctx, label, 22, 110), active ? GOLD : "#bfc6ff", "center", null);
+  text(ctx, label, r.x + 62, r.y + r.h / 2 + 2, fitSize(ctx, label, 22, 110), active ? accent : "#bfc6ff", "center", null);
   // Reel strip
   const rw = r.x + r.w - 8 - split;
   ctx.fillStyle = "#e9ecf8";
@@ -804,14 +925,23 @@ export function drawReels(
   const base = Math.floor(offset);
   const frac = offset - base;
   for (let k = -1; k <= 1; k++) {
-    const idx = (((base + k) % prizes.length) + prizes.length) % prizes.length;
+    const cell = cells[(((base + k) % cells.length) + cells.length) % cells.length];
     const yy = r.y + r.h / 2 + (k - frac) * cellH;
     const flash = won && k === 0 && Math.floor(t * 8) % 2 === 0;
+    const str = String(cell.value);
     ctx.font = `700 ${cellH * 1.05}px ${LED_FONT}`;
-    ctx.textAlign = "center";
+    const tw = ctx.measureText(str).width;
+    const iconW = 26;
+    const x0 = split + rw / 2 - (tw + iconW + 8) / 2;
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillStyle = flash ? "#e0115f" : "#1a1440";
-    ctx.fillText(String(prizes[idx]), split + rw / 2, yy + 3);
+    ctx.fillText(str, x0, yy + 3);
+    ctx.save();
+    ctx.translate(x0 + tw + 8 + iconW / 2, yy);
+    if (cell.coin) coinIcon(ctx, 11);
+    else ticketIcon(ctx, iconW);
+    ctx.restore();
   }
   // Curved-glass shading
   const sh = ctx.createLinearGradient(0, r.y + 6, 0, r.y + r.h - 6);
@@ -1009,12 +1139,26 @@ export function drawShadow(ctx: Ctx, b: Body) {
 }
 
 /**
- * One body on the shelf. Coins: a stack of discs; capsules: the orb sprite.
- * `drop` 0..1 raises it (just landed), `glow` lights a capsule whose core is lit.
+ * One body on the shelf. Coins: a stack of discs; capsules: the orb sprite;
+ * cards: a small card lying tilted on the deck. `drop` 0..1 raises it (just landed).
  */
-export function drawBody(ctx: Ctx, sp: Sprites, b: Body, t: number, drop = 0, glow = 0) {
+export function drawBody(ctx: Ctx, sp: Sprites, b: Body, t: number, drop = 0) {
   const p = proj(b.x, b.y);
   const lift = drop * 40 * p.s;
+  if (b.kind === "card") {
+    // Each card keeps its own slant (from its id), lying flat in the 3/4 view
+    const tilt = ((((b.id * 47) % 70) - 35) * Math.PI) / 180;
+    const w = b.r * 2 * p.s * 0.95;
+    ctx.save();
+    ctx.translate(p.x, p.y - 2 * p.s - lift);
+    ctx.scale(1, 0.66);
+    ctx.rotate(tilt);
+    ctx.shadowColor = "#ff7eb6";
+    ctx.shadowBlur = 8 + 6 * (0.5 + 0.5 * Math.sin(t * 3 + b.id));
+    drawCardFace(ctx, sp.cards[b.card] ?? null, -w / 2, (-w * 2) / 3, w, (w * 4) / 3, true);
+    ctx.restore();
+    return;
+  }
   if (b.kind === "coin") {
     const w = b.r * 2 * p.s * (COIN_PX + 4) / COIN_PX;
     const h = w * (sp.coin.height / sp.coin.width);
@@ -1030,7 +1174,7 @@ export function drawBody(ctx: Ctx, sp: Sprites, b: Body, t: number, drop = 0, gl
   ctx.save();
   const pulse = 0.5 + 0.5 * Math.sin(t * 4 + b.core);
   ctx.shadowColor = CORE_COLORS[b.core];
-  ctx.shadowBlur = 10 + pulse * 10 + glow * 16;
+  ctx.shadowBlur = 10 + pulse * 10;
   ctx.drawImage(img, p.x - w / 2, p.y - h + w * 0.34 - lift, w, h);
   ctx.restore();
 }
@@ -1100,6 +1244,27 @@ export function drawShootButton(ctx: Ctx, label: string, pressed: boolean, t: nu
   ctx.restore();
 }
 
+/** The AUTO toggle: a pill that is dark when off and lit mint when on, with its state spelled out. */
+export function drawAutoButton(ctx: Ctx, r: Rect, label: string, state: string, on: boolean, enabled: boolean) {
+  ctx.save();
+  ctx.globalAlpha = enabled || on ? 1 : 0.5;
+  if (on) {
+    ctx.shadowColor = MINT;
+    ctx.shadowBlur = 16;
+  }
+  ctx.fillStyle = on ? MINT : "#05040c";
+  ctx.strokeStyle = on ? "#ffffff" : "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.w, r.h, r.h / 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  const msg = `${label}: ${state}`;
+  text(ctx, msg, r.x + r.w / 2, r.y + r.h / 2 + 1, fitSize(ctx, msg, 17, r.w - 20), on ? INK : "#cfd6ff", "center", null);
+  ctx.restore();
+}
+
 /** Small BETA chip. */
 export function betaTag(ctx: Ctx, x: number, y: number, label: string) {
   ctx.save();
@@ -1137,5 +1302,105 @@ export function drawTray(ctx: Ctx, sp: Sprites, coins: number, view: Rect) {
     const yy = r.y + r.h - 14 - row * 9 - rnd() * 6;
     ctx.drawImage(sp.coin, x - 15, yy - 10, 30, 30 * (sp.coin.height / sp.coin.width));
   }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- cards and the album
+
+const ready = (img: HTMLImageElement | null) => (img?.complete && img.naturalWidth > 0 ? img : null);
+const silhouettes = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
+
+/**
+ * The card's art as a dim indigo monochrome (an unowned album slot). The art is
+ * opaque, so a flat fill would be a blank rectangle; keeping a trace of the
+ * brightness lets the cat's shape show through like a shadow.
+ */
+function silhouette(img: HTMLImageElement) {
+  let c = silhouettes.get(img);
+  if (c) return c;
+  c = document.createElement("canvas");
+  c.width = 120;
+  c.height = 160;
+  const g = c.getContext("2d", { willReadFrequently: true }) as Ctx;
+  g.drawImage(img, 0, 0, c.width, c.height);
+  try {
+    const px = g.getImageData(0, 0, c.width, c.height);
+    const d = px.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const lum = (0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]) / 255;
+      const k = 0.16 + lum * 0.6;
+      d[i] = 70 * k;
+      d[i + 1] = 60 * k;
+      d[i + 2] = 150 * k;
+    }
+    g.putImageData(px, 0, 0);
+  } catch {
+    // A tainted canvas can't be read: fall back to a flat tint
+    g.globalCompositeOperation = "source-atop";
+    g.fillStyle = "rgba(20,16,50,0.92)";
+    g.fillRect(0, 0, c.width, c.height);
+  }
+  silhouettes.set(img, c);
+  return c;
+}
+
+/**
+ * A cat card in a white frame. `owned` false shows its silhouette on a dark
+ * card; while the image is still loading the paw-print card back stands in.
+ */
+export function drawCardFace(ctx: Ctx, img: HTMLImageElement | null, x: number, y: number, w: number, h: number, owned: boolean) {
+  const r = Math.max(3, w * 0.09);
+  const pad = Math.max(1.5, w * 0.05);
+  ctx.save();
+  ctx.fillStyle = owned ? "#fffaf2" : "#15112f";
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
+  const art = ready(img);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x + pad, y + pad, w - pad * 2, h - pad * 2, r * 0.7);
+  ctx.clip();
+  if (art) ctx.drawImage(owned ? art : silhouette(art), x + pad, y + pad, w - pad * 2, h - pad * 2);
+  else {
+    ctx.fillStyle = owned ? "#ffd6ea" : "#211b48";
+    ctx.fillRect(x, y, w, h);
+    ctx.translate(x + w / 2, y + h / 2);
+    cardIcon(ctx, w * 0.5, owned ? "#fff4fa" : "#3a3270");
+  }
+  ctx.restore();
+  ctx.strokeStyle = owned ? "rgba(10,8,32,0.6)" : "rgba(255,255,255,0.18)";
+  ctx.lineWidth = Math.max(1, w * 0.025);
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The album button: a little card, the owned count, and the label. `pulse` 0..1 after a new card. */
+export function drawAlbumButton(ctx: Ctx, r: Rect, label: string, owned: number, total: number, pulse: number) {
+  ctx.save();
+  ctx.fillStyle = "rgba(10,8,32,0.85)";
+  ctx.strokeStyle = pulse > 0 ? PINK : "rgba(255,126,182,0.75)";
+  ctx.lineWidth = 2 + pulse * 2;
+  if (pulse > 0) {
+    ctx.shadowColor = PINK;
+    ctx.shadowBlur = 18 * pulse;
+  }
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.w, r.h, 14);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.save();
+  ctx.translate(r.x + 20, r.y + 20);
+  ctx.rotate(-0.12);
+  ctx.scale(1 + pulse * 0.25, 1 + pulse * 0.25);
+  cardIcon(ctx, 18);
+  ctx.restore();
+  text(ctx, `${owned}/${total}`, r.x + 52, r.y + 21, 17, "#ffffff", "center", null);
+  text(ctx, label, r.x + r.w / 2, r.y + 43, fitSize(ctx, label, 14, r.w - 10), "#ffd6ea", "center", null);
   ctx.restore();
 }

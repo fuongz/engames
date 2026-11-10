@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
+import { forgetGameIds } from "./games";
 import type { Db } from "./leaderboard";
 import { deleteSave, listSaves, readSave, writeSave } from "./saves";
 import * as schema from "./schema";
@@ -12,6 +13,7 @@ import * as schema from "./schema";
 const MIGRATIONS = join(import.meta.dir, "../../../drizzle");
 
 function freshDb(): Db {
+  forgetGameIds();
   const sqlite = new Database(":memory:");
   sqlite.run("pragma foreign_keys = on");
   for (const file of readdirSync(MIGRATIONS)

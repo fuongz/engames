@@ -1,5 +1,6 @@
 import { and, count, desc, eq, gt, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+import { gameIdOf } from "./games";
 import type * as schema from "./schema";
 import { score, user } from "./schema";
 
@@ -20,6 +21,7 @@ export interface LeaderboardEntry {
 }
 
 export async function topScores(db: Db, gameSlug: string, limit: number): Promise<LeaderboardEntry[]> {
+  const gameId = await gameIdOf(db, gameSlug);
   const rows = await db
     .select({
       id: score.id,
@@ -32,7 +34,7 @@ export async function topScores(db: Db, gameSlug: string, limit: number): Promis
     })
     .from(score)
     .leftJoin(user, eq(score.userId, user.id))
-    .where(eq(score.gameSlug, gameSlug))
+    .where(eq(score.gameId, gameId))
     // Ties go to whoever got there first
     .orderBy(desc(score.score), score.createdAt, score.id)
     .limit(limit);
@@ -44,6 +46,7 @@ export async function topScores(db: Db, gameSlug: string, limit: number): Promis
 }
 
 export interface SaveInput {
+  /** The game, or an online board ("<slug>:<mode>"). */
   gameSlug: string;
   score: number;
   detail: string | null;
@@ -60,6 +63,9 @@ export interface SaveResult {
 }
 
 export async function saveScore(db: Db, input: SaveInput): Promise<SaveResult> {
+  const { gameSlug, ...fields } = input;
+  const gameId = await gameIdOf(db, gameSlug);
+  const values = { ...fields, gameId };
   let id: number;
   let best = input.score;
   let improved = true;
@@ -69,9 +75,9 @@ export async function saveScore(db: Db, input: SaveInput): Promise<SaveResult> {
     // expression sees the OLD row, so the CASEs compare against the stored best.
     const [row] = await db
       .insert(score)
-      .values(input)
+      .values(values)
       .onConflictDoUpdate({
-        target: [score.gameSlug, score.userId],
+        target: [score.gameId, score.userId],
         targetWhere: sql`user_id is not null`,
         set: {
           name: input.name,
@@ -85,13 +91,13 @@ export async function saveScore(db: Db, input: SaveInput): Promise<SaveResult> {
     best = row.score;
     improved = best === input.score;
   } else {
-    const [row] = await db.insert(score).values(input).returning({ id: score.id });
+    const [row] = await db.insert(score).values(values).returning({ id: score.id });
     id = row.id;
   }
 
   const [{ ahead }] = await db
     .select({ ahead: count() })
     .from(score)
-    .where(and(eq(score.gameSlug, input.gameSlug), gt(score.score, best)));
+    .where(and(eq(score.gameId, gameId), gt(score.score, best)));
   return { id, best, improved, rank: ahead + 1 };
 }

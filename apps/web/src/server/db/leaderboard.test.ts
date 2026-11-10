@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { drizzle } from "drizzle-orm/bun-sqlite";
+import { forgetGameIds } from "./games";
 import { type Db, saveScore, topScores } from "./leaderboard";
 import * as schema from "./schema";
 
@@ -11,6 +12,7 @@ import * as schema from "./schema";
 const MIGRATIONS = join(import.meta.dir, "../../../drizzle");
 
 function freshDb(): Db {
+  forgetGameIds();
   const sqlite = new Database(":memory:");
   for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
     for (const stmt of readFileSync(join(MIGRATIONS, file), "utf8").split("--> statement-breakpoint")) {

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // The runtime schema — the ONE thing you hand-edit. Change it, then:
 //   bun run db:generate        # writes SQL into ./drizzle
@@ -9,6 +9,8 @@ import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "driz
 // migrations with a ledger D1 keeps server-side; hand-editing one that has already
 // been applied leaves the ledger and the database describing different things, and
 // nothing tells you until a later migration fails on a column that isn't there.
+// The one exception is a NEW, not-yet-applied migration that has to carry data
+// across a table rebuild (0007, see docs/standards/database.md).
 
 // ---------------------------------------------------------------- Better Auth
 // Field names and types mirror Better Auth's core tables (@better-auth/core
@@ -83,6 +85,27 @@ export const verification = sqliteTable(
   (t) => [index("verification_identifier_idx").on(t.identifier)],
 );
 
+// ---------------------------------------------------------------- Games
+
+/**
+ * One row per game slug the database has ever seen, so every other table refers
+ * to a game by `game_id` instead of repeating its slug. Rows are never written by
+ * hand: `gameIdOf` (db/games.ts) inserts a slug the first time it is used, so a
+ * new game needs no migration. Online leaderboards ("<slug>:<mode>",
+ * `boardKey`) get their own row too. See docs/standards/database.md.
+ */
+export const game = sqliteTable("game", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  slug: text("slug").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
+export type GameRow = typeof game.$inferSelect;
+
+const gameId = () => integer("game_id").references(() => game.id);
+
 // ---------------------------------------------------------------- Leaderboard
 
 /**
@@ -93,7 +116,8 @@ export const score = sqliteTable(
   "score",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    gameSlug: text("game_slug").notNull(),
+    /** The game, or an online board ("<slug>:<mode>"). */
+    gameId: gameId().notNull(),
     userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     score: integer("score").notNull(),
@@ -105,10 +129,10 @@ export const score = sqliteTable(
       .default(sql`(unixepoch())`),
   },
   (t) => [
-    index("score_game_rank_idx").on(t.gameSlug, t.score),
+    index("score_game_rank_idx").on(t.gameId, t.score),
     // Partial unique index: the upsert target for signed-in players. Anonymous
     // rows (user_id NULL) are never merged.
-    uniqueIndex("score_game_user_uq").on(t.gameSlug, t.userId).where(sql`user_id is not null`),
+    uniqueIndex("score_game_user_uq").on(t.gameId, t.userId).where(sql`user_id is not null`),
   ],
 );
 
@@ -128,7 +152,7 @@ export const gameSave = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    gameSlug: text("game_slug").notNull(),
+    gameId: gameId().notNull(),
     /** Which of the game's `saveSlots` this is (0 for single-save games). */
     slot: integer("slot").notNull().default(0),
     data: text("data").notNull(),
@@ -137,7 +161,7 @@ export const gameSave = sqliteTable(
       .notNull()
       .default(sql`(unixepoch())`),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.gameSlug, t.slot] })],
+  (t) => [primaryKey({ columns: [t.userId, t.gameId, t.slot] })],
 );
 
 export type GameSaveRow = typeof gameSave.$inferSelect;
@@ -146,7 +170,9 @@ export type GameSaveRow = typeof gameSave.$inferSelect;
 
 /** How many times each game was started, across every player (shown as "1.2K plays"). */
 export const gameStat = sqliteTable("game_stat", {
-  gameSlug: text("game_slug").primaryKey(),
+  gameId: integer("game_id")
+    .primaryKey()
+    .references(() => game.id),
   plays: integer("plays").notNull().default(0),
 });
 
@@ -171,7 +197,7 @@ export const onlineMatch = sqliteTable(
   "online_match",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    gameSlug: text("game_slug").notNull(),
+    gameId: gameId().notNull(),
     /** "coop" | "versus". */
     mode: text("mode").notNull(),
     roomCode: text("room_code").notNull(),
@@ -217,10 +243,63 @@ export const favorite = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    gameSlug: text("game_slug").notNull(),
+    gameId: gameId().notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.gameSlug] })],
+  (t) => [primaryKey({ columns: [t.userId, t.gameId] })],
+);
+
+// ---------------------------------------------------------------- Coupons
+
+/**
+ * A code the admin mints by hand in D1 (docs/standards/coupons.md). `game_id`
+ * null means any game that accepts coupons; `rewards` is a JSON array of
+ * {kind, amount}. Times are unix ms. The CHECKs reject a hand-written row that
+ * could never be redeemed (lowercase, spaces or dashes in the code, bad JSON).
+ */
+export const coupon = sqliteTable(
+  "coupon",
+  {
+    /** Uppercase, no spaces or dashes: what `normalizeCode` turns input into. */
+    code: text("code").primaryKey(),
+    gameId: gameId(),
+    rewards: text("rewards").notNull(),
+    maxUses: integer("max_uses").notNull().default(1),
+    uses: integer("uses").notNull().default(0),
+    expiresAt: integer("expires_at"),
+    disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
+    /** Admin's memo, e.g. "Tết 2027 fanpage giveaway". */
+    note: text("note"),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  () => [
+    check("coupon_code_shape", sql`code = upper(code) and instr(code, ' ') = 0 and instr(code, '-') = 0`),
+    check("coupon_rewards_array", sql`json_valid(rewards) and json_type(rewards) = 'array'`),
+  ],
+);
+
+/**
+ * Who redeemed which code, and what they got (the rewards after filtering to the
+ * game's kinds). One row per code per player is what makes a code single-use per
+ * player. Disable a coupon rather than delete it: these rows reference it.
+ */
+export const couponRedemption = sqliteTable(
+  "coupon_redemption",
+  {
+    code: text("code")
+      .notNull()
+      .references(() => coupon.code),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** The game it was redeemed in. */
+    gameId: gameId().notNull(),
+    rewards: text("rewards").notNull(),
+    redeemedAt: integer("redeemed_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.code, t.userId] }), index("coupon_redemption_user_idx").on(t.userId)],
 );

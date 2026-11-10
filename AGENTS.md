@@ -17,6 +17,7 @@ local repository instruction, then these general rules.
 | Where does this file go? | [`docs/standards/frontend-app-layout.md`](docs/standards/frontend-app-layout.md) |
 | How is a game built? | [`docs/standards/game-engine.md`](docs/standards/game-engine.md) |
 | How does a game play online? | [`docs/standards/online-multiplayer.md`](docs/standards/online-multiplayer.md) |
+| How does a game take coupons? | [`docs/standards/coupons.md`](docs/standards/coupons.md) |
 
 Four things you will get wrong without them, so they are worth stating up front:
 
