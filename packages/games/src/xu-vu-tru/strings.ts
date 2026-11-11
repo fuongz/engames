@@ -22,7 +22,7 @@ export interface Strings {
   auto: string;
   on: string;
   off: string;
-  /** Under the shelf for the first few shots: how to aim. */
+  /** Under the shelf for the first few shots: how to aim, in one sentence a child gets. */
   aimHint: string;
   /** Pops on the gate: a coin dropped in the hole, or did while the spin stock was full. */
   holeIn: string;
@@ -36,9 +36,30 @@ export interface Strings {
   coinRain: (n: number) => string;
   cardNew: string;
   cardDupe: string;
+  /** The badge on the rare card (card face, album slot, drop toast). */
+  rare: string;
   album: string;
   albumTitle: string;
-  albumNote: (each: number, set: number) => string;
+  albumNote: string;
+  /** A card's count in the inventory, e.g. "x5". */
+  count: (n: number) => string;
+  /** A cat collected once but exchanged down to none. */
+  traded: string;
+  /** The card exchange: its button and screen. */
+  exchange: string;
+  pickCard: string;
+  oneCard: string;
+  fullSet: string;
+  setMissing: (n: number) => string;
+  setReady: string;
+  ticketsN: (n: number) => string;
+  coinsN: (n: number) => string;
+  confirmCard: (name: string, reward: string) => string;
+  confirmSet: (reward: string) => string;
+  confirm: string;
+  cancel: string;
+  done: string;
+  exchanged: (reward: string) => string;
   setDone: string;
   setBonus: (n: number) => string;
   cards: Record<CardId, string>;
@@ -55,15 +76,13 @@ export interface Strings {
   loading: string;
   loadFailed: string;
   retry: string;
-  /** The out-of-coins panel. */
-  dryTitle: string;
-  dryKept: string;
-  /** Countdown to the next daily coins, "hh:mm:ss". */
+  /** The out-of-coins strip by the coin counter (never blocks the machine): countdown to the next daily coins, "hh:mm:ss". */
   dailyIn: (coins: number, clock: string) => string;
   dailyLater: (coins: number) => string;
-  /** The sign-in nudge for guests (on the out-of-coins panel). */
-  guestNudge: (welcome: number, daily: number) => string;
-  viewMachine: string;
+  /** The strip's sign-in hint for guests. */
+  guestHint: (welcome: number) => string;
+  /** The card viewer: how to flip, and its close button. */
+  flipHint: string;
   lifetimeLine: (n: number) => string;
   supersLine: (n: number) => string;
   /** Allowance toasts. */
@@ -100,7 +119,7 @@ export const STRINGS: Localized<Strings> = {
     auto: "Tự động",
     on: "Bật",
     off: "Tắt",
-    aimHint: "Canh lúc bắn để xu rơi vào lỗ đang lắc",
+    aimHint: "Bấm BẮN khi lỗ sáng xanh là xu rơi trúng lỗ!",
     holeIn: "VÀO!",
     stockFull: "Đầy lượt quay",
     youWin: "BẠN THẮNG",
@@ -112,10 +131,27 @@ export const STRINGS: Localized<Strings> = {
     coinRain: (n) => `${n} xu`,
     cardNew: "Thẻ mới!",
     cardDupe: "Thẻ trùng",
+    rare: "Hiếm",
     album: "Thẻ",
-    albumTitle: "Bộ sưu tập mèo",
-    albumNote: (each, set) => `Mỗi thẻ ${each} vé · đủ 10 thẻ +${set} vé`,
-    setDone: "ĐỦ BỘ SƯU TẬP!",
+    albumTitle: "Kho thẻ mèo",
+    albumNote: "Thẻ trùng được cộng dồn · đổi lấy vé hoặc xu",
+    count: (n) => `x${n}`,
+    traded: "đã đổi",
+    exchange: "Đổi thẻ",
+    pickCard: "Chọn một thẻ để đổi",
+    oneCard: "Đổi 1 thẻ",
+    fullSet: "Đổi cả bộ 10 giống (mỗi giống 1 thẻ)",
+    setMissing: (n) => `Còn thiếu ${n} giống`,
+    setReady: "Đủ bộ!",
+    ticketsN: (n) => `+${n} vé`,
+    coinsN: (n) => `+${n} xu`,
+    confirmCard: (name, reward) => `Đổi 1 thẻ ${name} lấy ${reward}?`,
+    confirmSet: (reward) => `Đổi 10 thẻ (mỗi giống 1 thẻ) lấy ${reward}?`,
+    confirm: "Đổi",
+    cancel: "Huỷ",
+    done: "Xong",
+    exchanged: (reward) => `Đã đổi: ${reward}`,
+    setDone: "ĐỔI CẢ BỘ!",
     setBonus: (n) => `+${n} vé`,
     cards: {
       persian: "Mèo Ba Tư",
@@ -135,13 +171,14 @@ export const STRINGS: Localized<Strings> = {
     enterCode: "Nhập mã",
     couponCoins: (n) => `+${n} xu`,
     rulesLines: [
-      "BẮN (hoặc Space): tốn 1 xu, nửa giây sau xu rơi xuống cổng dưới vòng quay, giữa hai vạch vàng.",
-      "Cổng lắc qua lại, có một lỗ. Vào lỗ: 1 lượt quay thưởng. Trượt: xu nảy ra, rơi xuống kệ.",
-      "Quay thưởng: đèn dừng ở một ô (ô càng rộng càng dễ trúng). Ô VÉ: cộng vé. Ô XU (1–8): xu rơi khắp kệ.",
+      "Bấm BẮN khi lỗ sáng xanh là xu rơi trúng lỗ!",
+      "BẮN (hoặc Space) tốn 1 xu; xu luôn rơi vào vòng đích dưới vòng quay. Vào lỗ: 1 lượt quay thưởng. Trượt: xu nảy xuống kệ.",
+      "Quay thưởng: đèn dừng ở một ô (ô càng rộng càng dễ trúng). Ô VÉ: cộng vé. Ô XU: xu rơi khắp kệ.",
       "Tối đa 4 lượt chờ (đèn dưới cổng). Đèn đầy mà xu vẫn vào lỗ thì mất xu đó.",
       "Xu bị đẩy rơi mép trước: +1 xu, +1 vé (hai bên có vách). Hết xu thì máy nghỉ, kệ giữ nguyên chờ bạn.",
       "Ô LÕI: lõi rơi xuống kệ + 1 MINI SPIN. Đẩy 6 lõi rơi mép trước: SUPER SPIN 80–500 vé!",
-      "Ô THẺ: thẻ mèo rơi xuống kệ. Đẩy rơi mép trước: +60 vé, vào bộ sưu tập. Đủ 10 thẻ: +1000 vé.",
+      "Ô THẺ: thẻ mèo rơi xuống kệ. Đẩy rơi mép trước: vào kho thẻ, thẻ trùng cộng dồn. Mèo Ragdoll hiếm hơn.",
+      "Đổi thẻ khi bạn muốn: 1 thẻ = 60 vé hoặc 3 xu (Ragdoll 300 vé hoặc 15 xu); cả bộ 10 giống = 1000 vé hoặc 50 xu.",
       "Đăng nhập: 100 xu chào mừng, 50 xu mỗi ngày, máy lưu vào tài khoản, vé vào ví vé chung của các game thùng.",
     ],
     close: "Đã hiểu",
@@ -151,13 +188,10 @@ export const STRINGS: Localized<Strings> = {
     loading: "Đang tải máy của bạn…",
     loadFailed: "Chưa tải được máy của bạn. Kiểm tra mạng rồi thử lại.",
     retry: "Thử lại",
-    dryTitle: "HẾT XU!",
-    dryKept: "Máy nghỉ, kệ xu vẫn giữ nguyên chờ bạn.",
-    dailyIn: (n, clock) => `${n} xu hôm nay sau ${clock}`,
-    dailyLater: (n) => `Mai quay lại nhận ${n} xu`,
-    guestNudge: (w, d) =>
-      `Đăng nhập để nhận ${w} xu chào mừng và ${d} xu mỗi ngày, lưu máy vào tài khoản và gom vé chung. Máy tài khoản bắt đầu mới: máy thử này không được chuyển sang.`,
-    viewMachine: "Xem máy",
+    dailyIn: (n, clock) => `+${n} xu sau ${clock}`,
+    dailyLater: (n) => `Mai nhận ${n} xu`,
+    guestHint: (w) => `Đăng nhập nhận ${w} xu`,
+    flipHint: "Chạm thẻ để lật",
     lifetimeLine: (n) => `Máy đã trả ${n} vé`,
     supersLine: (n) => (n > 0 ? `${n} lần Super Spin` : "Chưa có Super Spin"),
     welcomeGrant: (n) => `Quà chào mừng +${n} xu`,
@@ -168,11 +202,12 @@ export const STRINGS: Localized<Strings> = {
     legacyNote: "Lượt chơi bản beta cũ đã được dọn: máy 1.0 bắt đầu mới.",
     newsTitle: (v) => `Có gì mới · v${v}`,
     newsLines: [
-      "Cổng lắc có lỗ: canh xu rơi vào lỗ để được lượt quay thưởng.",
-      "Hình mới: tủ máy, vòng quay, xu, lõi năng lượng và robot vẽ lại.",
-      "Xu mỗi ngày: đăng nhập nhận 100 xu chào mừng, rồi 50 xu mỗi ngày.",
-      "Lưu đám mây: máy, kệ xu và bộ thẻ theo tài khoản, chơi tiếp ở thiết bị nào cũng được.",
-      "Vé chung: vé thắng được vào ví vé dùng chung cho các game thùng.",
+      "Bắn dễ hơn: xu luôn rơi vào vòng đích, lỗ to hơn và sáng xanh khi tới lúc bấm.",
+      "Thêm nhiều ô xu: quay thưởng ra xu thường hơn, vòng quay 11 ô to rõ.",
+      "Mèo Ragdoll hiếm: khó gặp hơn các bé mèo khác, có huy hiệu Hiếm.",
+      "Kho thẻ: thẻ trùng được cộng dồn; tự chọn lúc đổi 1 thẻ hoặc cả bộ lấy vé hay xu.",
+      "Xem thẻ: chạm thẻ trong kho để xem to, nghiêng và lật thẻ.",
+      "Chơi liền mạch: hết xu không còn bảng chắn, bảng xếp hạng tự cập nhật.",
     ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} vé · ${supers} lần Super` : `${tickets} vé`),
     summary: (n) => `Đã gom ${n} vé`,
@@ -191,7 +226,7 @@ export const STRINGS: Localized<Strings> = {
     auto: "Auto",
     on: "On",
     off: "Off",
-    aimHint: "Time it so the coin drops into the swinging hole",
+    aimHint: "Press SHOOT when the hole glows green and the coin drops right in!",
     holeIn: "IN!",
     stockFull: "Spins full",
     youWin: "YOU WIN",
@@ -203,10 +238,27 @@ export const STRINGS: Localized<Strings> = {
     coinRain: (n) => (n === 1 ? "1 coin" : `${n} coins`),
     cardNew: "New card!",
     cardDupe: "Duplicate",
+    rare: "Rare",
     album: "Cards",
-    albumTitle: "Cat collection",
-    albumNote: (each, set) => `${each} tickets a card · all 10: +${set}`,
-    setDone: "SET COMPLETE!",
+    albumTitle: "Cat cards",
+    albumNote: "Duplicates stack · exchange them for tickets or coins",
+    count: (n) => `x${n}`,
+    traded: "traded",
+    exchange: "Exchange",
+    pickCard: "Pick a card to exchange",
+    oneCard: "One card",
+    fullSet: "A full set of 10 (one of each cat)",
+    setMissing: (n) => (n === 1 ? "1 cat missing" : `${n} cats missing`),
+    setReady: "Full set!",
+    ticketsN: (n) => `+${n} tickets`,
+    coinsN: (n) => `+${n} coins`,
+    confirmCard: (name, reward) => `Exchange one ${name} card for ${reward}?`,
+    confirmSet: (reward) => `Exchange 10 cards (one of each cat) for ${reward}?`,
+    confirm: "Exchange",
+    cancel: "Cancel",
+    done: "Done",
+    exchanged: (reward) => `Exchanged: ${reward}`,
+    setDone: "FULL SET!",
     setBonus: (n) => `+${n} tickets`,
     cards: {
       persian: "Persian",
@@ -226,13 +278,14 @@ export const STRINGS: Localized<Strings> = {
     enterCode: "Enter code",
     couponCoins: (n) => `+${n} coins`,
     rulesLines: [
-      "SHOOT (or Space): 1 coin lands on the gate under the wheel half a second later, between the gold marks.",
-      "The gate swings with a hole in it. In the hole: a prize spin. Missed: the coin bounces onto the shelf.",
-      "Prize spin: a light stops on a slot (wider = likelier). TICKETS pay at once; COINS (1–8) rain onto the shelf.",
+      "Press SHOOT when the hole glows green and the coin drops right in!",
+      "SHOOT (or Space) costs 1 coin, which always lands on the target ring under the wheel. In the hole: a prize spin. Missed: it bounces onto the shelf.",
+      "Prize spin: a light stops on a slot (wider = likelier). TICKETS pay at once; COINS rain onto the shelf.",
       "Up to 4 spins wait (lamps under the gate). A coin that drops in while all 4 are lit is lost.",
       "Coins pushed off the front: +1 coin, +1 ticket each (walls guard the sides). Out of coins, the machine rests and keeps its shelf.",
       "CORE: a core drops onto the shelf + a MINI SPIN. Push 6 cores off the front: SUPER SPIN, 80–500 tickets!",
-      "CARD: a cat card drops onto the shelf. Pushed off the front: +60 tickets, into the album. All 10: +1000.",
+      "CARD: a cat card drops onto the shelf. Pushed off the front, it goes into your card stash; duplicates stack. The Ragdoll is rare.",
+      "Exchange cards when you like: one card = 60 tickets or 3 coins (Ragdoll 300 or 15); a full set of 10 cats = 1000 tickets or 50 coins.",
       "Signed in: 100 welcome coins, 50 coins a day, your machine saved to your account, tickets in the shared arcade wallet.",
     ],
     close: "Got it",
@@ -242,13 +295,10 @@ export const STRINGS: Localized<Strings> = {
     loading: "Loading your machine…",
     loadFailed: "Couldn't load your machine. Check your connection and try again.",
     retry: "Try again",
-    dryTitle: "OUT OF COINS!",
-    dryKept: "The machine rests, and keeps its shelf for you.",
-    dailyIn: (n, clock) => `${n} coins today in ${clock}`,
-    dailyLater: (n) => `Come back tomorrow for ${n} coins`,
-    guestNudge: (w, d) =>
-      `Sign in for ${w} welcome coins and ${d} coins a day, a machine saved to your account, and shared tickets. Your account machine starts fresh: this trial machine doesn't carry over.`,
-    viewMachine: "View machine",
+    dailyIn: (n, clock) => `+${n} coins in ${clock}`,
+    dailyLater: (n) => `${n} coins tomorrow`,
+    guestHint: (w) => `Sign in for ${w} coins`,
+    flipHint: "Tap the card to flip it",
     lifetimeLine: (n) => (n === 1 ? "This machine has paid 1 ticket" : `This machine has paid ${n} tickets`),
     supersLine: (n) => (n === 0 ? "No Super Spin yet" : n === 1 ? "1 Super Spin" : `${n} Super Spins`),
     welcomeGrant: (n) => `Welcome gift +${n} coins`,
@@ -259,11 +309,12 @@ export const STRINGS: Localized<Strings> = {
     legacyNote: "Your old beta run was cleared: the 1.0 machine starts fresh.",
     newsTitle: (v) => `What's new · v${v}`,
     newsLines: [
-      "A swinging gate with a hole: time your coin into it for a prize spin.",
-      "New art: the cabinet, wheel, coins, energy cores and robots, all redrawn.",
-      "Daily coins: sign in for 100 welcome coins, then 50 coins every day.",
-      "Cloud save: your machine, shelf and cards follow your account to any device.",
-      "Shared tickets: the tickets you win go to the arcade wallet every arcade game shares.",
+      "Easier aiming: every coin lands on the target ring, the hole is bigger and glows green when it's time to shoot.",
+      "More coin prizes: prize spins pay coins more often, on a bigger, clearer 11-slot wheel.",
+      "The rare Ragdoll: harder to find than the other cats, with a Rare badge.",
+      "Card stash: duplicates stack; you choose when to exchange one card or a full set, for tickets or coins.",
+      "Card viewer: tap a card in your stash to see it big, tilt it and flip it over.",
+      "Nonstop play: no more out-of-coins panel, and the leaderboard updates by itself.",
     ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} tickets · ${supers}× Super` : `${tickets} tickets`),
     summary: (n) => `${n} tickets collected`,

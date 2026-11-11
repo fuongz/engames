@@ -9,9 +9,9 @@
 // tilts it into a 3/4 view.
 import { type Rect, clamp, lerp, mulberry32 } from "@web-games/core";
 import {
-  AIM_SPREAD,
   GATE_AMP,
   HOLE_HALF,
+  LAND_X,
   PRIZE_QUEUE_MAX,
   SEG_SIZE,
   SEG_START,
@@ -31,6 +31,8 @@ export const LED_FONT = '"Handjet", "Baloo 2", monospace';
 
 // ---------------------------------------------------------------- palette (art/v2 style guide)
 
+/** The gate's ready cue: the green orb's green. */
+export const GO_GREEN = "#6CBF6A";
 /** Outlines, and dark text strokes. */
 export const BROWN = "#49332C";
 export const CREAM = "#F5E4BE";
@@ -81,8 +83,8 @@ const BACK_SCALE = 0.8;
 export const GATE = { x: WHEEL_C.x, y: WHEEL_C.y + 82 };
 /** Half the gate's swing room: the hole's full swing plus its rim. */
 export const GATE_HALF = GATE_AMP + HOLE_HALF + 18;
-/** The gate sprite's width: its U opening (43% of it) is the hole plus a coin's radius each side. */
-const GATE_W = 110;
+/** The gate sprite's width: its U opening (43% of it) is the hole plus about half a coin's radius each side. */
+const GATE_W = 124;
 /** The chute from the button round the right side, ending at the wheel's rim level with the gate. */
 export const CHUTE_X = 524;
 export const CHUTE: { x: number; y: number }[] = [
@@ -681,17 +683,41 @@ function slotColor(seg: Segment) {
 }
 
 const RING_K = 2;
+/** Px kept clear between a tile and its wedge's edges (screen px). */
+const TILE_GAP = 2;
+/**
+ * The biggest a tile can be drawn whole inside a wedge `angle` radians wide, at
+ * its own aspect (`aspect` = width / height): its height and its bottom edge's
+ * distance from the hub, in screen px. The v2 tiles are themselves wedge-shaped:
+ * full width a quarter of the way down, about 55% of it at the bottom edge, with
+ * rounded top corners; those three rows are what must stay inside the wedge.
+ */
+export function tileFit(angle: number, aspect: number) {
+  const tan = Math.tan(angle / 2);
+  const R = WHEEL_R - TILE_GAP;
+  let best = { h: 0, d: WHEEL_IN + TILE_GAP };
+  for (let d = WHEEL_IN + TILE_GAP; d < R; d += 0.5) {
+    for (let h = 8; d + h <= R; h += 0.5) {
+      const w = h * aspect;
+      const wide = d + 0.75 * h;
+      if (w / 2 > wide * tan - TILE_GAP || w * 0.275 > d * tan - TILE_GAP) break;
+      if (Math.hypot(wide, w / 2) > R || Math.hypot(d + h, w * 0.3) > R) break;
+      if (h > best.h) best = { h, d };
+    }
+  }
+  return best;
+}
+
 /**
  * The prize ring at 2×: every slot is a wedge exactly as wide as its weight (so a
- * slot's share of the circle is its chance), filled with its tile. A tile is
- * scaled to the ring's depth and narrowed at most to 62% for a thin slot; past
- * that the wedge crops it, so no tile is squashed out of shape.
+ * slot's share of the circle is its chance), with its tile drawn whole inside it
+ * at its own aspect (tileFit): never cropped, never squashed. MIN_SLOT_WEIGHT
+ * keeps the narrowest tile at about 80% of the ring's depth.
  */
 function wheelRing(img: Sprites["img"] | null) {
   const K = RING_K;
   const R = WHEEL_R * K;
   const r0 = WHEEL_IN * K;
-  const rm = (R + r0) / 2;
   const c = document.createElement("canvas");
   c.width = Math.ceil(R * 2 + 8);
   c.height = c.width;
@@ -711,13 +737,13 @@ function wheelRing(img: Sprites["img"] | null) {
     g.fill();
     const tile = img?.[tileOf(seg)];
     if (tile) {
-      g.clip();
-      const th = (R - r0) * 1.02;
-      const tw0 = (th * tile.naturalWidth) / tile.naturalHeight;
-      const tw = tw0 * clamp((SEG_SIZE[i] * rm) / tw0, 0.62, 1);
+      const aspect = tile.naturalWidth / tile.naturalHeight;
+      const fit = tileFit(SEG_SIZE[i], aspect);
+      const th = fit.h * K;
+      const tw = th * aspect;
       g.translate(cx, cy);
       g.rotate((a0 + a1) / 2 + Math.PI / 2);
-      g.drawImage(tile, -tw / 2, -rm - th / 2, tw, th);
+      g.drawImage(tile, -tw / 2, -(fit.d * K + th), tw, th);
     }
     g.restore();
   }
@@ -875,13 +901,24 @@ export function drawChute(ctx: Ctx, glow: number) {
   ctx.restore();
 }
 
+/** Where a shot coin lands: the gate's fixed target, a little above its rail. */
+export const LAND = { x: GATE.x + LAND_X, y: GATE.y - 10 };
+
+/** The shot coin's hop from the chute's mouth to LAND (`u` 0..1): a straight line with a small arc. */
+export function hopAt(u: number) {
+  const m = CHUTE[CHUTE.length - 1];
+  return { x: lerp(m.x, LAND.x, u), y: lerp(m.y, LAND.y, u) - Math.sin(u * Math.PI) * 24 };
+}
+
 /**
- * The swinging gate under the hub: the rod it rides on, the honey marks of the
- * band where shot coins land, the gate itself with its U hole at `hole` px from
- * the centre, and the prize stock lamps under it. `flash` (0..1) rings the hole
- * after a hit; `full` blinks the lamps while the stock is full.
+ * The swinging gate under the hub: the rod it rides on, the dotted guide from
+ * the chute's mouth to the landing spot, the gate itself with its U hole at
+ * `hole` px from the centre, the target ring where every coin lands, and the
+ * prize stock lamps under it. `flash` (0..1) rings the hole after a hit; `full`
+ * blinks the lamps while the stock is full; `ready` (0..1, faded by the caller)
+ * lights the hole green with a pulse and an arrow: a shot now drops in.
  */
-export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, flash: number, full: boolean, t: number) {
+export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, flash: number, full: boolean, t: number, ready = 0) {
   const { x, y } = GATE;
   const gh = (GATE_W * 186) / 360;
   /** The sprite's top sits just under the coins' landing line; its side knobs ride the rod. */
@@ -907,33 +944,23 @@ export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, fla
     ctx.fill();
     ctx.stroke();
   }
-  // The landing band: where shot coins come down
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  for (const [color, lw] of [
-    [BROWN, 6],
-    [HONEY, 3],
-  ] as const) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lw;
+  // The guide: dots from the chute's mouth to the landing spot, drifting gently toward it
+  const DOTS = 9;
+  const drift = (t * 0.6) % 1;
+  for (let i = 0; i < DOTS; i++) {
+    const u = (i + drift) / DOTS;
+    if (u > 0.9) continue;
+    const p = hopAt(u);
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(u * Math.PI);
+    ctx.fillStyle = ready > 0.5 ? "#C9F2B8" : "#FFE7A8";
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
-    for (const side of [-1, 1]) {
-      ctx.moveTo(x + side * AIM_SPREAD, y - 28);
-      ctx.lineTo(x + side * AIM_SPREAD, y - 19);
-      ctx.lineTo(x + side * (AIM_SPREAD - 6), y - 19);
-    }
+    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
   }
-  ctx.fillStyle = HONEY;
-  ctx.strokeStyle = BROWN;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x, y - 18);
-  ctx.lineTo(x - 6, y - 27);
-  ctx.lineTo(x + 6, y - 27);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  ctx.globalAlpha = 1;
   // The gate
   const hx = x + hole;
   const img = sp.img.gate;
@@ -953,6 +980,68 @@ export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, fla
     ctx.fill();
     ctx.stroke();
   }
+  // Ready: the cup glows green, a ring pulses out of it and an arrow points at the landing spot
+  if (ready > 0) {
+    ctx.globalAlpha = ready;
+    const glow = ctx.createRadialGradient(hx, y + 2, 2, hx, y + 2, HOLE_HALF + 12);
+    glow.addColorStop(0, "rgba(186,240,170,0.95)");
+    glow.addColorStop(0.55, "rgba(108,191,106,0.6)");
+    glow.addColorStop(1, "rgba(108,191,106,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(hx, y + 2, HOLE_HALF + 12, 15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // A solid green ring round the cup: easy to see at a glance
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.ellipse(hx, y + 3, HOLE_HALF + 6, 9, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = GO_GREEN;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    const k = (t * 1.6) % 1;
+    ctx.globalAlpha = ready * (1 - k) * 0.9;
+    ctx.strokeStyle = GO_GREEN;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(hx, y + 2, HOLE_HALF + 4 + k * 14, 9 + k * 6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = ready;
+    const ay = LAND.y - 22 - Math.abs(Math.sin(t * 6)) * 4;
+    ctx.fillStyle = GO_GREEN;
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(LAND.x, ay + 12);
+    ctx.lineTo(LAND.x - 11, ay);
+    ctx.lineTo(LAND.x - 5, ay);
+    ctx.lineTo(LAND.x - 5, ay - 9);
+    ctx.lineTo(LAND.x + 5, ay - 9);
+    ctx.lineTo(LAND.x + 5, ay);
+    ctx.lineTo(LAND.x + 11, ay);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // The target ring: every coin comes down here
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 5;
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.ellipse(LAND.x, LAND.y + 4, 18, 6.5, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.85;
+  ctx.strokeStyle = ready > 0.5 ? "#C9F2B8" : CREAM;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fillStyle = ready > 0.5 ? "#C9F2B8" : CREAM;
+  ctx.beginPath();
+  ctx.ellipse(LAND.x, LAND.y + 4, 3, 1.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
   if (flash > 0) {
     ctx.globalAlpha = flash;
     ctx.strokeStyle = LAMP_ON;
@@ -1483,9 +1572,19 @@ function silhouette(img: HTMLImageElement) {
 
 /**
  * A cat card in a cream frame. `owned` false shows its silhouette on a dark
- * card; while the image is still loading a plain card stands in.
+ * card; while the image is still loading a plain card stands in. `rare` is the
+ * Rare badge's label for the rare card (null for the others).
  */
-export function drawCardFace(ctx: Ctx, img: HTMLImageElement | null, x: number, y: number, w: number, h: number, owned: boolean) {
+export function drawCardFace(
+  ctx: Ctx,
+  img: HTMLImageElement | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  owned: boolean,
+  rare: string | null = null,
+) {
   const r = Math.max(3, w * 0.09);
   const pad = Math.max(1.5, w * 0.05);
   ctx.save();
@@ -1511,5 +1610,216 @@ export function drawCardFace(ctx: Ctx, img: HTMLImageElement | null, x: number, 
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.stroke();
+  if (rare && w >= 28) {
+    ctx.globalAlpha = owned ? 1 : 0.75;
+    drawRareBadge(ctx, x + pad + w * 0.02, y + pad + w * 0.11, Math.max(12, w * 0.17), rare);
+  }
   ctx.restore();
+}
+
+/**
+ * The Rare badge: a honey pill with a little star, its left edge at `x` and its
+ * middle at `y`, `size` tall. Returns its width.
+ */
+export function drawRareBadge(ctx: Ctx, x: number, y: number, size: number, label: string) {
+  ctx.save();
+  const fs = size * 0.68;
+  ctx.font = `800 ${fs}px ${FONT}`;
+  const star = size * 0.34;
+  const w = ctx.measureText(label).width + size * 0.5 + star * 2 + size * 0.1;
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(x, y - size / 2 + size * 0.08, w, size, size / 2);
+  ctx.fill();
+  const g = ctx.createLinearGradient(x, y - size / 2, x + w, y + size / 2);
+  g.addColorStop(0, "#F7D77E");
+  g.addColorStop(1, HONEY);
+  ctx.fillStyle = g;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = Math.max(1, size * 0.1);
+  ctx.beginPath();
+  ctx.roundRect(x, y - size / 2, w, size, size / 2);
+  ctx.fill();
+  ctx.stroke();
+  // A four-point sparkle, then the label
+  const sx = x + size * 0.25 + star;
+  ctx.fillStyle = "#FFF8E6";
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+    const rr = i % 2 === 0 ? star : star * 0.38;
+    ctx.lineTo(sx + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.lineWidth = Math.max(0.8, size * 0.06);
+  ctx.stroke();
+  ctx.fillStyle = BROWN;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, sx + star + size * 0.12, y + size * 0.04);
+  ctx.restore();
+  return w;
+}
+
+// ---------------------------------------------------------------- the card viewer
+
+/** The cat card (or its back) as a flat texture for the viewer, `w`×`h` px. */
+export function cardTexture(draw: (g: Ctx, w: number, h: number) => void, w: number, h: number) {
+  const c = document.createElement("canvas");
+  c.width = Math.ceil(w);
+  c.height = Math.ceil(h);
+  draw(c.getContext("2d") as Ctx, c.width, c.height);
+  return c;
+}
+
+/** Columns and rows of the mesh a tilted card is drawn with (each cell is two triangles). */
+const MESH_X = 6;
+const MESH_Y = 8;
+/** The viewer's camera distance in px: smaller is a stronger perspective. */
+const CAMERA = 1600;
+
+/**
+ * Draw a flat card texture in 3D: turned `yaw` radians about its upright axis
+ * and `pitch` about its horizontal one, centred on (cx, cy), `w`×`h` px at rest,
+ * in perspective. Canvas 2D has no perspective transform, so the card is cut
+ * into a grid; each corner is projected exactly and each half-cell drawn with
+ * the affine map that fits its three corners (clipped a hair large so no seams
+ * show). When the card faces away, `back` is drawn instead, mirrored as a real
+ * card's back would be. Returns the projected corners (for a shadow or a tap).
+ */
+export function drawCard3D(
+  ctx: Ctx,
+  front: HTMLCanvasElement,
+  back: HTMLCanvasElement,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  yaw: number,
+  pitch: number,
+) {
+  const cy0 = Math.cos(yaw);
+  const sy0 = Math.sin(yaw);
+  const cp = Math.cos(pitch);
+  const sp0 = Math.sin(pitch);
+  const project = (u: number, v: number) => {
+    const X = (u - 0.5) * w;
+    const Y = (v - 0.5) * h;
+    const x1 = X * cy0;
+    const z1 = -X * sy0;
+    const y2 = Y * cp - z1 * sp0;
+    const z2 = Y * sp0 + z1 * cp;
+    const f = CAMERA / (CAMERA + z2);
+    return { x: cx + x1 * f, y: cy + y2 * f };
+  };
+  const facing = cy0 * cp >= 0;
+  const tex = facing ? front : back;
+  const pts: { x: number; y: number }[][] = [];
+  for (let j = 0; j <= MESH_Y; j++) {
+    const row: { x: number; y: number }[] = [];
+    for (let i = 0; i <= MESH_X; i++) row.push(project(i / MESH_X, j / MESH_Y));
+    pts.push(row);
+  }
+  const tw = tex.width;
+  const th = tex.height;
+  // Texture px for grid corner (i, j): the back is mirrored left to right
+  const src = (i: number, j: number) => ({ x: (facing ? i / MESH_X : 1 - i / MESH_X) * tw, y: (j / MESH_Y) * th });
+  const tri = (a: [number, number], b: [number, number], c: [number, number]) => {
+    const d0 = pts[a[1]][a[0]];
+    const d1 = pts[b[1]][b[0]];
+    const d2 = pts[c[1]][c[0]];
+    const s0 = src(a[0], a[1]);
+    const s1 = src(b[0], b[1]);
+    const s2 = src(c[0], c[1]);
+    const ux = s1.x - s0.x;
+    const uy = s1.y - s0.y;
+    const vx = s2.x - s0.x;
+    const vy = s2.y - s0.y;
+    const det = ux * vy - vx * uy;
+    if (Math.abs(det) < 1e-6) return;
+    const px = d1.x - d0.x;
+    const py = d1.y - d0.y;
+    const qx = d2.x - d0.x;
+    const qy = d2.y - d0.y;
+    const ma = (px * vy - qx * uy) / det;
+    const mb = (py * vy - qy * uy) / det;
+    const mc = (qx * ux - px * vx) / det;
+    const md = (qy * ux - py * vx) / det;
+    // Clip to the triangle grown ~0.8 px about its centre, so neighbours overlap
+    const gx = (d0.x + d1.x + d2.x) / 3;
+    const gy = (d0.y + d1.y + d2.y) / 3;
+    const grow = (p: { x: number; y: number }) => {
+      const dx = p.x - gx;
+      const dy = p.y - gy;
+      const len = Math.hypot(dx, dy) || 1;
+      return { x: p.x + (dx / len) * 0.8, y: p.y + (dy / len) * 0.8 };
+    };
+    const g0 = grow(d0);
+    const g1 = grow(d1);
+    const g2 = grow(d2);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(g0.x, g0.y);
+    ctx.lineTo(g1.x, g1.y);
+    ctx.lineTo(g2.x, g2.y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.transform(ma, mb, mc, md, d0.x - ma * s0.x - mc * s0.y, d0.y - mb * s0.x - md * s0.y);
+    ctx.drawImage(tex, 0, 0);
+    ctx.restore();
+  };
+  for (let j = 0; j < MESH_Y; j++)
+    for (let i = 0; i < MESH_X; i++) {
+      tri([i, j], [i + 1, j], [i, j + 1]);
+      tri([i + 1, j], [i + 1, j + 1], [i, j + 1]);
+    }
+  return { facing, corners: [pts[0][0], pts[0][MESH_X], pts[MESH_Y][MESH_X], pts[MESH_Y][0]] };
+}
+
+/**
+ * The holographic shine over a card texture (drawn into `out`, a canvas the
+ * size of `tex`): a soft light band and a glint that slide across as the card
+ * tilts (`tx`, `ty` in -1..1), and for the rare card a moving rainbow shimmer.
+ */
+export function shineCard(out: HTMLCanvasElement, tex: HTMLCanvasElement, tx: number, ty: number, t: number, rainbow: boolean) {
+  const g = out.getContext("2d") as Ctx;
+  const w = out.width;
+  const h = out.height;
+  g.clearRect(0, 0, w, h);
+  g.drawImage(tex, 0, 0, w, h);
+  g.save();
+  g.globalCompositeOperation = "source-atop";
+  // The light band runs corner to corner, across from where the card leans
+  const k = 0.5 - tx * 0.55 - ty * 0.35;
+  const band = g.createLinearGradient(0, 0, w, h);
+  const at = (x: number) => clamp(x, 0, 1);
+  band.addColorStop(at(k - 0.28), "rgba(255,250,235,0)");
+  band.addColorStop(at(k - 0.06), "rgba(255,250,235,0.12)");
+  band.addColorStop(at(k), "rgba(255,252,240,0.38)");
+  band.addColorStop(at(k + 0.06), "rgba(255,250,235,0.12)");
+  band.addColorStop(at(k + 0.28), "rgba(255,250,235,0)");
+  g.fillStyle = band;
+  g.fillRect(0, 0, w, h);
+  if (rainbow) {
+    const off = (t * 0.08 + tx * 0.35 + ty * 0.2) % 1;
+    const rb = g.createLinearGradient(-w * 0.2, h, w * 1.2, 0);
+    const hues = [0, 45, 90, 180, 240, 300, 360];
+    for (let r = 0; r < 2; r++)
+      hues.forEach((hue, i) => {
+        const stop = (((i / (hues.length - 1)) * 0.5 + r * 0.5 + off) % 1 + 1) % 1;
+        rb.addColorStop(stop, `hsla(${hue}, 90%, 70%, 0.2)`);
+      });
+    g.fillStyle = rb;
+    g.fillRect(0, 0, w, h);
+  }
+  // A glint that follows the light
+  const gx = w * (0.5 - tx * 0.45);
+  const gy = h * (0.35 - ty * 0.4);
+  const glint = g.createRadialGradient(gx, gy, 0, gx, gy, w * 0.5);
+  glint.addColorStop(0, "rgba(255,255,248,0.28)");
+  glint.addColorStop(1, "rgba(255,255,248,0)");
+  g.fillStyle = glint;
+  g.fillRect(0, 0, w, h);
+  g.restore();
 }

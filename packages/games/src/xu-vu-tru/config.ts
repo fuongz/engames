@@ -7,7 +7,7 @@ export const H = 960;
 // ---------------------------------------------------------------- economy
 
 /** The game's version (manifest.version, the save envelope's `v`). */
-export const VERSION = "1.0.0";
+export const VERSION = "1.1.0";
 /** Coins a guest's local trial machine starts with (no daily coins, no deposits). */
 export const TRIAL_COINS = 100;
 /** The signed-in allowance (manifest.allowance): a welcome once, then a daily. */
@@ -20,20 +20,22 @@ export const FRONT_TICKETS = 1;
 
 /**
  * Under the wheel's hub a gate swings left and right with a hole (a cup) in it.
- * The shot coin lands on the gate FLIGHT_UP seconds after the press, somewhere in
- * a band ±AIM_SPREAD around the gate's centre (it rattles out of the chute). If
- * its centre is within ±HOLE_HALF of the hole's centre it drops in and starts a
- * prize spin; otherwise it bounces off and falls onto the shelf.
+ * A shot coin always lands on the same spot, the gate's centre (LAND_X, drawn
+ * as a target ring at the end of a dotted guide), FLIGHT_UP seconds after the
+ * press. If the hole's centre is within ±HOLE_HALF of it then, the coin drops in
+ * and starts a prize spin; otherwise it bounces off and falls onto the shelf.
  *
- * All three are screen px across the gate (drawn 1:1). Measured in logic.test.ts:
- * random fire times hit ≈ 25%, a perfectly timed shot (hole centred under the
- * band when the coin arrives) ≈ HOLE_HALF / AIM_SPREAD ≈ 45%.
+ * All are screen px across the gate (drawn 1:1). The hole is over the landing
+ * spot for asin(HOLE_HALF / GATE_AMP) / (π/2) of the time, so random fire times
+ * hit ≈ 30%; a shot fired while the ready cue shows always lands in it. Measured
+ * in logic.test.ts "gate difficulty".
  */
-export const GATE_AMP = 45;
-export const HOLE_HALF = 15;
-export const AIM_SPREAD = 33;
+export const GATE_AMP = 40;
+export const HOLE_HALF = 18;
+/** Where every shot coin lands, px from the gate's centre. */
+export const LAND_X = 0;
 /** One full left-right-left swing, seconds. */
-export const GATE_PERIOD = 1.45;
+export const GATE_PERIOD = 1.7;
 /** The swing speed drifts ±this share over GATE_WOBBLE_PERIOD, so a held button can't lock onto it. */
 export const GATE_WOBBLE = 0.1;
 export const GATE_WOBBLE_PERIOD = 5.9;
@@ -56,29 +58,33 @@ const c = (value: number): Segment => ({ kind: "coins", value });
 const CORE: Segment = { kind: "core" };
 const CARD: Segment = { kind: "card" };
 /**
- * The prize wheel, clockwise from angle 0. It turns as decoration; what it pays is
- * a weighted pick (see weightOf), and every slot is drawn exactly as wide as its
- * weight, so the wheel reads honestly: a slot's share of the circle is its chance.
+ * The prize wheel, clockwise from angle 0, and each slot's weight: its chance in
+ * percent (the weights add up to 100). It turns as decoration; what it pays is a
+ * weighted pick, and every slot is drawn exactly as wide as its weight, so the
+ * wheel reads honestly: a slot's share of the circle is its chance. Eleven
+ * slots, none under MIN_SLOT_WEIGHT, so every tile fits its wedge whole. Tuned
+ * by simulation, see RE_NOTES.md.
  */
-export const WHEEL: Segment[] = [
-  t(10), t(5), c(1), t(20), t(10), t(50), t(5), CORE, t(10), t(30),
-  c(8), t(5), t(20), t(10), c(4), t(100), t(5), t(30), c(2), t(10),
-  CARD, t(20), c(6), t(50),
+export const SLOTS: { segment: Segment; weight: number }[] = [
+  { segment: t(10), weight: 10 },
+  { segment: c(1), weight: 10 },
+  { segment: t(5), weight: 9.5 },
+  { segment: c(2), weight: 10 },
+  { segment: CORE, weight: 8 },
+  { segment: t(20), weight: 10 },
+  { segment: c(1), weight: 10 },
+  { segment: t(100), weight: 7.5 },
+  { segment: c(2), weight: 8.5 },
+  { segment: CARD, weight: 7.5 },
+  { segment: t(50), weight: 9 },
 ];
 /**
- * A slot's weight: its chance in percent (the weights add up to 100), and so its
- * share of the wheel's circle. Tuned by simulation, see RE_NOTES.md.
+ * The narrowest a slot may be, in percent of the circle. At 7.5% (27°) a tile
+ * still fits its wedge whole at about 80% of the ring's depth (art.ts tileFit).
  */
-export function weightOf(s: Segment) {
-  if (s.kind === "tickets") return TICKET_WEIGHT[s.value] ?? 1;
-  if (s.kind === "coins") return COIN_WEIGHT[s.value] ?? 1;
-  return s.kind === "core" ? CORE_WEIGHT : CARD_WEIGHT;
-}
-const TICKET_WEIGHT: Record<number, number> = { 5: 3.6, 10: 5.3, 20: 6, 30: 5.5, 50: 3.4, 100: 3.9 };
-const COIN_WEIGHT: Record<number, number> = { 1: 1.5, 2: 1.2, 4: 1, 6: 0.9, 8: 0.8 };
-const CORE_WEIGHT = 8;
-const CARD_WEIGHT = 6;
-export const WEIGHTS = WHEEL.map(weightOf);
+export const MIN_SLOT_WEIGHT = 7.5;
+export const WHEEL: Segment[] = SLOTS.map((s) => s.segment);
+export const WEIGHTS = SLOTS.map((s) => s.weight);
 export const UNITS = WEIGHTS.reduce((a, w) => a + w, 0);
 /** Where each segment starts and how wide it is, in radians from the wheel's zero mark. */
 export const SEG_START: number[] = [];
@@ -136,7 +142,8 @@ export const MINI_PRIZES: Prize[] = [
   { kind: "tickets", value: 50 },
   { kind: "coins", value: 35 },
 ];
-export const MINI_WEIGHTS = [40, 1, 30, 1, 15, 1, 8, 1];
+/** Coins 2% of the time (0.5 each): the wheel's coin slots now carry the coin prizes. */
+export const MINI_WEIGHTS = [40, 0.5, 30, 0.5, 15, 0.5, 8, 0.5];
 /** The Super spin (six cores collected): tickets only. */
 export const SUPER_PRIZES = [80, 100, 150, 200, 250, 300, 500];
 export const SUPER_WEIGHTS = [26, 26, 20, 13, 8, 5, 2];
@@ -149,7 +156,7 @@ export const CORE_COUNT = 6;
 
 // ---------------------------------------------------------------- cards
 
-/** The album: ten cat cards (art in img/cards/<id>.webp, names in strings.ts). */
+/** The album: ten cat cards (art in img/cards/<id>.webp, names in strings.ts), in CARD_WEIGHTS order. */
 export const CARD_IDS = [
   "persian",
   "british",
@@ -164,10 +171,29 @@ export const CARD_IDS = [
 ] as const;
 export type CardId = (typeof CARD_IDS)[number];
 export const CARD_COUNT = CARD_IDS.length;
-/** Tickets for every card pushed off the front (new or a duplicate). */
+/** The rare card: a quarter as likely as each other cat, with a Rare badge wherever it shows. */
+export const RARE_CARD: CardId = "ragdoll";
+/**
+ * When a card slot pays, the cat is picked by these weights (CARD_IDS order):
+ * 4 for each common cat, 1 for the Ragdoll. Out of 37: each common cat 4/37 ≈
+ * 10.81%, the Ragdoll 1/37 ≈ 2.70%. The set bonus still needs all ten.
+ */
+export const CARD_WEIGHTS: readonly number[] = CARD_IDS.map((id) => (id === RARE_CARD ? 1 : 4));
+export const isRare = (card: number) => CARD_IDS[card] === RARE_CARD;
+/**
+ * Cards pushed off the front stack up in the inventory (a count per cat) and pay
+ * nothing by themselves: the player exchanges them, when they choose, for tickets
+ * or coins. One card of a common cat, one Ragdoll, or a full set (one of each of
+ * the ten, consuming one of each). Coins are worth far less than tickets: a card
+ * slot must not hand back more coins than its shot cost (RE_NOTES.md "Card
+ * exchange"), so even perfect aim with every card turned into coins still drains.
+ */
 export const CARD_TICKETS = 60;
-/** Tickets for owning all ten; the album then starts over. */
+export const CARD_COINS = 3;
+export const RARE_TICKETS = 300;
+export const RARE_COINS = 15;
 export const SET_TICKETS = 1000;
+export const SET_COINS = 50;
 /** Seconds of set-complete celebration (display only). */
 export const SET_TIME = 3.6;
 

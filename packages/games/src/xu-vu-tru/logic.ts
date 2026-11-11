@@ -1,9 +1,10 @@
 import { nextRandom } from "@web-games/core/math";
 import {
-  AIM_SPREAD,
   CARD_COUNT,
   CARD_R,
+  CARD_COINS,
   CARD_TICKETS,
+  CARD_WEIGHTS,
   COIN_DROP_GAP,
   COIN_R,
   CORE_COUNT,
@@ -17,6 +18,7 @@ import {
   GATE_WOBBLE,
   GATE_WOBBLE_PERIOD,
   HOLE_HALF,
+  LAND_X,
   MAX_BODIES,
   MAX_STACK,
   MINI_PRIZES,
@@ -32,7 +34,10 @@ import {
   PUSH_MAX,
   PUSH_MIN,
   PUSH_PERIOD,
+  RARE_COINS,
+  RARE_TICKETS,
   SETTLE_TIME,
+  SET_COINS,
   SET_TICKETS,
   SHELF_D,
   SHELF_W,
@@ -46,6 +51,7 @@ import {
   WHEEL_SPEED,
   WHEEL_WOBBLE,
   WOBBLE_PERIOD,
+  isRare,
 } from "./config";
 import { type Body, stepShelf } from "./physics";
 
@@ -53,9 +59,11 @@ import { type Body, stepShelf } from "./physics";
 // wheel's hub; in the hole it starts a prize spin (a weighted pick of a wheel slot:
 // tickets, a rain of coins, an energy capsule or a cat card), off the hole it
 // bounces down onto the shelf. Anything dropped lands on the shelf, and the shelf
-// pushes things off. Pure and seeded:
+// pushes things off. A card pushed off the front joins the card inventory (a
+// count per cat, duplicates stack) and pays nothing until the player exchanges
+// it (exchangeCard, exchangeSet). Pure and seeded:
 // the random state is a number in the state, so a session replays exactly and the
-// whole state (the card album included) can be saved as JSON (see save.ts).
+// whole state (the card inventory included) can be saved as JSON (see save.ts).
 //
 // The machine never ends. Out of coins it settles and idles (`idle`); coins
 // granted later (grantCoins: allowance, coupons) wake it up where it stood.
@@ -75,7 +83,7 @@ export interface Flight {
   phase: "up" | "down";
   /** Where on the shelf it lands (world x). */
   x: number;
-  /** Where on the gate it lands (or bounced from), px from the gate's centre; seeded when shot. */
+  /** Where on the gate it lands (or bounced from), px from the gate's centre: always LAND_X for a shot. */
   aim: number;
   /** What lands: a coin, a capsule (`core` = its colour) or a card (`card` = its index). */
   kind: "coin" | "core" | "card";
@@ -110,7 +118,7 @@ export interface State {
   /** Tickets earned and not yet drained by the shell (drainTickets). */
   unpaid: number;
   supers: number;
-  /** Albums completed on this machine. */
+  /** Full sets exchanged on this machine. */
   sets: number;
   /** Cards pushed off the front on this machine. */
   cardsWon: number;
@@ -131,8 +139,10 @@ export interface State {
   flights: Flight[];
   /** Capsules pushed off the front toward the next Super spin (can pass 6 while one waits). */
   cores: number;
-  /** Which of the ten cards the player owns. */
-  album: boolean[];
+  /** Cards in the inventory, per cat (CARD_IDS order): duplicates stack. */
+  cards: number[];
+  /** Which cats were ever collected (a cat exchanged down to 0 stays seen). */
+  seen: boolean[];
   /** Spins waiting their turn on the reels. */
   queue: SpinKind[];
   spin: Spin | null;
@@ -156,7 +166,7 @@ export type GameEvent =
   | { type: "gate"; hit: boolean; full: boolean; x: number; hole: number }
   | { type: "prizeStart"; seg: number }
   | { type: "prizeWin"; seg: number; segment: Segment }
-  | { type: "tickets"; amount: number; source: "wheel" | "front" | "mini" | "super" | "card" | "set" }
+  | { type: "tickets"; amount: number; source: "wheel" | "front" | "mini" | "super" }
   | { type: "coinsWon"; amount: number }
   | { type: "land"; id: number; x: number; y: number; kind: Body["kind"]; stacked: boolean }
   | { type: "fall"; x: number; y: number; edge: "front" | "side"; stack: number; kind: Body["kind"]; core: number; card: number }
@@ -164,8 +174,8 @@ export type GameEvent =
   | { type: "spinStart"; kind: SpinKind; idx: number }
   | { type: "spinWin"; kind: SpinKind; idx: number; prize: Prize }
   | { type: "superReset" }
-  | { type: "card"; card: number; fresh: boolean; owned: number }
-  | { type: "setComplete" }
+  /** A card pushed off the front joined the inventory: `fresh` the first ever of its cat, `count` how many now. */
+  | { type: "card"; card: number; fresh: boolean; count: number }
   /** The machine ran out of coins and settled (once per time it happens). */
   | { type: "idle" };
 
@@ -205,12 +215,36 @@ export const holeAt = (gate: number) => GATE_AMP * Math.sin(gate);
 /** Whether a coin landing at `x` on the gate drops into a hole centred at `hole`. */
 export const inHole = (x: number, hole: number) => Math.abs(x - hole) <= HOLE_HALF;
 
+/**
+ * Where the hole will be when a coin shot on the next step lands (FLIGHT_UP
+ * later), stepping the swing forward exactly as update() will at steps of `dt`.
+ * A shot fired on step n reaches the gate on the step its flight time first
+ * passes FLIGHT_UP, ceil(FLIGHT_UP / dt) gate steps after this state.
+ */
+export function holeOnArrival(s: State, dt = 1 / 60) {
+  const n = Math.ceil(FLIGHT_UP / dt - 1e-9);
+  let g = s.gate;
+  let t = s.t;
+  for (let i = 0; i < n; i++) {
+    t += dt;
+    g += gateSpeed(t) * dt;
+  }
+  return holeAt(g);
+}
+
+/** Px of slack the ready cue keeps inside the hole's edge, for frames that run a little long or short. */
+export const READY_MARGIN = 2;
+
+/** Whether a shot fired now would drop into the hole (the gate's green ready cue). */
+export const readyToShoot = (s: State, dt = 1 / 60) => Math.abs(holeOnArrival(s, dt) - LAND_X) <= HOLE_HALF - READY_MARGIN;
+
 /** The prize a spin of this kind pays at reel index `idx`. */
 export function prizeOf(kind: SpinKind, idx: number): Prize {
   return kind === "mini" ? MINI_PRIZES[idx] : { kind: "tickets", value: SUPER_PRIZES[idx] };
 }
 
-export const ownedCount = (album: boolean[]) => album.reduce((n, o) => n + (o ? 1 : 0), 0);
+/** Cats with at least one card in the inventory (a full set needs all ten). */
+export const ownedCount = (cards: number[]) => cards.reduce((n, c) => n + (c > 0 ? 1 : 0), 0);
 
 /** A clean album, or a copy of a saved one if it has the right shape. */
 export function normalizeAlbum(album: unknown): boolean[] {
@@ -239,6 +273,8 @@ const body = (s: State, kind: Body["kind"], x: number, y: number, extra: Partial
  * machine, whose coins come from the allowance; TRIAL_COINS for a guest).
  */
 export function createMachine(seed: number, coins = 0, album: unknown = null): State {
+  // A beta album (owned flags) carries over as one card of each owned cat
+  const owned = normalizeAlbum(album);
   const s: State = {
     seed: seed | 0,
     t: 0,
@@ -261,7 +297,8 @@ export function createMachine(seed: number, coins = 0, album: unknown = null): S
     bodies: [],
     flights: [],
     cores: 0,
-    album: normalizeAlbum(album),
+    cards: owned.map((o) => (o ? 1 : 0)),
+    seen: [...owned],
     queue: [],
     spin: null,
     capsules: 0,
@@ -344,7 +381,8 @@ function payPrize(s: State, seg: number, ev: GameEvent[]) {
     drop(s, "core", dropX(s, CORE_R), 0, { core: s.capsules++ % CORE_COUNT });
     s.queue.push("mini");
   } else {
-    const card = Math.min(CARD_COUNT - 1, Math.floor(rand(s) * CARD_COUNT));
+    // Weighted: the rare Ragdoll a quarter as likely as each other cat (CARD_WEIGHTS)
+    const card = pick(s, CARD_WEIGHTS);
     drop(s, "card", dropX(s, CARD_R), 0, { card });
   }
 }
@@ -425,20 +463,55 @@ function collectCore(s: State, ev: GameEvent[]) {
   if (s.cores === CORE_COUNT) s.queue.unshift("super");
 }
 
-/** A card over the front edge: its tickets, the album, and the set bonus. */
+/** A card over the front edge: into the inventory, nothing paid until it is exchanged. */
 function collectCard(s: State, card: number, ev: GameEvent[]) {
-  const fresh = !s.album[card];
-  s.album[card] = true;
+  const fresh = !s.seen[card];
+  s.seen[card] = true;
+  s.cards[card]++;
   s.cardsWon++;
-  earn(s, CARD_TICKETS);
-  ev.push({ type: "card", card, fresh, owned: ownedCount(s.album) });
-  ev.push({ type: "tickets", amount: CARD_TICKETS, source: "card" });
-  if (s.album.every(Boolean)) {
-    s.sets++;
-    earn(s, SET_TICKETS);
-    s.album = s.album.map(() => false);
-    ev.push({ type: "setComplete" }, { type: "tickets", amount: SET_TICKETS, source: "set" });
-  }
+  ev.push({ type: "card", card, fresh, count: s.cards[card] });
+}
+
+export type Reward = "tickets" | "coins";
+
+/** What exchanging one card of this cat pays, in tickets or coins. */
+export const cardRate = (card: number, reward: Reward) =>
+  isRare(card) ? (reward === "tickets" ? RARE_TICKETS : RARE_COINS) : reward === "tickets" ? CARD_TICKETS : CARD_COINS;
+/** What exchanging a full set (one of each cat) pays. */
+export const setRate = (reward: Reward) => (reward === "tickets" ? SET_TICKETS : SET_COINS);
+
+/** Whether the inventory holds a full set: at least one card of every cat. */
+export const hasSet = (s: State) => s.cards.length === CARD_COUNT && s.cards.every((c) => c > 0);
+
+/** Pay an exchange: tickets join the lifetime count and wait for the shell (drainTickets); coins go on the balance. */
+function payReward(s: State, reward: Reward, n: number) {
+  if (reward === "tickets") earn(s, n);
+  else grantCoins(s, n);
+}
+
+/**
+ * Exchange one card of cat `card` for tickets or coins (cardRate). Returns what
+ * it paid, or 0 (and changes nothing) when there is no such card.
+ */
+export function exchangeCard(s: State, card: number, reward: Reward): number {
+  if (!Number.isInteger(card) || card < 0 || card >= CARD_COUNT || !(s.cards[card] > 0)) return 0;
+  const n = cardRate(card, reward);
+  s.cards[card]--;
+  payReward(s, reward, n);
+  return n;
+}
+
+/**
+ * Exchange a full set, one card of each of the ten cats, for the set bonus in
+ * tickets or coins (setRate). Returns what it paid, or 0 without a full set.
+ */
+export function exchangeSet(s: State, reward: Reward): number {
+  if (!hasSet(s)) return 0;
+  for (let i = 0; i < CARD_COUNT; i++) s.cards[i]--;
+  s.sets++;
+  const n = setRate(reward);
+  payReward(s, reward, n);
+  return n;
 }
 
 const spinTime = (kind: SpinKind) => (kind === "super" ? SUPER_SPIN_TIME : SPIN_TIME);
@@ -477,8 +550,8 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
       s.coins--;
       s.shots++;
       s.quiet = 0;
-      const aim = (rand(s) * 2 - 1) * AIM_SPREAD;
-      s.flights.push({ id: s.nextId++, t: 0, phase: "up", x: SHELF_W / 2, aim, kind: "coin", core: -1, card: -1 });
+      // Every shot lands on the same spot: only the timing decides
+      s.flights.push({ id: s.nextId++, t: 0, phase: "up", x: SHELF_W / 2, aim: LAND_X, kind: "coin", core: -1, card: -1 });
       ev.push({ type: "shoot" });
     } else ev.push({ type: "dry" });
   }

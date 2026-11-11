@@ -1,24 +1,35 @@
 import { mulberry32 } from "@web-games/core/math";
 import { describe, expect, it } from "vitest";
 import {
-  AIM_SPREAD,
   CARD_COUNT,
+  CARD_IDS,
   CARD_R,
+  CARD_COINS,
   CARD_TICKETS,
+  CARD_WEIGHTS,
   COIN_DROP_GAP,
   COIN_R,
   CORE_COUNT,
   CORE_R,
   FLIGHT_DOWN,
   FLIGHT_UP,
+  GATE_AMP,
+  HOLE_HALF,
+  LAND_X,
   MAX_BODIES,
   MAX_SPEED,
   MINI_PRIZES,
+  MINI_WEIGHTS,
+  MIN_SLOT_WEIGHT,
   PREFILL_CORES,
   PRIZE_HOLD,
   PRIZE_QUEUE_MAX,
   PRIZE_SPIN_TIME,
+  RARE_CARD,
+  RARE_COINS,
+  RARE_TICKETS,
   SEG_SIZE,
+  SET_COINS,
   SET_TICKETS,
   SHELF_D,
   SHELF_W,
@@ -34,15 +45,31 @@ import {
   WEIGHTS,
   WHEEL,
 } from "./config";
-import { type Flight, type GameEvent, SPIN_HOLD, grantCoins, type State, createMachine, drainTickets, ownedCount, update } from "./logic";
+import {
+  type Flight,
+  type GameEvent,
+  SPIN_HOLD,
+  type State,
+  busy,
+  createMachine,
+  drainTickets,
+  exchangeCard,
+  exchangeSet,
+  grantCoins,
+  hasSet,
+  holeOnArrival,
+  ownedCount,
+  readyToShoot,
+  update,
+} from "./logic";
 import { type Body, energy, stepShelf } from "./physics";
 
 const DT = 1 / 60;
 /** Coins the rules tests load a machine with (an account machine starts at 0, a trial at TRIAL_COINS). */
 const START = 200;
 /** Shots a TRIAL_COINS machine lasts with the button held (measured: see RE_NOTES.md). */
-const TRIAL_LO = 220;
-const TRIAL_HI = 600;
+const TRIAL_LO = 300;
+const TRIAL_HI = 750;
 const createRun = (seed: number, coins = START, album: unknown = null) => createMachine(seed, coins, album);
 const steps = (seconds: number) => Math.ceil(seconds / DT) + 2;
 
@@ -87,15 +114,13 @@ const bareCopy = (seed = 2) => {
 
 /**
  * Shoot once and park the gate until the coin lands: the hole centred under the
- * coin (`hit`), or swung to the far left with the coin at the band's right edge.
+ * landing spot (`hit`), or swung all the way to the left.
  * Returns every event up to and including the landing.
  */
 function landOnGate(s: State, hit: boolean) {
   const ev = run(s, 1, true);
-  const f = s.flights[s.flights.length - 1];
   while (!ev.some((e) => e.type === "gate")) {
-    // One step moves the hole < 4 px, far inside the 15 px tolerance
-    f.aim = hit ? 0 : AIM_SPREAD;
+    // One step moves the hole < 4 px, far inside the 18 px tolerance
     s.gate = hit ? 0 : -Math.PI / 2;
     ev.push(...update(s, { shoot: false }, DT));
   }
@@ -127,7 +152,8 @@ describe("a fresh run", () => {
     expect(s.coins).toBe(START);
     expect(s.lifetimeTickets).toBe(0);
     expect(s.cores).toBe(0);
-    expect(s.album).toEqual(Array(CARD_COUNT).fill(false));
+    expect(s.cards).toEqual(Array(CARD_COUNT).fill(0));
+    expect(s.seen).toEqual(Array(CARD_COUNT).fill(false));
     expect(s.bodies.filter((b) => b.kind === "coin").reduce((a, b) => a + b.stack, 0)).toBeGreaterThan(70);
     expect(s.bodies.filter((b) => b.kind === "core")).toHaveLength(PREFILL_CORES);
     expect(s.bodies.some((b) => b.kind === "card")).toBe(false);
@@ -137,11 +163,12 @@ describe("a fresh run", () => {
     expect(s.coins).toBe(START);
   });
 
-  it("carries the album it is given, and only its valid shape", () => {
+  it("carries a beta album it is given as one card of each owned cat, and only its valid shape", () => {
     const owned = [true, false, true, false, false, false, false, false, false, true];
-    expect(createRun(1, 10, owned).album).toEqual(owned);
-    expect(createRun(1, 10, "junk").album).toEqual(Array(CARD_COUNT).fill(false));
-    expect(createRun(1, 10, [true]).album.filter(Boolean)).toHaveLength(1);
+    expect(createRun(1, 10, owned).cards).toEqual(owned.map((o) => (o ? 1 : 0)));
+    expect(createRun(1, 10, owned).seen).toEqual(owned);
+    expect(createRun(1, 10, "junk").cards).toEqual(Array(CARD_COUNT).fill(0));
+    expect(createRun(1, 10, [true]).cards.filter((n) => n > 0)).toHaveLength(1);
   });
 
   it("is deterministic for a seed and different across seeds", () => {
@@ -184,7 +211,8 @@ describe("shooting and the gate", () => {
     expect(ev.some((e) => e.type === "shoot")).toBe(true);
     expect(s.coins).toBe(START - 1);
     expect(s.flights).toHaveLength(1);
-    expect(Math.abs(s.flights[0].aim)).toBeLessThanOrEqual(AIM_SPREAD);
+    // No spread: every shot lands on the same spot
+    expect(s.flights[0].aim).toBe(LAND_X);
     const dry = createRun(3, 0);
     const dev = run(dry, 1, true);
     expect(dev.map((e) => e.type)).toContain("dry");
@@ -284,14 +312,36 @@ describe("shooting and the gate", () => {
 });
 
 describe("the prize wheel", () => {
-  it("has every kind of slot, the coin values 1/2/4/6/8, and draws each slot as wide as its weight", () => {
+  it("has 10 to 12 slots of every kind, each wide enough for its whole tile, drawn as wide as its weight", () => {
+    expect(WHEEL.length).toBeGreaterThanOrEqual(10);
+    expect(WHEEL.length).toBeLessThanOrEqual(12);
     expect(WHEEL).toHaveLength(WEIGHTS.length);
     expect(UNITS).toBeCloseTo(100);
     expect(SEG_SIZE.reduce((a, b) => a + b, 0)).toBeCloseTo(Math.PI * 2);
-    for (let i = 0; i < WHEEL.length; i++) expect(SEG_SIZE[i] / (Math.PI * 2)).toBeCloseTo(WEIGHTS[i] / UNITS, 9);
-    const coinValues = new Set(WHEEL.flatMap((w) => (w.kind === "coins" ? [w.value] : [])));
-    expect([...coinValues].sort((a, b) => a - b)).toEqual([1, 2, 4, 6, 8]);
-    for (const kind of ["tickets", "core", "card"] as const) expect(WHEEL.some((w) => w.kind === kind)).toBe(true);
+    for (let i = 0; i < WHEEL.length; i++) {
+      expect(SEG_SIZE[i] / (Math.PI * 2)).toBeCloseTo(WEIGHTS[i] / UNITS, 9);
+      expect(WEIGHTS[i]).toBeGreaterThanOrEqual(MIN_SLOT_WEIGHT);
+    }
+    // Coin values only from the tiles there are (1/2/4/6/8); ticket values likewise
+    for (const w of WHEEL) {
+      if (w.kind === "coins") expect([1, 2, 4, 6, 8]).toContain(w.value);
+      if (w.kind === "tickets") expect([5, 10, 20, 30, 50, 100]).toContain(w.value);
+    }
+    for (const kind of ["tickets", "coins", "core", "card"] as const) expect(WHEEL.some((w) => w.kind === kind)).toBe(true);
+  });
+
+  it("pays coins on 35–45% of prize spins, and under one coin a spin on average (so even perfect aim drains)", () => {
+    const share = (pred: (w: Segment) => boolean) => WHEEL.reduce((a, w, i) => a + (pred(w) ? WEIGHTS[i] : 0), 0) / UNITS;
+    const coinShare = share((w) => w.kind === "coins");
+    expect(coinShare).toBeGreaterThanOrEqual(0.35);
+    expect(coinShare).toBeLessThanOrEqual(0.45);
+    const miniTotal = MINI_WEIGHTS.reduce((a, b) => a + b, 0);
+    const miniCoins = MINI_PRIZES.reduce((a, p, i) => a + (p.kind === "coins" ? (p.value * MINI_WEIGHTS[i]) / miniTotal : 0), 0);
+    const coinsPerSpin =
+      WHEEL.reduce((a, w, i) => a + (w.kind === "coins" ? (w.value * WEIGHTS[i]) / UNITS : 0), 0) + share((w) => w.kind === "core") * miniCoins;
+    // RE_NOTES.md: 0.74 from the coin slots + 0.09 from Mini spins
+    expect(coinsPerSpin).toBeGreaterThan(0.6);
+    expect(coinsPerSpin).toBeLessThan(0.9);
   });
 
   it("picks slots in proportion to their weights, over many seeds", () => {
@@ -327,7 +377,7 @@ describe("the prize wheel", () => {
     expect(s.bodies).toHaveLength(0);
   });
 
-  it.each([1, 2, 4, 6, 8])("a %i-coin slot drops that many coins spread across the shelf, and no tickets", (n) => {
+  it.each([...new Set(WHEEL.flatMap((w) => (w.kind === "coins" ? [w.value] : [])))])("a %i-coin slot drops that many coins spread across the shelf, and no tickets", (n) => {
     const { s, ev } = spinOnto((w) => w.kind === "coins" && w.value === n);
     expect(s.lifetimeTickets).toBe(0);
     expect(ev.some((e) => e.type === "tickets")).toBe(false);
@@ -391,7 +441,7 @@ describe("the prize wheel", () => {
     expect(ev).toContainEqual(expect.objectContaining({ type: "land", kind: "card" }));
     expect(s.bodies).toEqual([expect.objectContaining({ kind: "card", card: f.card })]);
     expect(s.lifetimeTickets).toBe(0);
-    expect(ownedCount(s.album)).toBe(0);
+    expect(ownedCount(s.cards)).toBe(0);
   });
 
   it("different seeds pick different cards", () => {
@@ -399,6 +449,36 @@ describe("the prize wheel", () => {
     for (let seed = 1; seed < 40; seed++) picked.add(spinOnto((w) => w.kind === "card", seed).s.flights[0].card);
     expect(picked.size).toBeGreaterThan(4);
   });
+
+  it("picks the cat by CARD_WEIGHTS: the Ragdoll a quarter as often as each other cat, over many seeds", () => {
+    const rare = CARD_IDS.indexOf(RARE_CARD);
+    expect(CARD_WEIGHTS[rare] * 4).toBe(CARD_WEIGHTS[(rare + 1) % CARD_COUNT]);
+    const total = CARD_WEIGHTS.reduce((a, b) => a + b, 0);
+    expect(CARD_WEIGHTS[rare] / total).toBeCloseTo(1 / 37, 9);
+    const seg = WHEEL.findIndex((w) => w.kind === "card");
+    const counts = new Array(CARD_COUNT).fill(0);
+    let n = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const s = bareCopy(seed);
+      for (let i = 0; i < 60; i++) {
+        // A card spin one step from paying
+        s.prize = { seg, t: PRIZE_SPIN_TIME - DT / 2, paid: false };
+        s.flights = [];
+        update(s, { shoot: false }, DT);
+        const f = s.flights.find((x) => x.kind === "card");
+        if (!f) throw new Error("no card dropped");
+        counts[f.card]++;
+        n++;
+      }
+    }
+    CARD_IDS.forEach((_, i) => {
+      const p = CARD_WEIGHTS[i] / total;
+      expect(Math.abs(counts[i] / n - p)).toBeLessThan(4 * Math.sqrt((p * (1 - p)) / n));
+    });
+    // About 2.7% against about 10.8% for each of the others
+    expect(counts[rare] / n).toBeGreaterThan(0.02);
+    expect(counts[rare] / n).toBeLessThan(0.034);
+  }, 30_000);
 });
 
 describe("gate difficulty", () => {
@@ -416,34 +496,77 @@ describe("gate difficulty", () => {
     return s.gateHits / s.gateShots;
   }
 
-  it("random fire times hit about 25%", () => {
+  it("every shot lands on one fixed spot, so the hole's swing alone decides: about 30% of the time it is there", () => {
+    // The hole is over LAND_X while |GATE_AMP·sin φ| ≤ HOLE_HALF
+    expect(LAND_X).toBe(0);
+    const theory = Math.asin(HOLE_HALF / GATE_AMP) / (Math.PI / 2);
+    expect(theory).toBeGreaterThan(0.28);
+    expect(theory).toBeLessThan(0.32);
+  });
+
+  it("random fire times hit about 30%", () => {
     const r = mulberry32(77);
     const rate = session(3, () => r() < 0.06, 3000);
-    expect(rate).toBeGreaterThan(0.22);
-    expect(rate).toBeLessThan(0.29);
+    expect(rate).toBeGreaterThan(0.26);
+    expect(rate).toBeLessThan(0.34);
   });
 
-  it("a held button (or Auto) cannot lock onto the gate: also about 25%", () => {
+  it("a held button (or Auto) cannot lock onto the gate: also about 30%", () => {
     const rate = session(4, () => true, 3000);
-    expect(rate).toBeGreaterThan(0.22);
-    expect(rate).toBeLessThan(0.29);
+    expect(rate).toBeGreaterThan(0.26);
+    expect(rate).toBeLessThan(0.34);
   });
 
-  it("ideally timed shots (hole centred under the landing band on arrival) hit about 45%", () => {
-    // The oracle peeks one shot ahead on a copy and fires only when the hole will
-    // be centred under the band's middle (within half a step of travel); it never
-    // sees where in the band the coin will land.
-    const holeOnArrival = (s: State) => {
-      const c = JSON.parse(JSON.stringify(s)) as State;
-      c.flights = [];
-      let ev = update(c, { shoot: true }, DT);
-      while (!ev.some((e) => e.type === "gate")) ev = update(c, { shoot: false }, DT);
-      const g = ev.find((e) => e.type === "gate");
-      return g?.type === "gate" ? g.hole : Number.NaN;
-    };
-    const rate = session(5, (s) => s.cooldown <= DT && s.flights.length === 0 && Math.abs(holeOnArrival(s)) < 1.8, 800);
-    expect(rate).toBeGreaterThan(0.39);
-    expect(rate).toBeLessThan(0.52);
+  it("the ready cue is honest: a shot fired while it shows always drops in", () => {
+    const rate = session(5, (s) => s.cooldown <= DT && readyToShoot(s), 800);
+    expect(rate).toBe(1);
+  }, 30_000);
+
+  it("predicts the hole on arrival exactly as the coin will meet it", () => {
+    const s = bareCopy(8);
+    for (let i = 0; i < 40; i++) {
+      update(s, { shoot: false }, DT);
+      const want = holeOnArrival(s);
+      const ev = run(s, 1, true);
+      let all = ev;
+      while (!all.some((e) => e.type === "gate")) all = [...all, ...update(s, { shoot: false }, DT)];
+      const g = all.find((e) => e.type === "gate");
+      expect(g?.type === "gate" && g.hole).toBeCloseTo(want, 6);
+      s.cooldown = 0;
+    }
+  });
+
+  it("well-timed taps (aimed at the green window, with ±0.1 s of human error) hit 75% or more", () => {
+    // A player who has the rhythm: aims each tap at the middle of the next ready
+    // window and misses the moment by a normal error with σ = 0.1 s (the window
+    // itself lasts about 0.25 s).
+    const r = mulberry32(91);
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+    const s = bareCopy(6);
+    s.coins = 1e6;
+    while (s.gateShots < 600) {
+      // Find the next whole ready window on a copy of the gate's clock
+      const probe = { ...s, flights: [], bodies: [] } as State;
+      const ready: boolean[] = [];
+      for (let i = 0; i < 60 * 3; i++) {
+        ready.push(readyToShoot(probe));
+        update(probe, { shoot: false }, DT);
+      }
+      const from = Math.ceil(s.cooldown / DT) + 1;
+      let i0 = ready.findIndex((x, i) => i >= from && x && !ready[i - 1]);
+      if (i0 < 0) i0 = from;
+      let i1 = i0;
+      while (i1 < ready.length && ready[i1]) i1++;
+      const target = Math.max(from, Math.round((i0 + i1 - 1) / 2 + (gauss() * 0.1) / DT));
+      for (let i = 0; i < target; i++) {
+        update(s, { shoot: false }, DT);
+        s.bodies = [];
+      }
+      update(s, { shoot: true }, DT);
+      s.bodies = [];
+    }
+    const rate = s.gateHits / s.gateShots;
+    expect(rate).toBeGreaterThanOrEqual(0.75);
   }, 60_000);
 });
 
@@ -564,7 +687,7 @@ describe("energy cores and the Super spin", () => {
   });
 });
 
-describe("cards and the album", () => {
+describe("cards: the inventory and the exchange", () => {
   it("a card flung at a side wall stays on the shelf", () => {
     const s = bare();
     atSide((x, y, vx, vy) => cardAt(s, 4, x, y, vx, vy));
@@ -573,49 +696,106 @@ describe("cards and the album", () => {
     expect(s.bodies.some((b) => b.kind === "card" && b.card === 4)).toBe(true);
   });
 
-  it("a card pushed off the front pays 60 tickets and joins the album", () => {
+  it("a card pushed off the front joins the inventory and pays nothing by itself", () => {
     const s = bare();
     atFront((x, y, vx, vy) => cardAt(s, 3, x, y, vx, vy));
     const ev = run(s, 10);
-    expect(ev).toContainEqual({ type: "card", card: 3, fresh: true, owned: 1 });
-    expect(s.lifetimeTickets).toBe(CARD_TICKETS);
-    expect(s.album[3]).toBe(true);
+    expect(ev).toContainEqual({ type: "card", card: 3, fresh: true, count: 1 });
+    expect(s.lifetimeTickets).toBe(0);
+    expect(ev.some((e) => e.type === "tickets")).toBe(false);
+    expect(s.cards[3]).toBe(1);
+    expect(s.seen[3]).toBe(true);
     expect(s.cardsWon).toBe(1);
   });
 
-  it("a duplicate still pays 60 and leaves the album as it was", () => {
+  it("duplicates stack: British Shorthair x5", () => {
     const s = bare();
-    s.album[3] = true;
-    atFront((x, y, vx, vy) => cardAt(s, 3, x, y, vx, vy));
-    const ev = run(s, 10);
-    expect(ev).toContainEqual({ type: "card", card: 3, fresh: false, owned: 1 });
-    expect(s.lifetimeTickets).toBe(CARD_TICKETS);
-    expect(ownedCount(s.album)).toBe(1);
+    const british = CARD_IDS.indexOf("british");
+    for (let i = 0; i < 5; i++) {
+      atFront((x, y, vx, vy) => cardAt(s, british, x, y, vx, vy));
+      const ev = run(s, 10);
+      expect(ev).toContainEqual({ type: "card", card: british, fresh: i === 0, count: i + 1 });
+    }
+    expect(s.cards[british]).toBe(5);
+    expect(s.lifetimeTickets).toBe(0);
   });
 
-  it("the tenth distinct card pays the 1000-ticket set bonus and starts the album over", () => {
+  it("a full set pays nothing and resets nothing by itself: the player chooses when to exchange", () => {
     const s = bare();
-    s.album = Array.from({ length: CARD_COUNT }, (_, i) => i !== 7);
-    atFront((x, y, vx, vy) => cardAt(s, 7, x, y, vx, vy));
-    const ev = run(s, 10);
-    expect(ev).toContainEqual({ type: "card", card: 7, fresh: true, owned: CARD_COUNT });
-    expect(ev.some((e) => e.type === "setComplete")).toBe(true);
-    expect(s.lifetimeTickets).toBe(CARD_TICKETS + SET_TICKETS);
-    expect(s.album).toEqual(Array(CARD_COUNT).fill(false));
-    expect(s.sets).toBe(1);
-  });
-
-  it("collecting all ten one by one (with duplicates) pays exactly one set bonus", () => {
-    const s = bare();
-    const order = [0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 8, 9];
-    for (const c of order) {
+    for (let c = 0; c < CARD_COUNT; c++) {
       atFront((x, y, vx, vy) => cardAt(s, c, x, y, vx, vy));
       run(s, 10);
     }
+    expect(s.cards).toEqual(Array(CARD_COUNT).fill(1));
+    expect(hasSet(s)).toBe(true);
+    expect(s.lifetimeTickets).toBe(0);
+    expect(s.sets).toBe(0);
+  });
+
+  it("exchanges one card for tickets or coins at the card's rate (the Ragdoll's is higher)", () => {
+    const s = bare();
+    s.coins = 0;
+    const rare = CARD_IDS.indexOf(RARE_CARD);
+    s.cards[0] = 2;
+    s.cards[rare] = 2;
+    expect(exchangeCard(s, 0, "tickets")).toBe(CARD_TICKETS);
+    expect(s.lifetimeTickets).toBe(CARD_TICKETS);
+    expect(drainTickets(s)).toBe(CARD_TICKETS);
+    expect(exchangeCard(s, 0, "coins")).toBe(CARD_COINS);
+    expect(s.coins).toBe(CARD_COINS);
+    expect(s.cards[0]).toBe(0);
+    expect(exchangeCard(s, rare, "tickets")).toBe(RARE_TICKETS);
+    expect(exchangeCard(s, rare, "coins")).toBe(RARE_COINS);
+    expect(s.lifetimeTickets).toBe(CARD_TICKETS + RARE_TICKETS);
+    expect(s.coins).toBe(CARD_COINS + RARE_COINS);
+    // Nothing left of either: refused, nothing changes
+    expect(exchangeCard(s, 0, "tickets")).toBe(0);
+    expect(exchangeCard(s, rare, "coins")).toBe(0);
+    expect(exchangeCard(s, 99, "coins")).toBe(0);
+    expect(s.lifetimeTickets).toBe(CARD_TICKETS + RARE_TICKETS);
+    expect(s.coins).toBe(CARD_COINS + RARE_COINS);
+  });
+
+  it("exchanges a full set, one of each cat, for the bigger bonus; refused without one", () => {
+    const s = bare();
+    s.coins = 0;
+    s.cards = [2, 1, 1, 1, 1, 1, 1, 1, 1, 3];
+    expect(exchangeSet(s, "tickets")).toBe(SET_TICKETS);
+    expect(s.cards).toEqual([1, 0, 0, 0, 0, 0, 0, 0, 0, 2]);
     expect(s.sets).toBe(1);
-    expect(s.cardsWon).toBe(order.length);
-    expect(s.lifetimeTickets).toBe(order.length * CARD_TICKETS + SET_TICKETS);
-    expect(ownedCount(s.album)).toBe(0);
+    expect(s.lifetimeTickets).toBe(SET_TICKETS);
+    expect(exchangeSet(s, "coins")).toBe(0);
+    expect(s.coins).toBe(0);
+    s.cards = Array(CARD_COUNT).fill(1);
+    expect(exchangeSet(s, "coins")).toBe(SET_COINS);
+    expect(s.coins).toBe(SET_COINS);
+    expect(s.cards).toEqual(Array(CARD_COUNT).fill(0));
+    expect(s.sets).toBe(2);
+    // A set is worth more than its ten cards one by one
+    const singles = (r: "tickets" | "coins") =>
+      CARD_IDS.reduce((a, id) => a + (id === RARE_CARD ? (r === "tickets" ? RARE_TICKETS : RARE_COINS) : r === "tickets" ? CARD_TICKETS : CARD_COINS), 0);
+    expect(SET_TICKETS).toBeGreaterThan(singles("tickets"));
+    expect(SET_COINS).toBeGreaterThan(singles("coins"));
+  });
+
+  it("a cat exchanged down to none stays seen", () => {
+    const s = bare();
+    atFront((x, y, vx, vy) => cardAt(s, 6, x, y, vx, vy));
+    run(s, 10);
+    exchangeCard(s, 6, "tickets");
+    expect(s.cards[6]).toBe(0);
+    expect(s.seen[6]).toBe(true);
+  });
+
+  it("coin exchanges wake an idle machine", () => {
+    const s = bare(4);
+    s.coins = 0;
+    run(s, 60 * 8);
+    expect(s.idle).toBe(true);
+    s.cards[2] = 1;
+    exchangeCard(s, 2, "coins");
+    expect(s.idle).toBe(false);
+    expect(s.coins).toBe(CARD_COINS);
   });
 });
 
@@ -757,53 +937,90 @@ describe("tickets drain to the shell", () => {
   });
 });
 
+/** Held SHOOT from a machine until it idles; the numbers RE_NOTES.md reports. */
+function heldSession(seed: number, coins: number, capMinutes = 15) {
+  const s = createMachine(seed, coins);
+  const sources = new Set<string>();
+  let prizes = 0;
+  let coinPrizes = 0;
+  let n = 0;
+  while (!s.idle && n < 60 * 60 * capMinutes) {
+    for (const e of update(s, { shoot: true }, DT)) {
+      if (e.type === "tickets") sources.add(e.source);
+      if (e.type === "prizeWin") {
+        prizes++;
+        if (e.segment.kind === "coins") coinPrizes++;
+      }
+    }
+    drainTickets(s);
+    n++;
+  }
+  const minutes = (n * DT) / 60;
+  return { s, shots: s.shots, minutes, tickets: s.lifetimeTickets, perMinute: s.lifetimeTickets / minutes, prizes, coinPrizes, sources };
+}
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
 describe("continuous play", () => {
   it(
-    "200 coins with the button held last 600–1000 shots (3–5 minutes) and pay from every source",
+    "a 100-coin start with the button held drains slowly: several minutes, with tickets at the 1.0.0 pace",
     () => {
-      // Four seeds, each played until the machine idles (or a 15-minute cap): their mean
-      // must sit in the target, and each one near it. RE_NOTES.md has a wider simulation.
-      const runs = [101, 202, 303, 404].map((seed) => {
-        const s = createRun(seed);
-        const sources = new Set<string>();
-        let n = 0;
-        while (!s.idle && n < 60 * 60 * 15) {
-          for (const e of update(s, { shoot: true }, DT)) if (e.type === "tickets") sources.add(e.source);
-          n++;
-        }
-        expect(s.idle).toBe(true);
-        expect(s.shots).toBeGreaterThan(450);
-        expect(s.shots).toBeLessThan(1300);
-        expect(s.returned).toBeGreaterThan(0);
-        for (const src of ["wheel", "front"]) expect(sources).toContain(src);
-        return { shots: s.shots, tickets: s.lifetimeTickets, minutes: (n * DT) / 60 };
-      });
-      const mean = (k: "shots" | "tickets" | "minutes") => runs.reduce((a, r) => a + r[k], 0) / runs.length;
-      expect(mean("shots")).toBeGreaterThanOrEqual(600);
-      expect(mean("shots")).toBeLessThanOrEqual(1000);
-      expect(mean("minutes")).toBeGreaterThanOrEqual(2.5);
-      expect(mean("minutes")).toBeLessThanOrEqual(5.5);
-      expect(mean("tickets")).toBeGreaterThan(2000);
-      expect(mean("tickets")).toBeLessThan(5000);
+      // Eight seeds, each played until the machine idles (15-minute cap). 1.0.0
+      // measured 2.4 minutes and ~634 tickets a minute here (RE_NOTES.md).
+      const runs = [11, 22, 33, 44, 55, 66, 77, 88].map((seed) => heldSession(seed, TRIAL_COINS));
+      for (const r of runs) {
+        expect(r.s.idle).toBe(true);
+        for (const src of ["wheel", "front"]) expect(r.sources).toContain(src);
+      }
+      expect(mean(runs.map((r) => r.minutes))).toBeGreaterThanOrEqual(2.8);
+      expect(mean(runs.map((r) => r.minutes))).toBeLessThanOrEqual(6);
+      expect(mean(runs.map((r) => r.shots))).toBeGreaterThanOrEqual(TRIAL_LO);
+      expect(mean(runs.map((r) => r.shots))).toBeLessThanOrEqual(TRIAL_HI);
+      // Tickets a minute from the machine alone (cards are exchanged on the side)
+      expect(mean(runs.map((r) => r.perMinute))).toBeGreaterThan(480);
+      expect(mean(runs.map((r) => r.perMinute))).toBeLessThan(800);
+      // Coins on 35–45% of prize spins in the tables; measured over the lot
+      const share = runs.reduce((a, r) => a + r.coinPrizes, 0) / runs.reduce((a, r) => a + r.prizes, 0);
+      expect(share).toBeGreaterThan(0.3);
+      expect(share).toBeLessThan(0.47);
     },
-    60_000,
+    120_000,
   );
 
   it(
-    `a ${TRIAL_COINS}-coin trial (or welcome) machine plays a few minutes before it idles`,
+    "even perfect aim with every card turned into coins runs dry: under one coin back per prize spin",
     () => {
-      const runs = [11, 22, 33, 44].map((seed) => {
+      // The skilled, patient player: fires only when the ready cue shows and a
+      // stock lamp is free, so every coin is a prize spin and none is swallowed;
+      // every card goes for coins at once (a set when there is one, spare common
+      // cards one by one). If coin prizes plus card coins reached one a spin,
+      // this machine would never stop.
+      for (const seed of [11, 22]) {
         const s = createMachine(seed, TRIAL_COINS);
-        const frames = playToIdle(s);
+        let prizes = 0;
+        let back = 0;
+        let n = 0;
+        while (!s.idle && n < 60 * 60 * 60) {
+          const shoot = s.cooldown <= DT && readyToShoot(s) && s.stock + (s.prize ? 1 : 0) < PRIZE_QUEUE_MAX;
+          for (const e of update(s, { shoot }, DT)) {
+            if (e.type === "prizeWin") {
+              prizes++;
+              if (e.segment.kind === "coins") back += e.segment.value;
+            }
+            if (e.type === "coinsWon") back += e.amount;
+            if (e.type === "card") {
+              if (hasSet(s)) back += exchangeSet(s, "coins");
+              for (let c = 0; c < CARD_COUNT; c++) while (s.cards[c] > 1 && CARD_IDS[c] !== RARE_CARD) back += exchangeCard(s, c, "coins");
+            }
+          }
+          drainTickets(s);
+          n++;
+        }
         expect(s.idle).toBe(true);
-        return { shots: s.shots, minutes: (frames * DT) / 60, tickets: s.lifetimeTickets };
-      });
-      const mean = (k: "shots" | "minutes" | "tickets") => runs.reduce((a, r) => a + r[k], 0) / runs.length;
-      expect(mean("shots")).toBeGreaterThanOrEqual(TRIAL_LO);
-      expect(mean("shots")).toBeLessThanOrEqual(TRIAL_HI);
-      expect(mean("tickets")).toBeGreaterThan(500);
+        expect(s.gateHits).toBe(s.gateShots);
+        expect(back / prizes).toBeLessThan(1);
+      }
     },
-    60_000,
+    120_000,
   );
 
   it(
@@ -812,17 +1029,43 @@ describe("continuous play", () => {
       const s = createMachine(5, WELCOME_COINS);
       playToIdle(s);
       expect(s.idle).toBe(true);
-      const day1 = { shots: s.shots, tickets: s.lifetimeTickets, album: [...s.album], cores: s.cores };
+      const day1 = { shots: s.shots, tickets: s.lifetimeTickets, cards: [...s.cards], cores: s.cores };
       grantCoins(s, DAILY_COINS);
       playToIdle(s);
       expect(s.idle).toBe(true);
       // The daily's coins and what the shelf gave back were shot; nothing was reset
       expect(s.shots - day1.shots).toBeGreaterThanOrEqual(DAILY_COINS);
       expect(s.lifetimeTickets).toBeGreaterThan(day1.tickets);
-      expect(ownedCount(s.album)).toBeGreaterThanOrEqual(0);
+      for (let i = 0; i < CARD_COUNT; i++) expect(s.cards[i]).toBeGreaterThanOrEqual(day1.cards[i]);
     },
     60_000,
   );
+});
+
+describe("endless play", () => {
+  it("has no end state: out of coins it idles for an hour of game time, whole, and plays on when coins come", () => {
+    const s = createRun(31, 0);
+    let events = 0;
+    run(s, 60 * 10);
+    expect(s.idle).toBe(true);
+    const shelf = JSON.stringify(s.bodies);
+    for (let i = 0; i < 60 * 60 * 60; i++) {
+      // Now and then the player presses SHOOT with nothing to shoot
+      for (const e of update(s, { shoot: i % 600 === 0 }, DT)) {
+        events++;
+        expect(e.type).toBe("dry");
+      }
+    }
+    expect(events).toBeGreaterThan(0);
+    expect(s.idle).toBe(true);
+    expect(busy(s)).toBe(false);
+    // Nothing on the machine says "over": only the idle flag
+    expect(Object.keys(s).filter((k) => /over|ended|done|finish/i.test(k))).toEqual([]);
+    // The shelf is untouched while it rests
+    expect(JSON.stringify(s.bodies)).toBe(shelf);
+    expect(grantCoins(s, 3)).toBe(3);
+    expect(update(s, { shoot: true }, DT).some((e) => e.type === "shoot")).toBe(true);
+  }, 60_000);
 });
 
 describe("grantCoins", () => {

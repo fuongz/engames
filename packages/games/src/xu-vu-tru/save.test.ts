@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { CARD_COUNT, COIN_R, MAX_BODIES, MAX_STACK, SHELF_D, SHELF_W, TRIAL_COINS, VERSION } from "./config";
-import { type State, createMachine, drainTickets, grantCoins, update } from "./logic";
-import { SAVE_MAX_BYTES, SCHEMA, fromSave, migrate, pack, parseSave, plausible, rules, toSave } from "./save";
+import { CARD_COUNT, COIN_R, LAND_X, MAX_BODIES, MAX_STACK, PRIZE_QUEUE_MAX, SHELF_D, SHELF_W, TRIAL_COINS, VERSION, WHEEL } from "./config";
+import { type State, createMachine, drainTickets, exchangeCard, exchangeSet, grantCoins, update } from "./logic";
+import { type PackedV2, SAVE_MAX_BYTES, SCHEMA, fromSave, migrate, pack, parseSave, plausible, rules, toSave, toV3 } from "./save";
 
 const DT = 1 / 60;
 
@@ -52,7 +52,8 @@ function fullShelf(): State {
   s.nextId = id;
   s.queue = ["super", "mini", "mini", "mini"];
   s.stock = 4;
-  s.album = s.album.map((_, i) => i % 2 === 0);
+  s.cards = s.cards.map((_, i) => (i % 2 === 0 ? 999 : 0));
+  s.seen = s.cards.map((n) => n > 0);
   s.lifetimeTickets = 987_654;
   s.shots = 400_000;
   s.gateShots = 399_000;
@@ -77,7 +78,8 @@ describe("the save envelope", () => {
     const back = fromSave(JSON.parse(JSON.stringify(save)));
     expect(back.coins).toBe(s.coins);
     expect(back.lifetimeTickets).toBe(s.lifetimeTickets);
-    expect(back.album).toEqual(s.album);
+    expect(back.cards).toEqual(s.cards);
+    expect(back.seen).toEqual(s.seen);
     expect(back.queue).toEqual(s.queue);
     expect(back.bodies).toHaveLength(s.bodies.length);
     back.bodies.forEach((b, i) => {
@@ -136,19 +138,72 @@ describe("migrate", () => {
     expect(migrate(JSON.parse(JSON.stringify(beta)))).toEqual({ ok: false, reason: "legacy" });
   });
 
-  it("walks schema 1 (the plain State) up to the current one", () => {
+  it("walks schema 1 (the plain 1.0.0 State, album as owned flags) up to the current one", () => {
     const s = midPlay(21);
-    const v1 = JSON.parse(JSON.stringify({ v: "1.0.0", schema: 1, state: s }));
+    s.prize = null;
+    const owned = [true, false, false, true, false, true, false, false, false, false];
+    const { cards: _c, seen: _s, ...rest } = s;
+    const v1 = JSON.parse(JSON.stringify({ v: "1.0.0", schema: 1, state: { ...rest, album: owned } }));
     const m = migrate(v1);
     expect(m.ok).toBe(true);
     if (!m.ok) return;
     expect(m.save.schema).toBe(SCHEMA);
     expect(m.save.v).toBe("1.0.0");
-    expect(m.save.state).toEqual(pack(s));
     const back = fromSave(m.save);
     expect(back.coins).toBe(s.coins);
     expect(back.lifetimeTickets).toBe(s.lifetimeTickets);
     expect(back.bodies.length).toBe(s.bodies.length);
+    expect(back.cards).toEqual(owned.map((o) => (o ? 1 : 0)));
+    expect(back.seen).toEqual(owned);
+  });
+
+  /** A live 1.0.0 save (schema 2): the album a bit mask, a prize running on the old 24-slot wheel, a coin on its way up. */
+  function v100(seed: number, album: number, prize: { seg: number; t: number; paid: boolean } | null, stock: number) {
+    const s = midPlay(seed);
+    const { cards: _c, seen: _s, ...state } = pack(s);
+    const v2: PackedV2 = { ...state, album, prize, stock };
+    v2.flights = [...v2.flights, [v2.nextId, 0.2, 0, SHELF_W / 2, 27.5, 0, -1]];
+    v2.nextId++;
+    return { s, save: JSON.parse(JSON.stringify({ v: "1.0.0", schema: 2, state: v2 })) as { v: string; schema: number; state: PackedV2 } };
+  }
+
+  it("migrates a live 1.0.0 save to 1.1.0: coins, lifetime tickets and the shelf kept, the album as counts", () => {
+    const { s, save } = v100(31, 0b1000100101, { seg: 20, t: 0.8, paid: false }, 2);
+    const m = migrate(save);
+    expect(m.ok).toBe(true);
+    if (!m.ok) return;
+    expect(m.save.schema).toBe(SCHEMA);
+    const back = fromSave(m.save);
+    expect(back.coins).toBe(s.coins);
+    expect(back.lifetimeTickets).toBe(s.lifetimeTickets);
+    expect(back.shots).toBe(s.shots);
+    expect(back.bodies.length).toBe(s.bodies.length);
+    // Each owned cat becomes one card, and is seen; the rest none
+    expect(back.cards).toEqual([1, 0, 1, 0, 0, 1, 0, 0, 0, 1]);
+    expect(back.seen).toEqual([true, false, true, false, false, true, false, false, false, true]);
+    // The old wheel's running spin (slot 20 does not exist now) goes back into the stock
+    expect(WHEEL.length).toBeLessThanOrEqual(20);
+    expect(back.prize).toBeNull();
+    expect(back.stock).toBe(3);
+    // The coin on its way up lands on the fixed spot
+    expect(back.flights.filter((f) => f.phase === "up").every((f) => f.aim === LAND_X)).toBe(true);
+    // And it plays on
+    const ev = update(back, { shoot: true }, 1 / 60);
+    expect(ev.some((e) => e.type === "shoot")).toBe(true);
+  });
+
+  it("a 1.0.0 spin that already paid is dropped, and a refund never overfills the stock", () => {
+    const paid = migrate(v100(32, 0, { seg: 3, t: 1.9, paid: true }, 1).save);
+    expect(paid.ok && fromSave(paid.save).stock).toBe(1);
+    const full = migrate(v100(33, 0, { seg: 3, t: 0.2, paid: false }, PRIZE_QUEUE_MAX).save);
+    expect(full.ok && fromSave(full.save).stock).toBe(PRIZE_QUEUE_MAX);
+    const none = migrate(v100(34, 2 ** CARD_COUNT - 1, null, 0).save);
+    expect(none.ok && fromSave(none.save).cards).toEqual(Array(CARD_COUNT).fill(1));
+    // A broken 1.0.0 album is refused, never crashed on
+    const bad = v100(35, 0, null, 0).save;
+    (bad.state as unknown as Record<string, unknown>).album = "lots";
+    expect(migrate(bad)).toEqual({ ok: false, reason: "broken" });
+    expect(() => toV3({} as PackedV2)).toThrow();
   });
 
   it("leaves a current save as it is", () => {
@@ -164,7 +219,14 @@ describe("migrate", () => {
       (x: { state: Record<string, unknown> }) => (x.state.coins = 1.5),
       (x: { state: Record<string, unknown> }) => (x.state.lifetimeTickets = "lots"),
       (x: { state: Record<string, unknown> }) => (x.state.stock = 99),
-      (x: { state: Record<string, unknown> }) => (x.state.album = 5000),
+      (x: { state: Record<string, unknown> }) => (x.state.seen = 5000),
+      (x: { state: Record<string, unknown> }) => (x.state.cards = [1, 2]),
+      (x: { state: Record<string, unknown> }) => (x.state.cards = Array(CARD_COUNT).fill(-1)),
+      // Cards of a cat never seen
+      (x: { state: Record<string, unknown> }) => {
+        x.state.seen = 0;
+        x.state.cards = Array(CARD_COUNT).fill(1);
+      },
       (x: { state: Record<string, unknown> }) => (x.state.queue = ["mega"]),
       (x: { state: Record<string, unknown> }) => ((x.state.bodies as unknown[]).push([1, 0, 10, 10, 0, 0, 9, -1])),
       (x: { state: Record<string, unknown> }) => ((x.state.bodies as unknown[]).push([99_999_999, 1, 10, 10, 0, 0, 1, 7])),
@@ -201,6 +263,23 @@ describe("the server's rules", () => {
     grantCoins(s, 5000);
     const granted = at(s);
     expect(granted && plausible(prev, granted)).toBe(true);
+  });
+
+  it("accepts tickets from exchanged cards even with no shots between saves", () => {
+    const s = midPlay(14);
+    s.cards = Array(CARD_COUNT).fill(20);
+    s.seen = s.cards.map(() => true);
+    const prev = at(s);
+    // Ten sets and a heap of Ragdolls in one go: well past the per-save slack
+    for (let i = 0; i < 10; i++) exchangeSet(s, "tickets");
+    for (let i = 0; i < 10; i++) exchangeCard(s, 5, "tickets");
+    drainTickets(s);
+    const next = at(s);
+    expect(prev && next && plausible(prev, next)).toBe(true);
+    // The same jump with no cards spent is refused
+    if (!prev || !next) throw new Error("no save");
+    const free = { ...prev, state: { ...prev.state, lifetimeTickets: next.state.lifetimeTickets } };
+    expect(plausible(prev, free)).toBe(false);
   });
 
   it("refuses tickets going backwards, or out of thin air", () => {

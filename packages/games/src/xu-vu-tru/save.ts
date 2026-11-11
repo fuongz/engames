@@ -1,6 +1,7 @@
 import type { SaveRules } from "../saves";
 import {
   CARD_COUNT,
+  LAND_X,
   CARD_R,
   COIN_R,
   CORE_COUNT,
@@ -9,6 +10,7 @@ import {
   MINI_PRIZES,
   PRIZE_QUEUE_MAX,
   PUSH_PERIOD,
+  RARE_TICKETS,
   SHELF_D,
   SHELF_W,
   SUPER_PRIZES,
@@ -31,8 +33,15 @@ import type { Body } from "./physics";
 //   1  `state` is the State object as is (the first 1.0.0 builds).
 //   2  bodies and flights packed into number tuples, floats rounded, the
 //      album as a bit mask, `unpaid` dropped (the shell drains it before saving).
+//   3  (1.1.0) the 11-slot wheel and the card inventory: `prize.seg` indexes
+//      the new WHEEL, shot coins land on LAND_X, and the album bit mask became
+//      `cards` (a count per cat) plus `seen` (a bit mask of cats ever
+//      collected). From schema 2 (1.0.0): each owned cat becomes a count of 1
+//      and is seen; a prize spin still running, if it had not paid yet, goes
+//      back into the stock (capped); coins in the air land on LAND_X. Coins,
+//      lifetime tickets and the shelf are kept as they are.
 
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 
 /** The server refuses a save bigger than this (MAX_BYTES in apps/web/src/server/saves.ts). */
 export const SAVE_MAX_BYTES = 64 * 1024;
@@ -63,8 +72,10 @@ export interface PackedState {
   bodies: PackedBody[];
   flights: PackedFlight[];
   cores: number;
-  /** Bit i set: card i is owned. */
-  album: number;
+  /** Cards in the inventory per cat (CARD_IDS order). */
+  cards: number[];
+  /** Bit i set: cat i was ever collected. */
+  seen: number;
   queue: SpinKind[];
   spin: Spin | null;
   capsules: number;
@@ -117,7 +128,8 @@ export function pack(s: State): PackedState {
     bodies: s.bodies.map((b) => [b.id, KINDS.indexOf(b.kind), r2(b.x), r2(b.y), r2(b.vx), r2(b.vy), b.stack, tagOf(b.kind, b.core, b.card)]),
     flights: s.flights.map((f) => [f.id, r4(f.t), f.phase === "up" ? 0 : 1, r2(f.x), r2(f.aim), KINDS.indexOf(f.kind), tagOf(f.kind, f.core, f.card)]),
     cores: s.cores,
-    album: s.album.reduce((m, owned, i) => (owned ? m | (1 << i) : m), 0),
+    cards: [...s.cards],
+    seen: s.seen.reduce((m, seen, i) => (seen ? m | (1 << i) : m), 0),
     queue: [...s.queue],
     spin: s.spin && { kind: s.spin.kind, idx: s.spin.idx, t: r4(s.spin.t), paid: s.spin.paid },
     capsules: s.capsules,
@@ -158,7 +170,8 @@ export function unpack(p: PackedState): State {
       return { id, t, phase: phase === 0 ? "up" : "down", x, aim, kind, core: kind === "core" ? tag : -1, card: kind === "card" ? tag : -1 };
     }),
     cores: p.cores,
-    album: Array.from({ length: CARD_COUNT }, (_, i) => (p.album & (1 << i)) !== 0),
+    cards: [...p.cards],
+    seen: Array.from({ length: CARD_COUNT }, (_, i) => (p.seen & (1 << i)) !== 0),
     queue: [...p.queue],
     spin: p.spin && { ...p.spin },
     capsules: p.capsules,
@@ -180,8 +193,42 @@ export const fromSave = (save: MachineSave): State => unpack(save.state);
 /** One step up per schema: STEPS[n] turns a schema-n `state` into a schema-(n+1) one. */
 const STEPS: Record<number, (state: unknown) => unknown> = {
   // 1 → 2: pack the plain State (a broken one throws, and migrate calls it broken)
-  1: (state) => pack(state as State),
+  1: (state) => packV1(state as State & { album: boolean[] }),
+  // 2 → 3: off the 1.0.0 wheel and onto the card inventory (see the schema notes above)
+  2: (state) => toV3(state as PackedV2),
 };
+
+/** Schema 2 (1.0.0): today's packed shape with the album as an owned-cats bit mask. */
+export type PackedV2 = Omit<PackedState, "cards" | "seen"> & { album: number };
+
+/** Schema 1's plain 1.0.0 State packed as schema 2. */
+function packV1(st: State & { album: boolean[] }): PackedV2 {
+  if (!isObj(st) || !Array.isArray(st.album)) throw new Error("not a schema-1 state");
+  const { cards: _c, seen: _s, ...rest } = pack({ ...st, cards: [], seen: [] });
+  return { ...rest, album: st.album.reduce((m, owned, i) => (owned === true ? m | (1 << i) : m), 0) };
+}
+
+/**
+ * A 1.0.0 machine moved onto 1.1.0. Its prize slot index meant a slot of the old
+ * 24-slot wheel, so a spin still running is dropped: unpaid, it goes back into
+ * the stock to be spun again on the new wheel (when a lamp is free); paid, it is
+ * already on the counters. Coins on their way up land on LAND_X like any 1.1.0
+ * shot. The album's owned cats become one card each in the inventory, and seen.
+ * Everything else carries over unchanged.
+ */
+export function toV3(p: PackedV2): PackedState {
+  if (!isObj(p) || !Array.isArray(p.flights) || !isInt(p.album, 0, 2 ** CARD_COUNT - 1)) throw new Error("not a schema-2 state");
+  const { album, ...rest } = p;
+  const refund = p.prize && !p.prize.paid ? 1 : 0;
+  return {
+    ...rest,
+    prize: null,
+    stock: Math.min(PRIZE_QUEUE_MAX, (Number.isInteger(p.stock) ? p.stock : 0) + refund),
+    flights: p.flights.map((f) => (Array.isArray(f) && f[2] === 0 ? ([f[0], f[1], f[2], f[3], LAND_X, f[5], f[6]] as PackedFlight) : f)),
+    cards: Array.from({ length: CARD_COUNT }, (_, i) => ((album & (1 << i)) !== 0 ? 1 : 0)),
+    seen: album,
+  };
+}
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const isInt = (x: unknown, lo: number, hi: number): x is number => Number.isInteger(x) && (x as number) >= lo && (x as number) <= hi;
@@ -218,7 +265,10 @@ export function validState(x: unknown): x is PackedState {
   if (!isInt(x.seed, -(2 ** 31), 2 ** 32) || !isInt(x.coins, 0, 1e9) || !isInt(x.cores, 0, 1000)) return false;
   if (!isNum(x.t, 0, 1e10) || !isNum(x.wheel, -10, 10) || !isNum(x.gate, -10, 10) || !isNum(x.pusherT, 0, PUSH_PERIOD * 10)) return false;
   if (!isNum(x.cooldown, 0, 10) || !isNum(x.quiet, 0, 1e10) || typeof x.idle !== "boolean") return false;
-  if (!isInt(x.stock, 0, PRIZE_QUEUE_MAX) || !isInt(x.album, 0, 2 ** CARD_COUNT - 1)) return false;
+  if (!isInt(x.stock, 0, PRIZE_QUEUE_MAX) || !isInt(x.seen, 0, 2 ** CARD_COUNT - 1)) return false;
+  // A count per cat, and a cat with cards in hand was collected
+  if (!Array.isArray(x.cards) || x.cards.length !== CARD_COUNT || !x.cards.every((c) => isInt(c, 0, 1e6))) return false;
+  if (!x.cards.every((c, i) => c === 0 || ((x.seen as number) & (1 << i)) !== 0)) return false;
   const pz = x.prize;
   if (pz !== null && !(isObj(pz) && isInt(pz.seg, 0, WHEEL.length - 1) && isNum(pz.t, 0, 100) && typeof pz.paid === "boolean")) return false;
   const sp = x.spin;
@@ -272,11 +322,14 @@ export function parseSave(raw: unknown): MachineSave | null {
 
 /**
  * Generously more than one coin can ever pay: a 100-ticket slot, a Mini spin's
- * share, a card and a share of the set and Super bonuses. Coins pushed off the
- * front pay 1 each, and a shelf holds a few hundred.
+ * share and a share of the Super bonus. Coins pushed off the front pay 1 each,
+ * and a shelf holds a few hundred. Cards pay when exchanged, maybe long after
+ * the shots that won them: each card gone from the inventory may bring up to
+ * TICKETS_PER_CARD (a Ragdoll's 300; a set's 1000 is 100 a card).
  */
 const TICKETS_PER_SHOT = 2000;
 const TICKET_SLACK = 5000;
+const TICKETS_PER_CARD = RARE_TICKETS;
 
 /**
  * Could `next` follow `prev` (null: the first save) in real play? The machine
@@ -289,7 +342,9 @@ export function plausible(prev: MachineSave | null, next: MachineSave) {
   if (!prev) return n.lifetimeTickets <= n.shots * TICKETS_PER_SHOT + TICKET_SLACK;
   const p = prev.state;
   if (n.lifetimeTickets < p.lifetimeTickets || n.shots < p.shots || n.supers < p.supers || n.cardsWon < p.cardsWon) return false;
-  return n.lifetimeTickets - p.lifetimeTickets <= (n.shots - p.shots) * TICKETS_PER_SHOT + TICKET_SLACK;
+  // Cards that left the inventory (exchanged) since the last save
+  const spent = n.cards.reduce((a, c, i) => a + Math.max(0, (p.cards[i] ?? 0) - c), 0);
+  return n.lifetimeTickets - p.lifetimeTickets <= (n.shots - p.shots) * TICKETS_PER_SHOT + TICKET_SLACK + spent * TICKETS_PER_CARD;
 }
 
 export const rules: SaveRules = {
