@@ -7,14 +7,37 @@ export const H = 960;
 // ---------------------------------------------------------------- economy
 
 /** The game's version (manifest.version, the save envelope's `v`). */
-export const VERSION = "1.1.0";
+export const VERSION = "1.2.0";
 /** Coins a guest's local trial machine starts with (no daily coins, no deposits). */
 export const TRIAL_COINS = 100;
 /** The signed-in allowance (manifest.allowance): a welcome once, then a daily. */
 export const WELCOME_COINS = 100;
 export const DAILY_COINS = 50;
+/**
+ * The login streak (manifest.allowance.streak): day n of an unbroken run of
+ * dailies pays STREAK[(n - 1) % 7]. The server picks the amount; this is what
+ * the manifest declares and the strip shows.
+ */
+export const STREAK = [50, 60, 70, 80, 90, 100, 150];
+/** Prize Counter items (manifest.shop): `coins` go on the balance, a `card-pack` rolls cards by CARD_WEIGHTS (kinds are lowercase-kebab: conventions.test.ts). */
+export const SHOP = {
+  coins10: { kind: "coins", amount: 10, price: 300, dailyLimit: 3 },
+  card1: { kind: "card-pack", amount: 1, price: 400, dailyLimit: 2 },
+} as const;
 /** Each coin (or each coin in a stack) pushed over the front edge comes back, plus this many tickets. */
 export const FRONT_TICKETS = 1;
+/**
+ * The robot jar on the middle of the front lip: a coin pushed off the front
+ * with its centre within JAR_W / 2 of JAR_X (world units across the shelf) drops
+ * into the jar and is kept by the machine: no coin back, no ticket. It is the
+ * machine's drain: every shot ends up as about one coin on the shelf (a miss, a
+ * bounce off the lid, or a prize spin's coins), so about JAR_W / SHELF_W of
+ * every shot is kept whatever the aim. Capsules and cards are never eaten: in
+ * the jar's section they count like anywhere else on the front. Tuned by
+ * simulation, see RE_NOTES.md "Economy".
+ */
+export const JAR_W = 44;
+export const JAR_X = 220;
 
 // ---------------------------------------------------------------- the gate
 
@@ -67,12 +90,12 @@ const CARD: Segment = { kind: "card" };
  */
 export const SLOTS: { segment: Segment; weight: number }[] = [
   { segment: t(10), weight: 10 },
-  { segment: c(1), weight: 10 },
-  { segment: t(5), weight: 9.5 },
   { segment: c(2), weight: 10 },
+  { segment: t(5), weight: 9.5 },
+  { segment: c(4), weight: 10 },
   { segment: CORE, weight: 8 },
   { segment: t(20), weight: 10 },
-  { segment: c(1), weight: 10 },
+  { segment: c(2), weight: 10 },
   { segment: t(100), weight: 7.5 },
   { segment: c(2), weight: 8.5 },
   { segment: CARD, weight: 7.5 },
@@ -117,11 +140,10 @@ export const PRIZE_SPIN_TIME = 1.7;
 /** Seconds the stopped slot stays lit before the next prize spin starts. */
 export const PRIZE_HOLD = 0.45;
 /**
- * Prize spins waiting their turn, at most (the lamps under the gate). A coin that
- * drops in the hole while all of them are lit is still swallowed but adds no spin
- * (as with a pachinko stock). With the button held, coins reach the hole about once
- * a second while a spin takes ~2.15 s, so the stock fills and stays full: pacing
- * shots to the lamps pays. Four keeps the wait once the coins run out under ~9 s.
+ * Prize spins waiting their turn, at most (the lamps under the gate). While all
+ * of them are lit the hole's lid is shut: a coin that reaches it bounces off onto
+ * the shelf like a miss, so a full stock never wastes a coin. Four keeps the wait
+ * once the coins run out under ~9 s.
  */
 export const PRIZE_QUEUE_MAX = 4;
 
@@ -156,7 +178,7 @@ export const CORE_COUNT = 6;
 
 // ---------------------------------------------------------------- cards
 
-/** The album: ten cat cards (art in img/cards/<id>.webp, names in strings.ts), in CARD_WEIGHTS order. */
+/** The album: ten cat cards (art in img/cards-v3/<id>.webp, names in strings.ts), in CARD_WEIGHTS order. */
 export const CARD_IDS = [
   "persian",
   "british",
@@ -182,18 +204,14 @@ export const CARD_WEIGHTS: readonly number[] = CARD_IDS.map((id) => (id === RARE
 export const isRare = (card: number) => CARD_IDS[card] === RARE_CARD;
 /**
  * Cards pushed off the front stack up in the inventory (a count per cat) and pay
- * nothing by themselves: the player exchanges them, when they choose, for tickets
- * or coins. One card of a common cat, one Ragdoll, or a full set (one of each of
- * the ten, consuming one of each). Coins are worth far less than tickets: a card
- * slot must not hand back more coins than its shot cost (RE_NOTES.md "Card
- * exchange"), so even perfect aim with every card turned into coins still drains.
+ * nothing by themselves: the player exchanges them for tickets when they choose.
+ * One card of a common cat, one Ragdoll, or a full set (one of each of the ten,
+ * consuming one of each). Tickets only: cards never turn back into coins, so
+ * they can never feed the coin balance (RE_NOTES.md "Card exchange").
  */
 export const CARD_TICKETS = 60;
-export const CARD_COINS = 3;
 export const RARE_TICKETS = 300;
-export const RARE_COINS = 15;
 export const SET_TICKETS = 1000;
-export const SET_COINS = 50;
 /** Seconds of set-complete celebration (display only). */
 export const SET_TIME = 3.6;
 

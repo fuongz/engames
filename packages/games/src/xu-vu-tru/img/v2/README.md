@@ -29,7 +29,6 @@ All sprites are trimmed, transparent WebP (quality 85, lossless alpha). The floo
 | `coin.webp` | 126x128 | centre |
 | `coin-stack2.webp` | 128x119 | centre |
 | `coin-stack3.webp` | 112x128 | centre |
-| `card-back.webp` | 124x160 | centre |
 | `ticket.webp` | 96x63 | centre |
 | `gate.webp` | 360x186 | centre |
 | `shoot-idle.webp` | 320x307 | centre |

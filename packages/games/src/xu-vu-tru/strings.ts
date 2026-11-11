@@ -24,9 +24,11 @@ export interface Strings {
   off: string;
   /** Under the shelf for the first few shots: how to aim, in one sentence a child gets. */
   aimHint: string;
-  /** Pops on the gate: a coin dropped in the hole, or did while the spin stock was full. */
+  /** Pops on the gate when a coin drops in the hole. */
   holeIn: string;
-  stockFull: string;
+  /** The robot jar's label on the front lip, and its pop when it eats coins. */
+  jar: string;
+  jarYum: string;
   youWin: string;
   marquee: (n: number) => string;
   superSpin: string;
@@ -53,7 +55,6 @@ export interface Strings {
   setMissing: (n: number) => string;
   setReady: string;
   ticketsN: (n: number) => string;
-  coinsN: (n: number) => string;
   confirmCard: (name: string, reward: string) => string;
   confirmSet: (reward: string) => string;
   confirm: string;
@@ -85,9 +86,19 @@ export interface Strings {
   flipHint: string;
   lifetimeLine: (n: number) => string;
   supersLine: (n: number) => string;
-  /** Allowance toasts. */
+  /** Allowance toasts: the welcome, a daily on login streak day `day`, a Prize Counter purchase. */
   welcomeGrant: (n: number) => string;
-  dailyGrant: (n: number) => string;
+  streakGrant: (day: number, n: number) => string;
+  shopCoins: (n: number) => string;
+  /** A card from the Prize Counter: the toast, and the line over the card viewer. */
+  shopCard: (name: string) => string;
+  shopCardTitle: string;
+  /**
+   * The out-of-coins strip's second line: where to trade tickets for coins. The
+   * portal gives a game no way to open the Prize Counter, so it points at the
+   * ticket chip (top bar on phones, sidebar on desktop).
+   */
+  counterHint: string;
   /** A deposit came back short: the server's daily ticket cap. */
   ticketCap: string;
   /** The account went away mid-game: back on the guest trial machine. */
@@ -121,7 +132,8 @@ export const STRINGS: Localized<Strings> = {
     off: "Tắt",
     aimHint: "Bấm BẮN khi lỗ sáng xanh là xu rơi trúng lỗ!",
     holeIn: "VÀO!",
-    stockFull: "Đầy lượt quay",
+    jar: "HŨ",
+    jarYum: "Măm!",
     youWin: "BẠN THẮNG",
     marquee: (n) => `SUPER tới ${n} vé`,
     superSpin: "SUPER SPIN!",
@@ -134,7 +146,7 @@ export const STRINGS: Localized<Strings> = {
     rare: "Hiếm",
     album: "Thẻ",
     albumTitle: "Kho thẻ mèo",
-    albumNote: "Thẻ trùng được cộng dồn · đổi lấy vé hoặc xu",
+    albumNote: "Thẻ trùng được cộng dồn · đổi lấy vé",
     count: (n) => `x${n}`,
     traded: "đã đổi",
     exchange: "Đổi thẻ",
@@ -144,7 +156,6 @@ export const STRINGS: Localized<Strings> = {
     setMissing: (n) => `Còn thiếu ${n} giống`,
     setReady: "Đủ bộ!",
     ticketsN: (n) => `+${n} vé`,
-    coinsN: (n) => `+${n} xu`,
     confirmCard: (name, reward) => `Đổi 1 thẻ ${name} lấy ${reward}?`,
     confirmSet: (reward) => `Đổi 10 thẻ (mỗi giống 1 thẻ) lấy ${reward}?`,
     confirm: "Đổi",
@@ -174,12 +185,13 @@ export const STRINGS: Localized<Strings> = {
       "Bấm BẮN khi lỗ sáng xanh là xu rơi trúng lỗ!",
       "BẮN (hoặc Space) tốn 1 xu; xu luôn rơi vào vòng đích dưới vòng quay. Vào lỗ: 1 lượt quay thưởng. Trượt: xu nảy xuống kệ.",
       "Quay thưởng: đèn dừng ở một ô (ô càng rộng càng dễ trúng). Ô VÉ: cộng vé. Ô XU: xu rơi khắp kệ.",
-      "Tối đa 4 lượt chờ (đèn dưới cổng). Đèn đầy mà xu vẫn vào lỗ thì mất xu đó.",
-      "Xu bị đẩy rơi mép trước: +1 xu, +1 vé (hai bên có vách). Hết xu thì máy nghỉ, kệ giữ nguyên chờ bạn.",
-      "Ô LÕI: lõi rơi xuống kệ + 1 MINI SPIN. Đẩy 6 lõi rơi mép trước: SUPER SPIN 80–500 vé!",
+      "Tối đa 4 lượt chờ (đèn dưới cổng). Đủ 4 lượt thì nắp lỗ đóng: xu nảy xuống kệ, không mất xu nào.",
+      "Xu bị đẩy rơi mép trước: +1 xu, +1 vé (hai bên có vách). Riêng khúc giữa có hũ robot: xu rơi vào hũ thì máy giữ.",
+      "Ô LÕI: lõi rơi xuống kệ + 1 MINI SPIN. Đẩy 6 lõi rơi mép trước: SUPER SPIN 80–500 vé! Lõi và thẻ rơi vào hũ vẫn được tính.",
       "Ô THẺ: thẻ mèo rơi xuống kệ. Đẩy rơi mép trước: vào kho thẻ, thẻ trùng cộng dồn. Mèo Ragdoll hiếm hơn.",
-      "Đổi thẻ khi bạn muốn: 1 thẻ = 60 vé hoặc 3 xu (Ragdoll 300 vé hoặc 15 xu); cả bộ 10 giống = 1000 vé hoặc 50 xu.",
-      "Đăng nhập: 100 xu chào mừng, 50 xu mỗi ngày, máy lưu vào tài khoản, vé vào ví vé chung của các game thùng.",
+      "Đổi thẻ lấy vé khi bạn muốn: 1 thẻ = 60 vé (Ragdoll 300 vé); cả bộ 10 giống = 1000 vé.",
+      "Đăng nhập: 100 xu chào mừng, xu mỗi ngày tăng theo chuỗi ngày (50 tới 150 xu), máy lưu vào tài khoản, vé vào ví vé chung của các game thùng.",
+      "Quầy đổi thưởng (bấm ô vé ngoài trang): đổi vé lấy xu hoặc gói thẻ mèo. Hết xu thì máy nghỉ, kệ giữ nguyên chờ bạn.",
     ],
     close: "Đã hiểu",
     menu: "Menu",
@@ -195,19 +207,23 @@ export const STRINGS: Localized<Strings> = {
     lifetimeLine: (n) => `Máy đã trả ${n} vé`,
     supersLine: (n) => (n > 0 ? `${n} lần Super Spin` : "Chưa có Super Spin"),
     welcomeGrant: (n) => `Quà chào mừng +${n} xu`,
-    dailyGrant: (n) => `Xu hôm nay +${n}`,
+    streakGrant: (day, n) => `Chuỗi ngày ${day}: +${n} xu`,
+    shopCoins: (n) => `Quầy đổi thưởng: +${n} xu`,
+    shopCard: (name) => `Quầy đổi thưởng: ${name}`,
+    shopCardTitle: "Thẻ từ Quầy đổi thưởng",
+    counterHint: "Thêm xu: bấm ô vé ngoài trang để mở Quầy đổi thưởng",
     ticketCap: "Hôm nay máy đã trả đủ vé, mai nhận tiếp",
     signedOut: "Đã đăng xuất: chơi máy thử",
     conflictAdopted: "Đã tải bản lưu mới hơn",
     legacyNote: "Lượt chơi bản beta cũ đã được dọn: máy 1.0 bắt đầu mới.",
     newsTitle: (v) => `Có gì mới · v${v}`,
     newsLines: [
-      "Bắn dễ hơn: xu luôn rơi vào vòng đích, lỗ to hơn và sáng xanh khi tới lúc bấm.",
-      "Thêm nhiều ô xu: quay thưởng ra xu thường hơn, vòng quay 11 ô to rõ.",
-      "Mèo Ragdoll hiếm: khó gặp hơn các bé mèo khác, có huy hiệu Hiếm.",
-      "Kho thẻ: thẻ trùng được cộng dồn; tự chọn lúc đổi 1 thẻ hoặc cả bộ lấy vé hay xu.",
-      "Xem thẻ: chạm thẻ trong kho để xem to, nghiêng và lật thẻ.",
-      "Chơi liền mạch: hết xu không còn bảng chắn, bảng xếp hạng tự cập nhật.",
+      "Hũ robot: giữa mép trước có một bé robot hũ, xu rơi vào hũ thì máy giữ. Quay thưởng giờ trả nhiều xu hơn, nên ngắm giỏi chỉ được thêm vé.",
+      "Không phí xu nào: đủ 4 lượt quay thì nắp lỗ đóng, xu nảy xuống kệ.",
+      "Thẻ mèo đổi lấy vé: 60 vé một thẻ, 300 vé thẻ Ragdoll, 1000 vé cả bộ.",
+      "Quầy đổi thưởng: bấm ô vé ngoài trang để đổi vé lấy xu hoặc gói thẻ mèo.",
+      "Chuỗi ngày đăng nhập: xu mỗi ngày tăng từ 50 tới 150 xu ở ngày thứ 7.",
+      "Bảng xếp hạng tuần: xếp theo vé kiếm được trong tuần, mỗi thứ Hai bắt đầu lại.",
     ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} vé · ${supers} lần Super` : `${tickets} vé`),
     summary: (n) => `Đã gom ${n} vé`,
@@ -228,7 +244,8 @@ export const STRINGS: Localized<Strings> = {
     off: "Off",
     aimHint: "Press SHOOT when the hole glows green and the coin drops right in!",
     holeIn: "IN!",
-    stockFull: "Spins full",
+    jar: "JAR",
+    jarYum: "Yum!",
     youWin: "YOU WIN",
     marquee: (n) => `SUPER UP TO ${n}`,
     superSpin: "SUPER SPIN!",
@@ -241,7 +258,7 @@ export const STRINGS: Localized<Strings> = {
     rare: "Rare",
     album: "Cards",
     albumTitle: "Cat cards",
-    albumNote: "Duplicates stack · exchange them for tickets or coins",
+    albumNote: "Duplicates stack · exchange them for tickets",
     count: (n) => `x${n}`,
     traded: "traded",
     exchange: "Exchange",
@@ -251,7 +268,6 @@ export const STRINGS: Localized<Strings> = {
     setMissing: (n) => (n === 1 ? "1 cat missing" : `${n} cats missing`),
     setReady: "Full set!",
     ticketsN: (n) => `+${n} tickets`,
-    coinsN: (n) => `+${n} coins`,
     confirmCard: (name, reward) => `Exchange one ${name} card for ${reward}?`,
     confirmSet: (reward) => `Exchange 10 cards (one of each cat) for ${reward}?`,
     confirm: "Exchange",
@@ -281,12 +297,13 @@ export const STRINGS: Localized<Strings> = {
       "Press SHOOT when the hole glows green and the coin drops right in!",
       "SHOOT (or Space) costs 1 coin, which always lands on the target ring under the wheel. In the hole: a prize spin. Missed: it bounces onto the shelf.",
       "Prize spin: a light stops on a slot (wider = likelier). TICKETS pay at once; COINS rain onto the shelf.",
-      "Up to 4 spins wait (lamps under the gate). A coin that drops in while all 4 are lit is lost.",
-      "Coins pushed off the front: +1 coin, +1 ticket each (walls guard the sides). Out of coins, the machine rests and keeps its shelf.",
-      "CORE: a core drops onto the shelf + a MINI SPIN. Push 6 cores off the front: SUPER SPIN, 80–500 tickets!",
+      "Up to 4 spins wait (lamps under the gate). With all 4 lit the hole's lid shuts: coins bounce onto the shelf, none is wasted.",
+      "Coins pushed off the front: +1 coin, +1 ticket each (walls guard the sides). In the middle sits the robot jar: coins that fall in are kept by the machine.",
+      "CORE: a core drops onto the shelf + a MINI SPIN. Push 6 cores off the front: SUPER SPIN, 80–500 tickets! Cores and cards still count in the jar's spot.",
       "CARD: a cat card drops onto the shelf. Pushed off the front, it goes into your card stash; duplicates stack. The Ragdoll is rare.",
-      "Exchange cards when you like: one card = 60 tickets or 3 coins (Ragdoll 300 or 15); a full set of 10 cats = 1000 tickets or 50 coins.",
-      "Signed in: 100 welcome coins, 50 coins a day, your machine saved to your account, tickets in the shared arcade wallet.",
+      "Exchange cards for tickets when you like: one card = 60 tickets (Ragdoll 300); a full set of 10 cats = 1000 tickets.",
+      "Signed in: 100 welcome coins, daily coins that grow with your login streak (50 up to 150), your machine saved to your account, tickets in the shared arcade wallet.",
+      "The Prize Counter (tap your ticket count outside the game) trades tickets for coins or cat card packs. Out of coins, the machine rests and keeps its shelf.",
     ],
     close: "Got it",
     menu: "Menu",
@@ -302,19 +319,23 @@ export const STRINGS: Localized<Strings> = {
     lifetimeLine: (n) => (n === 1 ? "This machine has paid 1 ticket" : `This machine has paid ${n} tickets`),
     supersLine: (n) => (n === 0 ? "No Super Spin yet" : n === 1 ? "1 Super Spin" : `${n} Super Spins`),
     welcomeGrant: (n) => `Welcome gift +${n} coins`,
-    dailyGrant: (n) => `Today's coins +${n}`,
+    streakGrant: (day, n) => `Streak day ${day}: +${n} coins`,
+    shopCoins: (n) => `Prize Counter: +${n} coins`,
+    shopCard: (name) => `Prize Counter: ${name}`,
+    shopCardTitle: "From the Prize Counter",
+    counterHint: "More coins: tap your ticket count outside the game for the Prize Counter",
     ticketCap: "Today's ticket limit reached, more tomorrow",
     signedOut: "Signed out: playing the trial machine",
     conflictAdopted: "Loaded a newer save",
     legacyNote: "Your old beta run was cleared: the 1.0 machine starts fresh.",
     newsTitle: (v) => `What's new · v${v}`,
     newsLines: [
-      "Easier aiming: every coin lands on the target ring, the hole is bigger and glows green when it's time to shoot.",
-      "More coin prizes: prize spins pay coins more often, on a bigger, clearer 11-slot wheel.",
-      "The rare Ragdoll: harder to find than the other cats, with a Rare badge.",
-      "Card stash: duplicates stack; you choose when to exchange one card or a full set, for tickets or coins.",
-      "Card viewer: tap a card in your stash to see it big, tilt it and flip it over.",
-      "Nonstop play: no more out-of-coins panel, and the leaderboard updates by itself.",
+      "The robot jar: a little jar robot sits in the middle of the front edge and keeps the coins that fall in. Prize spins now pay more coins, so good aim only adds tickets.",
+      "Never a wasted coin: with 4 spins waiting the hole's lid shuts and coins bounce onto the shelf.",
+      "Cards for tickets: 60 tickets a card, 300 for the Ragdoll, 1000 for a full set.",
+      "The Prize Counter: tap your ticket count outside the game to trade tickets for coins or cat card packs.",
+      "Login streak: daily coins grow from 50 up to 150 on day 7.",
+      "Weekly leaderboard: ranked by the tickets you earn this week, starting over every Monday.",
     ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} tickets · ${supers}× Super` : `${tickets} tickets`),
     summary: (n) => `${n} tickets collected`,

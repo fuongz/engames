@@ -4,13 +4,18 @@
 // launch button and the two robots. game.ts imports them and makeSprites decodes
 // each once; until one has decoded, a plain shape stands in for it. Everything
 // that is text or live state (counters, marquee, reels, lamps, lights, pops) is
-// drawn here in code, in the same palette. The cat cards (img/cards/<id>.webp)
+// drawn here in code, in the same palette, and so are the 1.2.0 parts: the
+// robot jar on the front lip with its lane, and the hole's lid (no sprites, no
+// art-src). The cat cards (img/cards-v3/<id>.webp)
 // are loaded by game.ts too. The shelf is 2D physics seen from above; `proj`
 // tilts it into a 3/4 view.
 import { type Rect, clamp, lerp, mulberry32 } from "@web-games/core";
 import {
   GATE_AMP,
   HOLE_HALF,
+  isRare,
+  JAR_W,
+  JAR_X,
   LAND_X,
   PRIZE_QUEUE_MAX,
   SEG_SIZE,
@@ -135,6 +140,7 @@ export const ART = [
   "coin-stack2",
   "coin-stack3",
   "card-back",
+  "card-back-rare",
   "ticket",
   "orb-red",
   "orb-orange",
@@ -300,10 +306,16 @@ export function drawOrb(ctx: Ctx, sp: Sprites, core: number, x: number, bottom: 
 }
 
 /** The card back (a card whose cat is still a surprise), filling the rect. */
-export function drawCardBack(ctx: Ctx, sp: Sprites, x: number, y: number, w: number, h: number) {
-  const img = sp.img["card-back"];
+export function drawCardBack(ctx: Ctx, sp: Sprites, x: number, y: number, w: number, h: number, rare = false) {
+  const img = (rare ? sp.img["card-back-rare"] : null) ?? sp.img["card-back"];
   if (img) {
+    // The art is a rounded card on square white corners: clip to its own corner radius
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, w * 0.065);
+    ctx.clip();
     ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
     return;
   }
   ctx.fillStyle = TEAL;
@@ -316,7 +328,7 @@ export function drawCardBack(ctx: Ctx, sp: Sprites, x: number, y: number, w: num
 }
 
 /** The card back's height for a width. */
-export const cardBackH = (w: number) => (w * 160) / 124;
+export const cardBackH = (w: number) => (w * 4) / 3;
 
 // ---------------------------------------------------------------- text and UI
 
@@ -916,9 +928,11 @@ export function hopAt(u: number) {
  * `hole` px from the centre, the target ring where every coin lands, and the
  * prize stock lamps under it. `flash` (0..1) rings the hole after a hit; `full`
  * blinks the lamps while the stock is full; `ready` (0..1, faded by the caller)
- * lights the hole green with a pulse and an arrow: a shot now drops in.
+ * lights the hole green with a pulse and an arrow: a shot now drops in. `lid`
+ * (0 open → 1 shut, eased by the caller) swings the hole's lid shut over the cup
+ * while the stock is full; `knock` (1 → 0) jiggles it when a coin bounces off.
  */
-export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, flash: number, full: boolean, t: number, ready = 0) {
+export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, flash: number, full: boolean, t: number, ready = 0, lid = 0, knock = 0) {
   const { x, y } = GATE;
   const gh = (GATE_W * 186) / 360;
   /** The sprite's top sits just under the coins' landing line; its side knobs ride the rod. */
@@ -1042,6 +1056,7 @@ export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, fla
   ctx.ellipse(LAND.x, LAND.y + 4, 3, 1.4, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
+  if (lid > 0) drawLid(ctx, hx, top, lid, knock, t);
   if (flash > 0) {
     ctx.globalAlpha = flash;
     ctx.strokeStyle = LAMP_ON;
@@ -1066,6 +1081,55 @@ export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, fla
     const lx = x + (i - (PRIZE_QUEUE_MAX - 1) / 2) * 20;
     bulb(ctx, lx, ly, 5, full ? (Math.floor(t * 6) % 2 === 0 ? TERRA : "#F2B8A2") : CYAN, i < stock);
   }
+}
+
+/**
+ * The hole's lid: a terracotta flap hinged on the cup's left rim. It swings up
+ * and over as `k` goes 0 → 1, settling flat across the cup with a small bounce,
+ * and hops when a coin knocks on it.
+ */
+function drawLid(ctx: Ctx, hx: number, top: number, k: number, knock: number, t: number) {
+  // A plug that fills the cup: as wide as the U's mouth, rounded at the bottom like it
+  const w = HOLE_HALF * 2 + 22;
+  const h = 30;
+  // Drops in from above, easing out with a small bounce; hops when a coin knocks on it
+  const e = 1 - (1 - k) ** 3;
+  const bounce = k < 1 ? Math.sin(k * Math.PI) * 3 : 0;
+  const hop = knock * Math.abs(Math.sin(t * 30)) * 4;
+  const y0 = top - 6 - (1 - e) * 30 + bounce - hop;
+  ctx.save();
+  ctx.globalAlpha *= Math.min(1, k * 2.5);
+  // Shadow, the plug, and its cream rim on top
+  ctx.fillStyle = "rgba(46,36,32,0.35)";
+  ctx.beginPath();
+  ctx.roundRect(hx - w / 2 + 2, y0 + 4, w, h, [8, 8, w / 2.4, w / 2.4]);
+  ctx.fill();
+  ctx.fillStyle = TERRA;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(hx - w / 2, y0, w, h, [8, 8, w / 2.4, w / 2.4]);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#E39272";
+  ctx.beginPath();
+  ctx.roundRect(hx - w / 2 + 4, y0 + 3, w - 8, 7, 4);
+  ctx.fill();
+  // A cream bar across it: shut
+  ctx.fillStyle = CREAM;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(hx - 13, y0 + 13, 26, 7, 3.5);
+  ctx.fill();
+  ctx.stroke();
+  // The honey knob on top
+  ctx.fillStyle = HONEY;
+  ctx.beginPath();
+  ctx.arc(hx, y0 - 2, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** A coin seen edge-on-ish, spinning as it flies (k: spin phase). */
@@ -1129,16 +1193,22 @@ function reelIcon(ctx: Ctx, sp: Sprites, coin: boolean, x: number, y: number) {
     coinFace(ctx, sp, x, y, 24, 24);
     return;
   }
+  drawTicketIcon(ctx, sp, x, y, 30);
+}
+
+/** The ticket sprite centred at (x, y), `w` wide (a plain stub until it decodes). */
+export function drawTicketIcon(ctx: Ctx, sp: Sprites, x: number, y: number, w: number) {
+  const h = (w * 2) / 3;
   const img = sp.img.ticket;
   if (img) {
-    ctx.drawImage(img, x - 15, y - 10, 30, 20);
+    ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
     return;
   }
   ctx.fillStyle = TERRA;
   ctx.strokeStyle = BROWN;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(x - 14, y - 9, 28, 18, 4);
+  ctx.roundRect(x - w / 2 + 1, y - h / 2 + 1, w - 2, h - 2, 4);
   ctx.fill();
   ctx.stroke();
 }
@@ -1410,7 +1480,7 @@ export function drawBody(ctx: Ctx, sp: Sprites, b: Body, t: number, drop = 0) {
     ctx.roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 8);
     ctx.fill();
     ctx.globalAlpha = 1;
-    drawCardBack(ctx, sp, -w / 2, -h / 2, w, h);
+    drawCardBack(ctx, sp, -w / 2, -h / 2, w, h, b.card >= 0 && isRare(b.card));
     ctx.restore();
     return;
   }
@@ -1442,8 +1512,247 @@ export function drawFrontLip(ctx: Ctx, chase: number, rainbow: boolean) {
   const n = 20;
   for (let i = 0; i < n; i++) {
     const x = fl.x + 10 + (i / (n - 1)) * (fr.x - fl.x - 20);
+    // The robot jar sits on the middle of the lip
+    if (Math.abs(x - JAR_MOUTH.x) < JAR_HALF + 8) continue;
     const on = (i + Math.floor(chase)) % 4 < 2;
     bulb(ctx, x, fl.y + 15, 3.2, rainbow ? CORE_COLORS[i % 6] : LAMP_ON, on || rainbow);
+  }
+}
+
+// ---------------------------------------------------------------- the robot jar
+
+/** Half the jar's section on screen at the front edge (JAR_W world units), and its mouth's centre. */
+const JAR_HALF = (proj(JAR_X + JAR_W / 2, SHELF_D).x - proj(JAR_X - JAR_W / 2, SHELF_D).x) / 2;
+/** The jar stands in front of the shelf's front edge, its mouth a little above the edge (coins hop in). */
+export const JAR_MOUTH = { x: proj(JAR_X, SHELF_D).x, y: SHELF_BOTTOM - 18 };
+const BLUSH = "#F2A6A0";
+const GLASS = "rgba(206,240,233,0.9)";
+
+/**
+ * The jar's lane: its section of the front edge, tinted terracotta from a
+ * little way back, with dashed rails along its sides and chevrons that run
+ * toward the jar. Drawn over the bodies, see-through, so it reads on a full
+ * shelf. `munch` (1 → 0) flashes it after the jar eats.
+ */
+export function drawJarLane(ctx: Ctx, t: number, munch: number) {
+  const x0 = JAR_X - JAR_W / 2;
+  const x1 = JAR_X + JAR_W / 2;
+  const back = SHELF_D - 96;
+  const a = proj(x0, back);
+  const b = proj(x1, back);
+  const c = proj(x1, SHELF_D);
+  const d = proj(x0, SHELF_D);
+  ctx.save();
+  const fill = ctx.createLinearGradient(0, a.y, 0, d.y);
+  fill.addColorStop(0, "rgba(207,121,90,0)");
+  fill.addColorStop(0.35, "rgba(207,121,90,0.16)");
+  fill.addColorStop(1, `rgba(207,121,90,${0.6 + 0.25 * munch})`);
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.lineTo(c.x, c.y);
+  ctx.lineTo(d.x, d.y);
+  ctx.closePath();
+  ctx.fill();
+  // Dashed rails, fading in toward the front
+  ctx.setLineDash([7, 5]);
+  ctx.lineWidth = 3;
+  for (const [p, q] of [
+    [a, d],
+    [b, c],
+  ]) {
+    const g = ctx.createLinearGradient(0, p.y, 0, q.y);
+    g.addColorStop(0, "rgba(255,243,207,0)");
+    g.addColorStop(0.4, "rgba(255,243,207,0.7)");
+    g.addColorStop(1, "rgba(255,243,207,1)");
+    // A brown underline first, so the cream dashes read on gold coins
+    ctx.strokeStyle = "rgba(73,51,44,0.55)";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // Chevrons sliding toward the jar
+  for (let i = 0; i < 3; i++) {
+    const k = (i / 3 + t * 0.5) % 1;
+    const p = proj(JAR_X, back + 18 + k * (SHELF_D - back - 26));
+    ctx.globalAlpha = Math.sin(k * Math.PI);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(p.x - 10 * p.s, p.y - 5);
+    ctx.lineTo(p.x, p.y + 2);
+    ctx.lineTo(p.x + 10 * p.s, p.y - 5);
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.strokeStyle = CREAM;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * The robot jar on the middle of the front lip: a round glass jar with a robot
+ * face, little arms and an antenna, its open mouth exactly as wide as the jar's
+ * section of the edge. The coins it has eaten this session (`fill`) pile up
+ * inside. `munch` (1 → 0) after coins drop in: it squashes and bounces, shuts its
+ * eyes happily, chews and waves; the antenna bulb lights. `label` is the small
+ * tag on its belly.
+ */
+export function drawJar(ctx: Ctx, sp: Sprites, t: number, munch: number, fill: number, label: string) {
+  const { x, y } = JAR_MOUTH;
+  const m = munch > 0 ? Math.sin((1 - munch) * Math.PI * 3) * munch : 0;
+  const rx = JAR_HALF + 3;
+  const bodyH = 50;
+  ctx.save();
+  // Squash and stretch from its base
+  const base = y + bodyH;
+  ctx.translate(x, base);
+  ctx.scale(1 + 0.08 * m, 1 - 0.1 * m + Math.sin(t * 2.4) * 0.015);
+  ctx.translate(-x, -base);
+  // Arms: little teal stubs, waving while it munches
+  for (const side of [-1, 1]) {
+    const wave = munch > 0 ? Math.sin(t * 22 + side) * 0.6 * munch : Math.sin(t * 1.8 + side) * 0.08;
+    ctx.save();
+    ctx.translate(x + side * (rx + 2), y + 24);
+    ctx.rotate(side * (0.5 + wave) - (munch > 0 ? side * 0.9 * munch : 0));
+    ctx.fillStyle = TEAL;
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(side > 0 ? 0 : -14, -4, 14, 8, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = CREAM;
+    ctx.beginPath();
+    ctx.arc(side * 14, 0, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Antenna on the right shoulder, its bulb lit while it munches
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(x + rx - 6, y + 4);
+  ctx.quadraticCurveTo(x + rx + 4, y - 6, x + rx + 2, y - 14);
+  ctx.stroke();
+  bulb(ctx, x + rx + 2, y - 16, 4, munch > 0.05 ? HONEY : LAMP_ON, munch > 0.05 || Math.sin(t * 3) > 0.6);
+  // The glass body
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(x - rx - 2, y + 2, rx * 2 + 4, bodyH + 2, [10, 10, 18, 18]);
+  ctx.fill();
+  ctx.fillStyle = GLASS;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(x - rx, y, rx * 2, bodyH, [10, 10, 16, 16]);
+  ctx.fill();
+  ctx.stroke();
+  // Coins it ate, piling up inside (a few always there: the jar is never empty)
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x - rx + 2, y + 2, rx * 2 - 4, bodyH - 4, [8, 8, 14, 14]);
+  ctx.clip();
+  const pile = Math.min(14, 4 + Math.floor(fill / 3));
+  const r = mulberry32(7);
+  for (let i = 0; i < pile; i++) {
+    const row = Math.floor(i / 5);
+    const cx = x - rx + 9 + (i % 5) * ((rx * 2 - 18) / 4) + (r() - 0.5) * 4;
+    const cy = y + bodyH - 7 - row * 6 + (r() - 0.5) * 2;
+    coinFace(ctx, sp, cx, cy, 14, 7);
+  }
+  ctx.restore();
+  // The face plate: cream, on the jar's belly
+  const fy = y + 19;
+  ctx.fillStyle = CREAM;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x - rx + 6, fy - 9, rx * 2 - 12, 19, 9);
+  ctx.fill();
+  ctx.stroke();
+  // Eyes: dots with a glint, or happy arcs while it munches
+  ctx.fillStyle = BROWN;
+  ctx.strokeStyle = BROWN;
+  ctx.lineCap = "round";
+  for (const side of [-1, 1]) {
+    const ex = x + side * 8;
+    if (munch > 0.05) {
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(ex, fy + 1, 3.5, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+    } else {
+      const blink = Math.sin(t * 0.9) > 0.985 ? 0.25 : 1;
+      ctx.beginPath();
+      ctx.ellipse(ex, fy - 1, 2.8, 3.3 * blink, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.arc(ex + 1, fy - 2.2, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = BROWN;
+    }
+  }
+  // Blush
+  ctx.fillStyle = BLUSH;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(x + side * 14, fy + 4, 3.2, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Mouth: a small smile, a chewing "o" while it munches
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (munch > 0.05) {
+    const open = 2 + Math.abs(Math.sin(t * 18)) * 2.5;
+    ctx.ellipse(x, fy + 5, 3, open, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#8C4A3C";
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.arc(x, fy + 3, 3, Math.PI * 0.15, Math.PI * 0.85);
+    ctx.stroke();
+  }
+  // The open mouth of the jar: a honey rim ring, dark inside, right under the edge
+  ctx.fillStyle = HONEY;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(x, y, JAR_HALF + 2, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = WELL;
+  ctx.beginPath();
+  ctx.ellipse(x, y, JAR_HALF - 4, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // Its name tag, hanging under the mouth's right side
+  if (label) {
+    ctx.save();
+    ctx.font = `800 13px ${FONT}`;
+    const w = ctx.measureText(label).width + 12;
+    ctx.translate(x - rx - 8 - w / 2, y + 40);
+    ctx.rotate(-0.14);
+    ctx.fillStyle = TERRA;
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -9, w, 18, 7);
+    ctx.fill();
+    ctx.stroke();
+    text(ctx, label, 0, 0.5, 13, CREAM, "center", null);
+    ctx.restore();
   }
 }
 

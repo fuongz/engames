@@ -15,18 +15,49 @@ characters, logos, sounds or layouts).
 | Wheel | 11 slots, turning ~0.12 rev/s as decoration. It does not pay by where it stands: a prize spin picks the slot (below). Every slot is drawn exactly as wide as its weight, so its share of the circle is its chance, and none is under MIN_SLOT_WEIGHT = 7.5% so its tile fits whole (art.ts `tileFit`: never cropped, never squashed) |
 | Gate | A rail under the hub with a cup in it. The cup swings on a sine, ±GATE_AMP = 40 px, one swing per GATE_PERIOD = 1.7 s, the speed drifting ±10 % over 5.9 s so a held button can't lock onto it |
 | Landing | Every shot coin lands on the same spot, LAND_X = 0 (the gate's centre), FLIGHT_UP = 0.42 s after the press. A dotted guide runs from the chute's mouth to it and a target ring marks it |
-| Ready cue | When a shot fired now would land in the hole (`readyToShoot`: the swing stepped forward exactly as `update` will, ceil(FLIGHT_UP / dt) steps), the cup glows green with a green ring, a ring pulses out and a green arrow points at the target |
+| Ready cue | When a shot fired now would drop into the hole (`readyToShoot`, from `onArrival`: the swing, the coins already in the air and the prize spins stepped forward exactly as `update` will, ceil(FLIGHT_UP / dt) steps), the cup glows green with a green ring, a ring pulses out and a green arrow points at the target. It stays off while the lid will be shut when the coin arrives |
 | Hole | The hole's centre within ±HOLE_HALF = 18 px of the landing spot: swallowed, +1 prize spin in the stock. Otherwise it bounces off and falls onto the shelf as one coin at a seeded x |
+| Lid (1.2.0) | While the stock is full (`lidShut`: all PRIZE_QUEUE_MAX = 4 lamps lit) a terracotta lid plugs the cup (drawn in code, art.ts `drawLid`, dropping in over 0.18 s). A coin that arrives over the hole then knocks on the lid and bounces onto the shelf exactly like a miss (`gate` event `lid: true`, `hit: false`). Nothing is swallowed for nothing and no "Spins full" pop shows; the lamps blink |
 | Prize spin | A weighted pick of a slot (seeded). A light chases round the slots for PRIZE_SPIN_TIME = 1.7 s, braking onto the picked slot, which blinks for PRIZE_HOLD = 0.45 s; it pays when it stops |
-| Stock | At most PRIZE_QUEUE_MAX = 4 prize spins wait (the lamps under the gate), plus the one running. A coin that drops in the hole while all four are lit is swallowed for nothing ("Spins full") |
 | Ticket slot (5/10/20/50/100) | tickets straight to the counter |
-| Coin slot (1/2) | that many coins rain onto the shelf, one per equal band of its width |
+| Coin slot (2/4) | that many coins rain onto the shelf, one per equal band of its width |
 | Core slot | an energy capsule drops onto the shelf + a **Mini spin**: tickets 20/30/40/50 or coins 20/25/30/35 |
 | Card slot | a cat card drops onto the shelf, picked by CARD_WEIGHTS (below) |
-| Shelf | walls on both sides the whole way; only the front edge drops things: +1 coin and +1 ticket per coin |
+| Shelf | walls on both sides the whole way; only the front edge drops things: +1 coin and +1 ticket per coin, except into the jar |
+| Robot jar (1.2.0) | A glass jar with a robot face stands on the middle of the front lip (art.ts `drawJar`, drawn in code). A coin whose centre leaves the front within JAR_W / 2 = 22 world units of JAR_X = 220 (the middle 44 of the shelf's 440, **10.0 %** of the front edge, ~46 px on screen) drops into it and is kept: no coin back, no ticket (`fall` event `jar: true`, `State.eaten`). The jar munches (squash, happy eyes, chewing, "Măm!/Yum!", antenna lit) and its coins pile up inside. Its lane is marked over the coins: a terracotta tint, dashed cream rails at the section's exact edges and chevrons running toward it. Capsules and cards are never eaten: in the jar's section they count like anywhere else |
 | Core meter | 6 slots; only a capsule pushed off the **front** fills one. The sixth starts a **Super spin**: 80/100/150/200/250/300/500 tickets |
-| Cards | a card pushed off the **front** goes into the card inventory (`State.cards`, a count per cat: duplicates stack) and pays nothing by itself. `State.seen` marks cats ever collected. The player exchanges cards when they choose (below) |
-| Out of coins | coins at 0 and nothing in the air, on the wheel, in the stock or on the reels, and nothing has fallen for ~5.7 s: the machine **idles** (`State.idle`). There is no end state and no blocking panel: a strip by the coin counter shows the next daily coins (or, for a guest, a sign-in hint) and the code button; `grantCoins`, a coin exchange or a coin pushed off the shelf wakes it where it stood |
+| Cards | a card pushed off the **front** goes into the card inventory (`State.cards`, a count per cat: duplicates stack) and pays nothing by itself. `State.seen` marks cats ever collected. The player exchanges cards for tickets when they choose (below) |
+| Out of coins | coins at 0 and nothing in the air, on the wheel, in the stock or on the reels, and nothing has fallen for ~5.7 s: the machine **idles** (`State.idle`). There is no end state and no blocking panel: a strip over the shelf shows the next daily coins (the streak's next amount; for a guest, a sign-in hint) and the code button, and, signed in, a line pointing at the Prize Counter. `grantCoins` or a coin pushed off the shelf (not into the jar) wakes it where it stood |
+
+## 1.2.0
+
+- **The robot jar** is the machine's drain (above). Every shot ends up as about
+  one coin on the shelf whatever happens at the gate, so the jar keeps about a
+  tenth of every shot whatever the aim (Economy).
+- **The lid**: a full stock never wastes a coin (above).
+- **Prize spins pay about one coin back** (coin slots 1/2/2/1 → 2/4/2/2), so a
+  hit is worth no less than a miss and good aim only adds tickets.
+- **Cards for tickets only**: 60 a common card, 300 the Ragdoll, 1000 a full
+  set. The coin exchange (CARD_COINS, RARE_COINS, SET_COINS) is gone.
+- **The Prize Counter** (`manifest.shop`) and the **login streak**
+  (`allowance.streak` = STREAK, 50/60/70/80/90/100/150), both delivered by
+  `ctx.allowance.claim()` (game.ts `claimAllowance`): `coins` grants (welcome,
+  a daily with its `streakDay`, a `shop` purchase) go on the balance; a
+  `card-pack` grant rolls each card with `grantCard` (CARD_WEIGHTS on the
+  machine's seeded random, straight into the stash, `State.packCards`) and shows
+  it in the 3D card viewer, turning over from its back. Saved at once. Toasts:
+  "Chuỗi ngày 3: +70 xu", "Quầy đổi thưởng: +10 xu", "Quầy đổi thưởng: <cat>".
+- **Purchases arrive while the game is open**: besides the start and each
+  Vietnam midnight, the game claims when it runs again after a suspend (tab,
+  portal menu), on the first tap after 4 s without one (a dialog over the game,
+  such as the Prize Counter, held the taps), at most every 10 s, and every 20 s
+  while the out-of-coins strip shows. No window or document listeners.
+- **The Prize Counter from the game**: the portal gives a game no way to open
+  it, so the out-of-coins strip, signed in, points at the ticket chip instead
+  ("Thêm xu: bấm ô vé ngoài trang để mở Quầy đổi thưởng").
+- The item kind is `card-pack`, not `cardPack`: conventions.test.ts requires
+  kinds in lowercase kebab case.
+- **Saves**: schema 4 (below).
 
 ## 1.1.0
 
@@ -59,40 +90,113 @@ for asin(HOLE_HALF / GATE_AMP) / (π/2) = asin(0.45) / (π/2) = 29.7% of the tim
 | Fired while the ready cue shows | 100 % (2,000 shots): the cue is exact |
 | Well-timed taps, aimed at the middle of each green window with a normal timing error σ = 0.06 / 0.10 / 0.14 s | 96.2 / 78.4 / 62.0 % (2,000 shots each) |
 
-A green window lasts about 0.25 s, twice per swing. The test checks random and
-held in 26–34%, the cue at 100% and σ = 0.1 s at ≥ 75%.
+A green window lasts about 0.25 s, twice per swing. These rates are timing
+alone: a coin over the hole counts whether it drops in or knocks on the lid
+(1.2.0). The test checks random and held in 26–34%, the cue at 100% (it is off
+while the lid will be shut, so a cued shot always drops in) and σ = 0.1 s at
+≥ 75%. With the button held most of those coins find the lid shut (a spin takes
+2.15 s, hits come about once a second): 12% drop in.
 
 ## Economy (config.ts)
 
-Misses come back as a coin on the shelf and the side walls keep everything, so
-the only drain is coins swallowed by the hole minus what prizes give back.
+The side walls keep everything, misses and lid bounces come back as a coin on
+the shelf, and prize spins pay about a coin back, so every shot ends up as
+about one coin on the shelf. The only way out for a coin is the front edge,
+and the jar keeps the ones that fall in its tenth of it. The drain is that
+tenth, whatever the aim.
 
 The wheel (weights in percent; widths on the wheel are the same numbers),
-clockwise: t10 10 · c1 10 · t5 9.5 · c2 10 · core 8 · t20 10 · c1 10 · t100 7.5 ·
-c2 8.5 · card 7.5 · t50 9.
+clockwise: t10 10 · c2 10 · t5 9.5 · c4 10 · core 8 · t20 10 · c2 10 · t100 7.5 ·
+c2 8.5 · card 7.5 · t50 9. Slot order and kinds are as in 1.1.0; three coin
+slots pay more (c1 → c2 twice, c2 → c4 once).
 
 | Per prize spin | Expected value |
 | --- | --- |
 | Ticket slots (46%: 5/10/20/50/100 at 9.5/10/10/9/7.5) | 15.5 tickets |
-| Coin slots (38.5%: 1 at 20, 2 at 18.5) | 0.57 coins |
-| Core slot (8%) → Mini spin | 2.27 tickets + 0.046 coins |
-| Card slot (7.5%) | 0.075 cards (worth ≤ 5.3 tickets or ≤ 0.27 coins exchanged, below) |
-| **All of it** | **≤ 23.1 tickets, or ≤ 0.885 coins** (cards one way or the other) |
+| Coin slots (38.5%: 2 at 28.5, 4 at 10) | 0.97 coins, onto the shelf |
+| Core slot (8%) → Mini spin | 2.27 tickets + 0.046 coins (straight to the balance) |
+| Card slot (7.5%) | 0.075 cards, worth 5.0–5.3 tickets exchanged (below) |
+| **All of it** | **1.016 coins and ~23 tickets** |
 
 | Spin | Prizes | Weights | Expected value |
 | --- | --- | --- | --- |
-| Mini | T20 / C20 / T30 / C25 / T40 / C30 / T50 / C35 | 40 / 0.5 / 30 / 0.5 / 15 / 0.5 / 8 / 0.5 | 28.4 tickets + 0.58 coins (coins 2% of the time; was 4%) |
+| Mini | T20 / C20 / T30 / C25 / T40 / C30 / T50 / C35 | 40 / 0.5 / 30 / 0.5 / 15 / 0.5 / 8 / 0.5 | 28.4 tickets + 0.58 coins |
 | Super | 80 / 100 / 150 / 200 / 250 / 300 / 500 | 26 / 26 / 20 / 13 / 8 / 5 / 2 | 148 tickets |
 
-Expected coins back **per shot**: a miss comes back (via the shelf) and a hit
-pays a prize spin, so with hit rate h and every hit spun it is (1 − h) + h ×
-0.885: 0.966 at the 30% of random play, 0.885 with perfect aim. Below 1 at every
-hit rate, so no aim and no card strategy can run forever; with the button held
-the stock also swallows hits, so it drains faster.
+By the tables, with hit rate h: a miss puts 1 coin on the shelf, a hit 0.97 on
+the shelf plus 0.046 in hand. The jar keeps ~10% of what reaches the front, so
+coins back per shot ≈ 0.9 + h × 0.019: 0.906 at random aim (h 0.3), 0.919 at
+perfect aim. Perfect aim drains no faster than random, and no aim runs forever.
 
-The 4-coin slot of the first 1.1.0 draft became a second 2-coin slot and the
-Mini's coin prizes went from 1/1/1/1 to 0.5 each: with card exchange for coins
-on top, the 4 pushed perfect aim to ~1.0 coin a spin.
+### Drain per shot (measured)
+
+Steady state: a machine with coins to spare, 200 shots to settle, then 4,000
+more, 4 seeds each (bun over logic.ts, 2026-11-11). Drain = coins gone from the
+balance, the shelf and the air together, per shot; jar = coins the jar kept per
+shot. Tickets exclude cards; cards are shown per shot (each worth ~66.5 tickets
+exchanged one by one, up to ~70.8 with sets).
+
+| Play | Shots/s | Over the hole | Drain/shot | Jar/shot | Tickets/shot | Cards/shot |
+| --- | --- | --- | --- | --- | --- | --- |
+| Random taps (p 0.02 per step) | 0.94 | 29 % | 0.105 | 0.106 | 6.7 | 0.020 |
+| Button held / Auto | 4.0 | 12 % in (the lid takes most hits) | 0.099 | 0.103 | 3.4 | 0.006 |
+| Rhythm taps (every swing window, σ 0.1 s, lid or not) | 1.18 | 39 % in | 0.090 | 0.108 | 8.7 | 0.027 |
+| Perfect aim (only on the ready cue) | 0.46 | 100 % | 0.076 | 0.099 | 20.5 | 0.072 |
+
+The jar's share is 0.10 ± 0.01 in every style; perfect aim drains least (its
+Mini coins skip the jar). logic.test.ts measures random, held and perfect aim
+(3 seeds × 1,500 shots: 0.114 / 0.094 / 0.095) and checks each within
+0.05–0.14, the jar's share within 0.07–0.13, the spread under 0.05 and perfect
+aim no faster than random.
+
+### Simulated sessions (bun over logic.ts, 2026-11-11, final tuning)
+
+**The daily 50 coins on a played machine**: a machine that played its 100
+welcome coins held to idle, then 50 more. A new machine's shelf (~110–137
+prefilled coins) first fills up to its working level (~135–140), so its first
+coins last less; the daily always lands on a played shelf. Tickets a minute
+include the cards' value.
+
+| Play | Seeds | Minutes, mean | P10–P90 | Shots | Tickets a minute |
+| --- | --- | --- | --- | --- | --- |
+| Button held / Auto | 48 | **3.7** | 2.1–6.3 | 513 | 759 |
+| Casual taps (2 a second, no aim) | 32 | **7.3** | 2.7–13.5 | 560 | 611 |
+| Random taps (~0.94 a second) | 32 | 8.1 | 5.0–12.0 | 439 | 421 |
+| Rhythm taps (1.18 a second) | 32 | 9.3 | 4.3–13.8 | 605 | 676 |
+| Careful aim (green cue only, σ 0.1 s; waits while the lid is shut) | 16 | 17.0 | 8.5–29.0 | 633 | 686 |
+| Perfect aim | 8 | 24.7 (2 runs hit the 60-minute cap) | 9.2–60 | 682 | 716 |
+
+Targets: held 3–5 minutes (3.7 ✓), realistic tapping 5–8 minutes (casual 7.3 ✓;
+a steady rhythm tapper runs a little long at 9.3). Variance is large: a 4-coin
+slot or a Super spin early stretches a session a lot. The 100-coin trial on a
+new machine, held, 24 seeds: 4.9 minutes (3.5–7.3), 836 shots, ~668 machine
+tickets a minute (783 with cards).
+
+logic.test.ts runs eight seeds of each with explicit timeouts: the trial held
+(mean 3–7.5 minutes, 500–1,200 shots, 500–850 tickets a minute, coin share
+30–47 %), the daily 50 held (2.5–5.5 minutes; measured 3.9) and casual taps
+(4–11 minutes, longer than held; measured 5.5), and one perfect-aim run of 50
+coins that idles (26 minutes, 718 shots).
+
+### What a coin is worth in tickets
+
+Tickets earned (cards exchanged) per coin drained, from the steady state
+(tickets and cards per shot ÷ drain per shot) and the daily sessions:
+
+| Play | Steady state | Daily 50 sessions |
+| --- | --- | --- |
+| Button held | ~38 | 55 |
+| Random / casual taps | ~76 | 69 / 89 |
+| Rhythm taps | ~116 | 127 |
+| Careful aim | | 232 |
+| Perfect aim | ~334 | 350 |
+
+The Prize Counter sells 10 coins for 300 tickets, **30 tickets a coin**: below
+what any style earns from a coin, so buying coins pays for itself in tickets
+(more so the better the aim). The daily limit (3 bags, 30 coins a day) caps
+what that adds, roughly 1,000–10,000 tickets a day. A card pack (400 tickets for
+one card worth ~66.5 exchanged, or 100 toward a set) is a collector's buy, never
+a ticket gain.
 
 ### Card weights
 
@@ -103,58 +207,30 @@ seeds and checks every cat within 4 standard errors.
 
 ### Card exchange
 
-| Exchange | Tickets | Coins |
-| --- | --- | --- |
-| One common card (9 cats) | CARD_TICKETS = 60 | CARD_COINS = 3 |
-| One Ragdoll (rare) | RARE_TICKETS = 300 | RARE_COINS = 15 |
-| A full set of 10 (one of each, consumes 1 of each) | SET_TICKETS = 1000 | SET_COINS = 50 |
+Tickets only, when the player chooses:
+
+| Exchange | Tickets |
+| --- | --- |
+| One common card (9 cats) | CARD_TICKETS = 60 |
+| One Ragdoll (rare) | RARE_TICKETS = 300 |
+| A full set of 10 (one of each, consumes 1 of each) | SET_TICKETS = 1000 |
 
 Tickets go to the shared wallet (`ctx.tickets`; a guest's trial tickets) and
-count on the leaderboard; coins go on the balance (`grantCoins`). A card is worth
-at most ~70.8 tickets (sets wherever a Ragdoll allows: 1000/37 + 27/37 × 60) or
-~3.5 coins.
+count on the leaderboard. A card is worth ~66.5 tickets one by one, at most
+~70.8 with sets wherever a Ragdoll allows (1000/37 + 27/37 × 60).
 
-**Why the coin rates are not 25 / 120 / 400.** Those were the requested rates.
-A perfect player gets one prize spin per coin, so a card slot (7.5% of spins)
-paying ~29 coins a card (400/37 + 27/37 × 25) adds 2.2 coins a spin: 2.8 coins
-back per coin shot, an endless coin loop. Simulated (perfect aim, every card
-turned into coins at once): 2.2 coins back per prize spin, and the machine never
-idled within the 60-minute cap. At 3 / 15 / 50 the same player gets 0.69 coins
-back per prize spin (0.885 at most by the tables) and every run ends (below).
-Coins stay deliberately worth far less than tickets: 3 coins against 60 tickets.
+**Why the coin exchange went.** In 1.1.0 cards could also turn into coins (3 /
+15 / 50), kept that low so a card slot could never hand back more coins than its
+shot cost, which made the exchange feel bad. With prize spins now paying about
+a coin back, any coin from a card would tip perfect aim past one coin a shot
+and the machine would never run dry. Tickets only keeps cards worth having and
+the coin balance honest.
 
 The server's plausibility check allows up to RARE_TICKETS (300) tickets per card
 gone from the inventory since the last save, on top of the per-shot bound, so an
 exchange of a hoard with no shots in between is accepted and a jump without
-cards spent is not.
-
-### Simulated sessions (bun over logic.ts, 2026-11-11, final tuning)
-
-100 coins on a new machine (the trial, or the welcome), button held until it
-idles, 24 seeds; tickets are the machine's own (cards not exchanged):
-
-| | Mean | P10 | Median | P90 | Min–max |
-| --- | --- | --- | --- | --- | --- |
-| Shots | 486 | 343 | 481 | 631 | 279–726 |
-| Minutes | 3.6 | 2.1 | 3.9 | 4.7 | 1.7–5.4 |
-| Tickets | 2,145 | 1,328 | 2,243 | 2,767 | 1,019–3,171 |
-| Tickets a minute | 608 | 495 | 598 | 715 | 445–879 |
-| Gate hit rate | 29.5 % | 28.7 % | 29.5 % | 30.4 % | 28.5–30.8 % |
-| Coin slot share of prize spins | 36.7 % | 27.3 % | 37.3 % | 43.8 % | 24.6–49.1 % |
-| Coins back per prize spin | 0.60 | 0.42 | 0.57 | 0.81 | 0.36–1.08 |
-| Cards collected | 3.8 | 1 | 3 | 7 | 0–10 |
-
-1.0.0, same harness: 373 shots, 2.4 minutes, ~634 tickets a minute *including*
-the 60 tickets each card paid automatically. 1.1.0 lasts half again as long, at
-~608 tickets a minute before cards (the ~3.8 cards add ~250 tickets or ~13 coins
-when exchanged). logic.test.ts runs eight seeds and checks the means: 2.8–6
-minutes, 300–750 shots, 480–800 tickets a minute, coin share 30–47%.
-
-Perfect, paced play (fires only on the ready cue and only while a stock lamp is
-free), every card exchanged for coins at once, 6 seeds: 296–885 shots over
-10.9–32 minutes (mean 18), 0.69 coins back per prize spin, ~577 tickets a
-minute, ~28 cards a run. Skill stretches the coins about 5×, not forever.
-logic.test.ts runs two seeds of it and checks they idle with < 1 coin back a spin.
+cards spent is not. Cards from the Prize Counter enter the stash without shots;
+exchanging them later is accepted the same way.
 
 ## Saves (save.ts)
 
@@ -165,12 +241,21 @@ logic.test.ts runs two seeds of it and checks they idle with < 1 coin back a spi
 | 1 | early 1.0.0 | the plain State, album as owned flags |
 | 2 | 1.0.0 | bodies and flights packed into tuples, floats rounded, album as a bit mask |
 | 3 | 1.1.0 | as 2 on the 11-slot wheel, with `cards` (a count per cat) and `seen` (bit mask) instead of the album |
+| 4 | 1.2.0 | as 3, plus `eaten` (coins the jar kept) and `packCards` (cards bought at the Prize Counter) |
 
 2 → 3 (`toV3`): each owned cat becomes a count of 1 and is seen; a prize spin
 running on the old 24-slot wheel is dropped, refunded into the stock (capped at
 4) if it had not paid; coins on their way up land on LAND_X. Coins, lifetime
 tickets, cores and the shelf carry over. save.test.ts migrates a live-shaped
 1.0.0 save and checks all of it.
+
+3 → 4 (`toV4`): `eaten` and `packCards` start at 0; nothing else changes. The
+wheel kept its slots in the same order, so a prize spin saved mid-run stays on
+its slot (a coin slot pays the 1.2.0 amount). 1.1.0 paid card exchanges at once,
+so there are no pending coin exchanges to convert. save.test.ts migrates a
+live-shaped 1.1.0 save (a stash, a spin running, coins in the air), checks the
+machine is otherwise identical, that the server accepts the next save after
+it, and walks a 1.0.0 save all the way up.
 
 ## Physics (physics.ts)
 
@@ -186,5 +271,6 @@ The renderer tilts the shelf into a 3/4 view and draws piles as offset discs.
 ## Changed from the genre
 
 - No real money, tokens or prizes: tickets are only the score; the cards are
-  in-game collectibles only (no trading, nothing to buy).
+  in-game collectibles only (no trading; the Prize Counter sells them for
+  tickets, never for money).
 - Solo only (no online, no computer player).

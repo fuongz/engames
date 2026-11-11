@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CARD_COUNT, COIN_R, LAND_X, MAX_BODIES, MAX_STACK, PRIZE_QUEUE_MAX, SHELF_D, SHELF_W, TRIAL_COINS, VERSION, WHEEL } from "./config";
-import { type State, createMachine, drainTickets, exchangeCard, exchangeSet, grantCoins, update } from "./logic";
-import { type PackedV2, SAVE_MAX_BYTES, SCHEMA, fromSave, migrate, pack, parseSave, plausible, rules, toSave, toV3 } from "./save";
+import { type State, createMachine, drainTickets, exchangeCard, exchangeSet, grantCard, grantCoins, update } from "./logic";
+import { type PackedV2, type PackedV3, SAVE_MAX_BYTES, SCHEMA, fromSave, migrate, pack, parseSave, plausible, rules, toSave, toV3, toV4 } from "./save";
 
 const DT = 1 / 60;
 
@@ -160,7 +160,7 @@ describe("migrate", () => {
   /** A live 1.0.0 save (schema 2): the album a bit mask, a prize running on the old 24-slot wheel, a coin on its way up. */
   function v100(seed: number, album: number, prize: { seg: number; t: number; paid: boolean } | null, stock: number) {
     const s = midPlay(seed);
-    const { cards: _c, seen: _s, ...state } = pack(s);
+    const { cards: _c, seen: _s, eaten: _e, packCards: _p, ...state } = pack(s);
     const v2: PackedV2 = { ...state, album, prize, stock };
     v2.flights = [...v2.flights, [v2.nextId, 0.2, 0, SHELF_W / 2, 27.5, 0, -1]];
     v2.nextId++;
@@ -206,6 +206,78 @@ describe("migrate", () => {
     expect(() => toV3({} as PackedV2)).toThrow();
   });
 
+  /** A live 1.1.0 save (schema 3): a stash of cards, a prize spin running, coins in the air, no jar or pack counters. */
+  function v110(seed: number) {
+    const s = midPlay(seed);
+    s.cards = [3, 0, 1, 2, 0, 1, 0, 0, 5, 1];
+    s.seen = [true, true, true, true, false, true, false, false, true, true];
+    s.prize = { seg: 3, t: 0.6, paid: false };
+    s.stock = 2;
+    const { eaten: _e, packCards: _p, ...state } = pack(s);
+    const v3: PackedV3 = state;
+    return { s, save: JSON.parse(JSON.stringify({ v: "1.1.0", schema: 3, state: v3 })) as { v: string; schema: number; state: PackedV3 } };
+  }
+
+  it("migrates a live 1.1.0 save to 1.2.0: everything kept, the jar and pack counters from 0", () => {
+    expect(SCHEMA).toBe(4);
+    const { s, save } = v110(41);
+    expect("eaten" in save.state).toBe(false);
+    const m = migrate(save);
+    expect(m.ok).toBe(true);
+    if (!m.ok) return;
+    expect(m.save.schema).toBe(SCHEMA);
+    expect(m.save.v).toBe("1.1.0");
+    const back = fromSave(m.save);
+    expect(back.eaten).toBe(0);
+    expect(back.packCards).toBe(0);
+    // The machine itself is untouched: coins, tickets, the stash, the shelf, the running spin and the stock
+    const { eaten: _e, packCards: _p, ...rest } = back;
+    const { eaten: _e2, packCards: _p2, ...want } = fromSave(toSave(s));
+    expect(rest).toEqual(want);
+    expect(back.cards).toEqual([3, 0, 1, 2, 0, 1, 0, 0, 5, 1]);
+    expect(back.prize).toEqual({ seg: 3, t: 0.6, paid: false });
+    expect(back.stock).toBe(2);
+    // Saved again it is a plain current save, and the server takes it after the old one
+    const again = JSON.parse(JSON.stringify(toSave(back)));
+    expect(migrate(again)).toEqual({ ok: true, save: again });
+    const prev = parseSave(save);
+    expect(prev && plausible(prev, again)).toBe(true);
+    // Its old cards exchange for tickets only, and it plays on
+    expect(exchangeCard(back, 0)).toBe(60);
+    expect(back.coins).toBe(s.coins);
+    expect(update(back, { shoot: true }, DT).some((e) => e.type === "shoot")).toBe(true);
+  });
+
+  it("walks a 1.0.0 save all the way up through 1.1.0", () => {
+    const { save } = v100(36, 0b11, null, 1);
+    const m = migrate(save);
+    expect(m.ok && m.save.schema).toBe(SCHEMA);
+    expect(m.ok && m.save.state.eaten).toBe(0);
+    expect(m.ok && m.save.state.packCards).toBe(0);
+    expect(m.ok && m.save.state.cards.slice(0, 3)).toEqual([1, 1, 0]);
+  });
+
+  it("refuses a broken 1.1.0 save, and a current one without the new counters", () => {
+    const { save } = v110(42);
+    (save.state as unknown as Record<string, unknown>).cards = "lots";
+    expect(migrate(save)).toEqual({ ok: false, reason: "broken" });
+    expect(() => toV4({} as PackedV3)).toThrow();
+    const current = JSON.parse(JSON.stringify(toSave(midPlay(43))));
+    delete current.state.eaten;
+    expect(migrate(current)).toEqual({ ok: false, reason: "broken" });
+  });
+
+  it("keeps the jar's and the Prize Counter's counters across a save", () => {
+    const s = midPlay(44);
+    s.eaten = 37;
+    grantCard(s);
+    grantCard(s);
+    const back = fromSave(JSON.parse(JSON.stringify(toSave(s))));
+    expect(back.eaten).toBe(37);
+    expect(back.packCards).toBe(2);
+    expect(back.cards).toEqual(s.cards);
+  });
+
   it("leaves a current save as it is", () => {
     const save = JSON.parse(JSON.stringify(toSave(midPlay(5))));
     const m = migrate(save);
@@ -219,6 +291,8 @@ describe("migrate", () => {
       (x: { state: Record<string, unknown> }) => (x.state.coins = 1.5),
       (x: { state: Record<string, unknown> }) => (x.state.lifetimeTickets = "lots"),
       (x: { state: Record<string, unknown> }) => (x.state.stock = 99),
+      (x: { state: Record<string, unknown> }) => (x.state.eaten = -1),
+      (x: { state: Record<string, unknown> }) => (x.state.packCards = 0.5),
       (x: { state: Record<string, unknown> }) => (x.state.seen = 5000),
       (x: { state: Record<string, unknown> }) => (x.state.cards = [1, 2]),
       (x: { state: Record<string, unknown> }) => (x.state.cards = Array(CARD_COUNT).fill(-1)),
@@ -271,8 +345,8 @@ describe("the server's rules", () => {
     s.seen = s.cards.map(() => true);
     const prev = at(s);
     // Ten sets and a heap of Ragdolls in one go: well past the per-save slack
-    for (let i = 0; i < 10; i++) exchangeSet(s, "tickets");
-    for (let i = 0; i < 10; i++) exchangeCard(s, 5, "tickets");
+    for (let i = 0; i < 10; i++) exchangeSet(s);
+    for (let i = 0; i < 10; i++) exchangeCard(s, 5);
     drainTickets(s);
     const next = at(s);
     expect(prev && next && plausible(prev, next)).toBe(true);
@@ -280,6 +354,18 @@ describe("the server's rules", () => {
     if (!prev || !next) throw new Error("no save");
     const free = { ...prev, state: { ...prev.state, lifetimeTickets: next.state.lifetimeTickets } };
     expect(plausible(prev, free)).toBe(false);
+  });
+
+  it("accepts cards bought at the Prize Counter and exchanged with no shots between saves", () => {
+    const s = midPlay(15);
+    const prev = at(s);
+    for (let i = 0; i < 25; i++) grantCard(s);
+    const bought = at(s);
+    expect(prev && bought && plausible(prev, bought)).toBe(true);
+    for (let c = 0; c < CARD_COUNT; c++) while (s.cards[c] > 0) exchangeCard(s, c);
+    drainTickets(s);
+    const next = at(s);
+    expect(bought && next && plausible(bought, next)).toBe(true);
   });
 
   it("refuses tickets going backwards, or out of thin air", () => {

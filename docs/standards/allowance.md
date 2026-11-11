@@ -1,9 +1,11 @@
 # Allowance
 
 A free, server-granted payout of a game's own currency: a **welcome** once per
-account, then a **daily** once per Vietnam day. The server records every grant,
-so a player cannot claim twice by reloading, racing two tabs or changing the
-device clock.
+account, then a **daily** once per Vietnam day, optionally growing with a
+**login streak**. The same claim also delivers what the player bought for the
+game at the [Prize Counter](tickets.md#4-the-prize-counter-shop). The server
+records every grant, so a player cannot claim twice by reloading, racing two
+tabs or changing the device clock.
 
 ---
 
@@ -13,6 +15,12 @@ device clock.
   `ctx.allowance.claim()` (signed-in players only, never online).
 - **The first claim grants the welcome only.** The first daily comes the next
   Vietnam day, then one per Vietnam day (00:00 Asia/Ho_Chi_Minh, UTC+7).
+- **A streak** (`allowance.streak`, optional) makes the daily grow: day n of an
+  unbroken run pays `streak[(n − 1) % streak.length]`. A missed day starts over
+  at day 1; the welcome day is not a streak day. Computed from the grant rows,
+  no extra table.
+- **Purchases ride along.** Every Prize Counter purchase for this game not yet
+  delivered comes back in the same claim as a `shop` grant.
 - **The server decides and records.** `claimAllowance`
   (`apps/web/src/server/db/allowance.ts`) inserts the rows; only grants created
   by *this* call come back.
@@ -57,6 +65,36 @@ comment above `claimAllowance` has the full argument; `allowance.test.ts` races 
 A game with `welcome: 0` still gets its welcome row (amount 0, not returned):
 the dailies key off it.
 
+### The login streak
+
+With `allowance.streak` set, the daily on the **n-th consecutive Vietnam day
+that has a daily row** pays `streak[(n − 1) % streak.length]`; without it, every
+daily pays `allowance.daily`.
+
+| Rule | Why it holds |
+| --- | --- |
+| The cycle restarts after the last entry | `(n − 1) % length`: with 7 entries, day 8 pays `streak[0]` again |
+| A missed day resets to day 1 | n counts only an **unbroken** run of daily rows ending today |
+| The welcome day is not a streak day | it has no daily row; the first daily (the next day) is day 1 |
+
+`readStreak` (`apps/web/src/server/db/allowance.ts`) reads n from the
+`allowance_grant` rows themselves with one gaps-and-islands query: the dailies
+numbered newest first sit exactly `rn − 1` days before today while the run is
+unbroken, and the first gap pushes every older row out of the count. The amount
+is read just before the daily insert; only today's row can be written
+concurrently, and its primary key turns the race into a no-op for the loser, so
+the run that decides the amount cannot change underneath it.
+
+Deleting a past daily row (a reset, below) breaks the run at that day.
+
+### Prize Counter grants
+
+A purchase waits in `pending_grant` (see [`tickets.md`](tickets.md) §4). The
+claim stamps every unclaimed row of this player and game with one
+`UPDATE … SET claimed_at = now WHERE claimed_at IS NULL … RETURNING`, so of two
+racing claims exactly one gets each purchase. Pending grants come back even on
+the welcome day and alongside the daily.
+
 ---
 
 ## 2. How a game opts in
@@ -66,6 +104,9 @@ the dailies key off it.
 const manifest: GameManifest = {
   // …
   allowance: { kind: "coins", welcome: 100, daily: 50 },
+  // Optional: a 7-day login streak instead of the flat daily (Xu Vũ Trụ's,
+  // added to its manifest by its own task)
+  // allowance: { kind: "coins", welcome: 100, daily: 50, streak: [50, 60, 70, 80, 90, 100, 150] },
 };
 ```
 
@@ -75,10 +116,16 @@ export function setup(rt: Runtime): GameHooks {
   const { storage, allowance } = rt.game;
 
   // Missing signed out, outside the portal, and in an online match
-  void allowance?.claim().then(({ grants, nextDailyAt }) => {
+  void allowance?.claim().then(({ grants, nextDailyAt, nextDailyAmount, streakDay }) => {
     for (const g of grants) if (g.kind === "coins") state.coins += g.amount;
     if (grants.length > 0) save(); // NOW: the server will never send these again
+    for (const g of grants) {
+      if (g.type === "daily") toast(tr().streakDay(g.streakDay, g.amount)); // "Day 3: +70"
+      if (g.type === "shop") toast(tr().prizeArrived(g.itemId, g.amount));
+    }
     state.nextDailyAt = nextDailyAt; // a countdown, if the game shows one
+    state.tomorrow = nextDailyAmount; // "Come back tomorrow for +80"
+    state.streakDay = streakDay; // today's streak day, 0 on the welcome day
   });
   // …
 }
@@ -87,10 +134,19 @@ export function setup(rt: Runtime): GameHooks {
 - `claim()` is cheap and idempotent: call it at start, and again when the
   countdown reaches `nextDailyAt` if the game stays open.
 - `grants` is empty when nothing is due. Each grant is
-  `{ kind, amount, type: "welcome" | "daily" }`.
+  `{ kind, amount, type }`: `"welcome"`; `"daily"` with `streakDay` (n, 1-based,
+  it keeps counting past the cycle: show `((n − 1) % length) + 1` for a 7-day
+  calendar); or `"shop"` with `itemId` (a Prize Counter purchase).
+- `nextDailyAmount` is what tomorrow's daily pays if the player keeps the
+  streak (with no streak, `daily`). `streakDay` is today's streak day, 0 when
+  today has no daily (the welcome day).
+- A purchase made while the game is open arrives on the **next** `claim()`:
+  claim at start, at `nextDailyAt`, and when the game comes back to the
+  foreground.
 - The server refuses (`claimAllowanceFn`, `apps/web/src/server/allowance.ts`)
   any slug whose manifest has no `allowance`, and anyone signed out
-  (`sign-in-required`).
+  (`sign-in-required`). That is why a game with a `shop` must also declare
+  `allowance` (`conventions.test.ts` checks it).
 
 ---
 
@@ -102,7 +158,7 @@ database, `--remote` for production. Pass SQL through a quoted heredoc (see
 
 ```sh
 cd apps/web
-bunx wrangler d1 migrations apply prod-engames --local   # once, for 0008
+bunx wrangler d1 migrations apply prod-engames --local   # once, for 0008 and 0009
 bunx wrangler d1 execute prod-engames --local --command "$(cat <<'SQL'
 SELECT 1;
 SQL
@@ -120,6 +176,21 @@ JOIN game g ON g.id = a.game_id
 JOIN user u ON u.id = a.user_id
 WHERE u.email = 'player@example.com'
 ORDER BY a.granted_at DESC;
+```
+
+### One player's streak in one game
+
+Each row is a daily; an unbroken run of dates ending today (or yesterday, before
+today's claim) is the current streak.
+
+```sql
+SELECT a.day, a.amount
+FROM allowance_grant a
+WHERE a.user_id = (SELECT id FROM user WHERE email = 'player@example.com')
+  AND a.game_id = (SELECT id FROM game WHERE slug = 'xu-vu-tru')
+  AND a.type = 'daily'
+ORDER BY a.day DESC
+LIMIT 14;
 ```
 
 ### Today's dailies, per game

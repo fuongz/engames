@@ -89,13 +89,40 @@ export interface GameManifest {
    * A server-granted allowance (docs/standards/allowance.md): `welcome` once per
    * account, then `daily` once per Vietnam day, both of currency `kind` (e.g.
    * "coins"). Signed-in players get `GameContext.allowance`.
+   *
+   * `streak` (optional) replaces the flat `daily` with a login streak: on the
+   * n-th consecutive Vietnam day with a daily grant the player gets
+   * `streak[(n - 1) % streak.length]`. A missed day starts over at day 1; the
+   * welcome day is not a streak day.
    */
-  allowance?: { kind: string; welcome: number; daily: number };
+  allowance?: { kind: string; welcome: number; daily: number; streak?: number[] };
   /**
    * Pays out into the shared arcade ticket wallet (docs/standards/tickets.md).
    * Signed-in players get `GameContext.tickets`.
    */
   tickets?: boolean;
+  /**
+   * Items the portal's Prize Counter sells for shared arcade tickets
+   * (docs/standards/tickets.md §4). A bought item reaches the game through
+   * `ctx.allowance.claim()` as a `{ type: "shop" }` grant, so a game with a shop
+   * must also declare `allowance`.
+   */
+  shop?: ShopItem[];
+}
+
+/** One Prize Counter item: `amount` of the game's currency `kind`, for `price` tickets. */
+export interface ShopItem {
+  /** Stable id, unique in the game: it names the purchase in the ledger. Never rename one. */
+  id: string;
+  /** What the player sees in the Prize Counter. */
+  name: Localized<string>;
+  /** The game-defined currency granted, e.g. "coins". */
+  kind: string;
+  amount: number;
+  /** In shared arcade tickets. */
+  price: number;
+  /** How many one player may buy per Vietnam day (unlimited when missing). */
+  dailyLimit?: number;
 }
 
 /**
@@ -172,25 +199,38 @@ export interface GameContext {
   tickets?: GameTickets;
 }
 
-/** One allowance payout the server just recorded. */
-export interface AllowanceGrant {
-  kind: string;
-  amount: number;
-  type: "welcome" | "daily";
+/**
+ * One payout the server just recorded: the welcome, a daily (with its login
+ * streak day, 1-based), or a Prize Counter purchase (`itemId` of `manifest.shop`).
+ */
+export type AllowanceGrant =
+  | { type: "welcome"; kind: string; amount: number }
+  | { type: "daily"; kind: string; amount: number; streakDay: number }
+  | { type: "shop"; kind: string; amount: number; itemId: string };
+
+export interface AllowanceClaim {
+  grants: AllowanceGrant[];
+  /** The next Vietnam midnight (unix ms): when the next daily is due. */
+  nextDailyAt: number;
+  /** What the next daily will pay if the player claims it on time (keeps the streak). */
+  nextDailyAmount: number;
+  /** Today's login streak day (1-based), or 0 when today has no daily (the welcome day). */
+  streakDay: number;
 }
 
 export interface GameAllowance {
   /**
    * Ask the server for whatever is due now: the welcome once per account, then
    * one daily per Vietnam day (the first daily comes the Vietnam day after the
-   * welcome). `grants` is empty when nothing is due; `nextDailyAt` is the next
-   * Vietnam midnight (unix ms), for a countdown.
+   * welcome), plus every Prize Counter purchase for this game not yet delivered.
+   * `grants` is empty when nothing is due; `nextDailyAt` is the next Vietnam
+   * midnight (unix ms), for a countdown.
    *
    * The server has ALREADY recorded every grant it returns, and will never send
    * it again: persist it IMMEDIATELY (storage or cloud save), before anything
    * else can go wrong.
    */
-  claim(): Promise<{ grants: AllowanceGrant[]; nextDailyAt: number }>;
+  claim(): Promise<AllowanceClaim>;
 }
 
 export interface GameTickets {

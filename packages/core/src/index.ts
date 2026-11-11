@@ -24,6 +24,7 @@ export { type PointerInfo, Stage, type StageHandlers } from "./stage";
 export { type GameStorage, createStorage } from "./storage";
 export { fitFontSize } from "./text";
 export {
+  type AllowanceClaim,
   type AllowanceGrant,
   type CloudSave,
   type CloudSaveResult,
@@ -40,6 +41,7 @@ export {
   type GameTickets,
   type OnlineMatch,
   type ScoreReport,
+  type ShopItem,
   SUMMARY_KEY,
   summaryText,
 } from "./types";

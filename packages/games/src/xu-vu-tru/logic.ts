@@ -2,7 +2,6 @@ import { nextRandom } from "@web-games/core/math";
 import {
   CARD_COUNT,
   CARD_R,
-  CARD_COINS,
   CARD_TICKETS,
   CARD_WEIGHTS,
   COIN_DROP_GAP,
@@ -18,6 +17,8 @@ import {
   GATE_WOBBLE,
   GATE_WOBBLE_PERIOD,
   HOLE_HALF,
+  JAR_W,
+  JAR_X,
   LAND_X,
   MAX_BODIES,
   MAX_STACK,
@@ -34,10 +35,8 @@ import {
   PUSH_MAX,
   PUSH_MIN,
   PUSH_PERIOD,
-  RARE_COINS,
   RARE_TICKETS,
   SETTLE_TIME,
-  SET_COINS,
   SET_TICKETS,
   SHELF_D,
   SHELF_W,
@@ -57,11 +56,14 @@ import { type Body, stepShelf } from "./physics";
 
 // The rules of the machine: spend a coin, it lands on the swinging gate under the
 // wheel's hub; in the hole it starts a prize spin (a weighted pick of a wheel slot:
-// tickets, a rain of coins, an energy capsule or a cat card), off the hole it
-// bounces down onto the shelf. Anything dropped lands on the shelf, and the shelf
-// pushes things off. A card pushed off the front joins the card inventory (a
-// count per cat, duplicates stack) and pays nothing until the player exchanges
-// it (exchangeCard, exchangeSet). Pure and seeded:
+// tickets, a rain of coins, an energy capsule or a cat card), off the hole (or
+// off its lid, shut while the prize stock is full) it bounces down onto the
+// shelf. Anything dropped lands on the shelf, and the shelf pushes things off.
+// Coins pushed off the front come back with a ticket, except in the middle,
+// where the robot jar keeps them (the machine's drain). A card pushed off the
+// front joins the card inventory (a count per cat, duplicates stack) and pays
+// nothing until the player exchanges it for tickets (exchangeCard,
+// exchangeSet). Pure and seeded:
 // the random state is a number in the state, so a session replays exactly and the
 // whole state (the card inventory included) can be saved as JSON (see save.ts).
 //
@@ -125,6 +127,10 @@ export interface State {
   shots: number;
   /** Coins pushed off the front (and given back). */
   returned: number;
+  /** Coins pushed off the front into the robot jar (kept by the machine). */
+  eaten: number;
+  /** Cards that came from the Prize Counter (grantCard), not off the shelf. */
+  packCards: number;
   wheel: number;
   /** The gate's swing phase (radians); the hole is at GATE_AMP·sin(gate). */
   gate: number;
@@ -162,14 +168,19 @@ export interface Input {
 export type GameEvent =
   | { type: "shoot" }
   | { type: "dry" }
-  /** A coin reached the gate at `x` (px from its centre) with the hole at `hole`. `full`: in the hole, but the stock was full. */
-  | { type: "gate"; hit: boolean; full: boolean; x: number; hole: number }
+  /**
+   * A coin reached the gate at `x` (px from its centre) with the hole at `hole`.
+   * `lid`: it was over the hole, but the stock was full and the lid shut, so it
+   * bounced off onto the shelf like a miss (`hit` false).
+   */
+  | { type: "gate"; hit: boolean; lid: boolean; x: number; hole: number }
   | { type: "prizeStart"; seg: number }
   | { type: "prizeWin"; seg: number; segment: Segment }
   | { type: "tickets"; amount: number; source: "wheel" | "front" | "mini" | "super" }
   | { type: "coinsWon"; amount: number }
   | { type: "land"; id: number; x: number; y: number; kind: Body["kind"]; stacked: boolean }
-  | { type: "fall"; x: number; y: number; edge: "front" | "side"; stack: number; kind: Body["kind"]; core: number; card: number }
+  /** Something left the shelf. `jar`: coins over the front into the robot jar (kept, nothing paid). */
+  | { type: "fall"; x: number; y: number; edge: "front" | "side"; stack: number; kind: Body["kind"]; core: number; card: number; jar: boolean }
   | { type: "coreIn"; count: number }
   | { type: "spinStart"; kind: SpinKind; idx: number }
   | { type: "spinWin"; kind: SpinKind; idx: number; prize: Prize }
@@ -215,28 +226,77 @@ export const holeAt = (gate: number) => GATE_AMP * Math.sin(gate);
 /** Whether a coin landing at `x` on the gate drops into a hole centred at `hole`. */
 export const inHole = (x: number, hole: number) => Math.abs(x - hole) <= HOLE_HALF;
 
+/** Whether the hole's lid is shut: every stock lamp lit, so a coin over the hole bounces off it. */
+export const lidShut = (s: State) => s.stock >= PRIZE_QUEUE_MAX;
+
+/** Whether a coin pushed off the front at world x drops into the robot jar. */
+export const inJar = (x: number) => Math.abs(x - JAR_X) <= JAR_W / 2;
+
+const PRIZE_TOTAL = PRIZE_SPIN_TIME + PRIZE_HOLD;
+
 /**
- * Where the hole will be when a coin shot on the next step lands (FLIGHT_UP
- * later), stepping the swing forward exactly as update() will at steps of `dt`.
- * A shot fired on step n reaches the gate on the step its flight time first
- * passes FLIGHT_UP, ceil(FLIGHT_UP / dt) gate steps after this state.
+ * A coin shot on the next step, as it reaches the gate (FLIGHT_UP later): where
+ * the hole will be, and whether the lid will be shut then. Steps the swing, the
+ * coins already in the air and the prize spins forward exactly as update() will
+ * at steps of `dt` (the same order: the gate, then flights oldest first, then the
+ * wheel), without touching `s`. A shot fired on step n reaches the gate on the
+ * step its flight time first passes FLIGHT_UP, ceil(FLIGHT_UP / dt) steps on.
  */
-export function holeOnArrival(s: State, dt = 1 / 60) {
+export function onArrival(s: State, dt = 1 / 60) {
   const n = Math.ceil(FLIGHT_UP / dt - 1e-9);
   let g = s.gate;
   let t = s.t;
+  let stock = s.stock;
+  let prize = s.prize ? s.prize.t : -1;
+  const ups: number[] = [];
+  const aims: number[] = [];
+  for (const f of s.flights)
+    if (f.phase === "up") {
+      ups.push(f.t);
+      aims.push(f.aim);
+    }
   for (let i = 0; i < n; i++) {
     t += dt;
     g += gateSpeed(t) * dt;
+    if (i === n - 1) {
+      // Older coins reach the gate first, in this same step
+      for (let j = 0; j < ups.length; j++) if (ups[j] >= 0 && ups[j] + dt >= FLIGHT_UP && inHole(aims[j], holeAt(g)) && stock < PRIZE_QUEUE_MAX) stock++;
+      return { hole: holeAt(g), lid: stock >= PRIZE_QUEUE_MAX };
+    }
+    for (let j = 0; j < ups.length; j++) {
+      if (ups[j] < 0) continue;
+      ups[j] += dt;
+      if (ups[j] >= FLIGHT_UP) {
+        if (inHole(aims[j], holeAt(g)) && stock < PRIZE_QUEUE_MAX) stock++;
+        ups[j] = -1;
+      }
+    }
+    if (prize < 0 && stock > 0) {
+      stock--;
+      prize = 0;
+    }
+    if (prize >= 0) {
+      prize += dt;
+      if (prize >= PRIZE_TOTAL) prize = -1;
+    }
   }
-  return holeAt(g);
+  return { hole: holeAt(g), lid: stock >= PRIZE_QUEUE_MAX };
 }
+
+/** Where the hole will be when a coin shot on the next step lands (see onArrival). */
+export const holeOnArrival = (s: State, dt = 1 / 60) => onArrival(s, dt).hole;
 
 /** Px of slack the ready cue keeps inside the hole's edge, for frames that run a little long or short. */
 export const READY_MARGIN = 2;
 
-/** Whether a shot fired now would drop into the hole (the gate's green ready cue). */
-export const readyToShoot = (s: State, dt = 1 / 60) => Math.abs(holeOnArrival(s, dt) - LAND_X) <= HOLE_HALF - READY_MARGIN;
+/**
+ * Whether a shot fired now would drop into the hole (the gate's green ready
+ * cue): over the hole on arrival, with the lid open then.
+ */
+export function readyToShoot(s: State, dt = 1 / 60) {
+  const a = onArrival(s, dt);
+  return !a.lid && Math.abs(a.hole - LAND_X) <= HOLE_HALF - READY_MARGIN;
+}
 
 /** The prize a spin of this kind pays at reel index `idx`. */
 export function prizeOf(kind: SpinKind, idx: number): Prize {
@@ -287,6 +347,8 @@ export function createMachine(seed: number, coins = 0, album: unknown = null): S
     cardsWon: 0,
     shots: 0,
     returned: 0,
+    eaten: 0,
+    packCards: 0,
     wheel: 0,
     gate: 0,
     gateShots: 0,
@@ -349,19 +411,21 @@ function drop(s: State, kind: Flight["kind"], x: number, t = 0, extra: Partial<F
 
 /**
  * The shot coin lands on the gate. In the hole: swallowed, and one more prize
- * spin in the stock (none if the stock is full). Off the hole: it bounces and
- * falls onto the shelf as one coin at a seeded spot.
+ * spin in the stock. Off the hole, or on the lid (shut while the stock is full):
+ * it bounces and falls onto the shelf as one coin at a seeded spot. Nothing is
+ * ever swallowed for nothing.
  */
 function hitGate(s: State, f: Flight, ev: GameEvent[]) {
   const hole = holeAt(s.gate);
-  const hit = inHole(f.aim, hole);
-  const full = hit && s.stock >= PRIZE_QUEUE_MAX;
+  const over = inHole(f.aim, hole);
+  const lid = over && lidShut(s);
+  const hit = over && !lid;
   s.gateShots++;
   if (hit) {
     s.gateHits++;
-    if (!full) s.stock++;
+    s.stock++;
   } else drop(s, "coin", dropX(s, COIN_R), 0, { aim: f.aim });
-  ev.push({ type: "gate", hit, full, x: f.aim, hole });
+  ev.push({ type: "gate", hit, lid, x: f.aim, hole });
 }
 
 /** A prize spin stopped on slot `seg`: pay it by the slot's rules. */
@@ -472,46 +536,51 @@ function collectCard(s: State, card: number, ev: GameEvent[]) {
   ev.push({ type: "card", card, fresh, count: s.cards[card] });
 }
 
-export type Reward = "tickets" | "coins";
-
-/** What exchanging one card of this cat pays, in tickets or coins. */
-export const cardRate = (card: number, reward: Reward) =>
-  isRare(card) ? (reward === "tickets" ? RARE_TICKETS : RARE_COINS) : reward === "tickets" ? CARD_TICKETS : CARD_COINS;
-/** What exchanging a full set (one of each cat) pays. */
-export const setRate = (reward: Reward) => (reward === "tickets" ? SET_TICKETS : SET_COINS);
+/** What exchanging one card of this cat pays, in tickets. */
+export const cardRate = (card: number) => (isRare(card) ? RARE_TICKETS : CARD_TICKETS);
+/** What exchanging a full set (one of each cat) pays, in tickets. */
+export const setRate = () => SET_TICKETS;
 
 /** Whether the inventory holds a full set: at least one card of every cat. */
 export const hasSet = (s: State) => s.cards.length === CARD_COUNT && s.cards.every((c) => c > 0);
 
-/** Pay an exchange: tickets join the lifetime count and wait for the shell (drainTickets); coins go on the balance. */
-function payReward(s: State, reward: Reward, n: number) {
-  if (reward === "tickets") earn(s, n);
-  else grantCoins(s, n);
-}
-
 /**
- * Exchange one card of cat `card` for tickets or coins (cardRate). Returns what
- * it paid, or 0 (and changes nothing) when there is no such card.
+ * Exchange one card of cat `card` for tickets (cardRate): they join the lifetime
+ * count and wait for the shell (drainTickets). Returns what it paid, or 0 (and
+ * changes nothing) when there is no such card.
  */
-export function exchangeCard(s: State, card: number, reward: Reward): number {
+export function exchangeCard(s: State, card: number): number {
   if (!Number.isInteger(card) || card < 0 || card >= CARD_COUNT || !(s.cards[card] > 0)) return 0;
-  const n = cardRate(card, reward);
+  const n = cardRate(card);
   s.cards[card]--;
-  payReward(s, reward, n);
+  earn(s, n);
   return n;
 }
 
 /**
  * Exchange a full set, one card of each of the ten cats, for the set bonus in
- * tickets or coins (setRate). Returns what it paid, or 0 without a full set.
+ * tickets (setRate). Returns what it paid, or 0 without a full set.
  */
-export function exchangeSet(s: State, reward: Reward): number {
+export function exchangeSet(s: State): number {
   if (!hasSet(s)) return 0;
   for (let i = 0; i < CARD_COUNT; i++) s.cards[i]--;
   s.sets++;
-  const n = setRate(reward);
-  payReward(s, reward, n);
+  const n = setRate();
+  earn(s, n);
   return n;
+}
+
+/**
+ * A card from the Prize Counter (a `card-pack` grant): a cat rolled by
+ * CARD_WEIGHTS on the machine's own seeded random, straight into the inventory
+ * (it never touches the shelf). Returns the cat's index.
+ */
+export function grantCard(s: State): number {
+  const card = pick(s, CARD_WEIGHTS);
+  s.seen[card] = true;
+  s.cards[card]++;
+  s.packCards++;
+  return card;
 }
 
 const spinTime = (kind: SpinKind) => (kind === "super" ? SUPER_SPIN_TIME : SPIN_TIME);
@@ -577,9 +646,12 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
   for (const x of stepShelf(s.bodies, p.y, p.v, dt)) {
     const b = x.body;
     s.quiet = 0;
-    ev.push({ type: "fall", x: b.x, y: b.y, edge: x.edge, stack: b.stack, kind: b.kind, core: b.core, card: b.card });
+    // Only coins go in the jar: a capsule or a card in its section counts as usual
+    const jar = x.edge === "front" && b.kind === "coin" && inJar(b.x);
+    ev.push({ type: "fall", x: b.x, y: b.y, edge: x.edge, stack: b.stack, kind: b.kind, core: b.core, card: b.card, jar });
     if (x.edge !== "front") continue;
-    if (b.kind === "coin") {
+    if (jar) s.eaten += b.stack;
+    else if (b.kind === "coin") {
       s.coins += b.stack;
       s.returned += b.stack;
       earn(s, b.stack * FRONT_TICKETS);

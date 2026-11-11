@@ -14,17 +14,20 @@ const ROWS = stagger(0.05);
 /**
  * Ranked rows: medal colours for the podium, the player's own row highlighted.
  * `cascade` deals the rows in one after another — for the end-of-run reveal,
- * not for a board someone is reading on a page.
+ * not for a board someone is reading on a page. `empty` replaces the default
+ * empty-board copy.
  */
 export function LeaderboardList({
   entries,
   highlightId,
   cascade = false,
+  empty,
   className,
 }: {
   entries: LeaderboardEntry[];
   highlightId?: number;
   cascade?: boolean;
+  empty?: { title: string; description: string };
   className?: string;
 }) {
   const m = useMessages();
@@ -37,8 +40,8 @@ export function LeaderboardList({
           <EmptyMedia variant="icon">
             <HugeiconsIcon icon={RankingIcon} />
           </EmptyMedia>
-          <EmptyTitle>{m.leaderboard.emptyTitle}</EmptyTitle>
-          <EmptyDescription>{m.leaderboard.emptyDescription}</EmptyDescription>
+          <EmptyTitle>{empty?.title ?? m.leaderboard.emptyTitle}</EmptyTitle>
+          <EmptyDescription>{empty?.description ?? m.leaderboard.emptyDescription}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );

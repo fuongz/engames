@@ -59,6 +59,9 @@ import {
   drawFlyingCoin,
   drawFrontLip,
   drawGate,
+  drawJar,
+  drawJarLane,
+  JAR_MOUTH,
   drawGlass,
   drawMarquee,
   drawMenuButton,
@@ -70,6 +73,7 @@ import {
   drawShadow,
   drawShelf,
   drawShootButton,
+  drawTicketIcon,
   drawTray,
   drawWheel,
   fitSize,
@@ -107,18 +111,19 @@ import {
   WHEEL,
   isRare,
 } from "./config";
-import bengalImg from "./img/cards/bengal.webp";
-import britishImg from "./img/cards/british.webp";
-import maineCoonImg from "./img/cards/maine-coon.webp";
-import munchkinImg from "./img/cards/munchkin.webp";
-import persianImg from "./img/cards/persian.webp";
-import ragdollImg from "./img/cards/ragdoll.webp";
-import scottishFoldImg from "./img/cards/scottish-fold.webp";
-import siameseImg from "./img/cards/siamese.webp";
-import sphynxImg from "./img/cards/sphynx.webp";
-import tabbyImg from "./img/cards/tabby.webp";
+import cardBackArt from "./img/cards-v3/card-back.webp";
+import cardBackRareArt from "./img/cards-v3/card-back-rare.webp";
+import bengalImg from "./img/cards-v3/bengal.webp";
+import britishImg from "./img/cards-v3/british.webp";
+import maineCoonImg from "./img/cards-v3/maine-coon.webp";
+import munchkinImg from "./img/cards-v3/munchkin.webp";
+import persianImg from "./img/cards-v3/persian.webp";
+import ragdollImg from "./img/cards-v3/ragdoll.webp";
+import scottishFoldImg from "./img/cards-v3/scottish-fold.webp";
+import siameseImg from "./img/cards-v3/siamese.webp";
+import sphynxImg from "./img/cards-v3/sphynx.webp";
+import tabbyImg from "./img/cards-v3/tabby.webp";
 import cabinetBgArt from "./img/v2/cabinet-bg.webp";
-import cardBackArt from "./img/v2/card-back.webp";
 import coinArt from "./img/v2/coin.webp";
 import coinStack2Art from "./img/v2/coin-stack2.webp";
 import coinStack3Art from "./img/v2/coin-stack3.webp";
@@ -156,12 +161,13 @@ import {
   type State,
   createMachine,
   drainTickets,
+  grantCard,
   grantCoins,
   holeAt,
+  lidShut,
   normalizeAlbum,
   ownedCount,
   pusherAt,
-  type Reward,
   cardRate,
   exchangeCard,
   exchangeSet,
@@ -179,8 +185,12 @@ import { STRINGS } from "./strings";
 // One machine that never resets. Signed in (ctx.cloud), it lives in cloud slot 0:
 // loaded on mount, saved a few seconds after it changes (and at once for grants,
 // on suspend and on dispose), with a local backup of anything unsent. Its coins
-// come from the allowance and coupons, and every ticket it pays is deposited in
-// the shared arcade wallet. Signed out, it is a local trial machine with
+// come from the allowance (the welcome, the login streak's dailies and Prize
+// Counter purchases: coins, or card packs rolled into the stash and shown in the
+// card viewer) and coupons, and every ticket it pays is deposited in the shared
+// arcade wallet. The allowance is claimed at start, at each Vietnam midnight, on
+// coming back to the game (resumed, or tapped after a while away) and now and
+// then while the coins are out, so a purchase arrives without a reload. Signed out, it is a local trial machine with
 // TRIAL_COINS, trial tickets and nothing sent anywhere. A sign-out mid-game
 // (calls failing with sign-in-required) drops back to the trial.
 //
@@ -222,6 +232,17 @@ const DEPOSIT_RETRY = 10;
 const CLAIM_SLACK = 2000;
 /** ms between claims at the least, and before a failed claim is retried. */
 const CLAIM_GAP = 60_000;
+/**
+ * ms between the extra claims that pick up Prize Counter purchases: when the
+ * game resumes (the tab or the portal's menu gave it back) or the player taps it
+ * again after a while (a dialog over it, like the Prize Counter, held the taps),
+ * and every so often while the coins are out.
+ */
+const WAKE_GAP = 10_000;
+/** ms without a tap on the game after which the next tap counts as coming back to it. */
+const AWAY_TAP = 4_000;
+/** ms between claims while the out-of-coins strip shows (a purchase may be on its way). */
+const EMPTY_CLAIM_GAP = 20_000;
 /** Card art in CARD_IDS order. */
 const CARD_SRC: Record<(typeof CARD_IDS)[number], string> = {
   persian: persianImg,
@@ -244,6 +265,7 @@ const ART_SRC: ArtSrc = {
   "coin-stack2": coinStack2Art,
   "coin-stack3": coinStack3Art,
   "card-back": cardBackArt,
+  "card-back-rare": cardBackRareArt,
   "ticket": ticketArt,
   "orb-red": orbRedArt,
   "orb-orange": orbOrangeArt,
@@ -282,6 +304,11 @@ const SUPER_FX = 3.2;
 const SINK = 0.2;
 /** Seconds a won card takes to fly to the album button. */
 const CARD_FLY = 0.9;
+/** Seconds a coin takes to drop into the robot jar, and the jar's happy munch after it. */
+const JAR_DROP = 0.32;
+const JAR_MUNCH = 0.9;
+/** Seconds the gate's lid takes to shut or open. */
+const LID_TIME = 0.18;
 /** Toasts sit on the pusher's top plate, the one calm strip in the machine. */
 const TOAST_Y = 522;
 /** Where a toast is drawn (and, for a card's, tapped to open the card viewer). */
@@ -344,6 +371,8 @@ interface Faller {
   x: number;
   y: number;
   edge: "front" | "side";
+  /** Coins into the robot jar (drawn dropping into its mouth). */
+  jar: boolean;
   stack: number;
   kind: "coin" | "core" | "card";
   core: number;
@@ -454,6 +483,21 @@ export function setup(rt: Runtime): GameHooks {
   let stripPulse = 0;
   /** The gate's ready cue, faded (0..1). */
   let readyGlow = 0;
+  /** The hole's lid, 0 open → 1 shut (it follows lidShut), and a knock when a coin bounces off it. */
+  let lidK = 0;
+  let lidKnock = 0;
+  /** The robot jar: its munch (1 → 0) after coins drop in, and what it has eaten this session (for its fill). */
+  let jarMunch = 0;
+  let jarFill = 0;
+  /** Cards from the Prize Counter waiting to be shown in the card viewer, one at a time. */
+  const reveals: number[] = [];
+  /** The allowance: tomorrow's daily (the streak's next step), and the last claim (unix ms). */
+  let nextDailyAmount = DAILY_COINS;
+  let lastClaimAt = 0;
+  /** The game was suspended (tab hidden, portal menu): claim once it runs again. */
+  let resumed = false;
+  /** The last tap on the game (unix ms). */
+  let lastTapAt = Date.now();
 
   // Input
   /** Every pointer currently pressing SHOOT (a Set: a second finger must not overwrite the first). */
@@ -545,6 +589,14 @@ export function setup(rt: Runtime): GameHooks {
     },
     lost() {
       audio.tone({ freq: 200, to: 80, dur: 0.16, type: "sine", vol: 0.05 });
+    },
+    /** A coin bounces off the hole's shut lid: a soft wooden knock. */
+    lidKnock() {
+      audio.tone({ freq: 520, to: 360, dur: 0.06, type: "triangle", vol: 0.05 });
+    },
+    /** The robot jar munches: two happy chirps. */
+    munch() {
+      for (const [i, f] of [660, 990].entries()) audio.tone({ freq: f, to: f * 1.2, dur: 0.07, type: "sine", vol: 0.04, delay: i * 0.08 });
     },
     core() {
       for (const [i, f] of [523, 659, 784, 1047, 1319].entries()) audio.tone({ freq: f, dur: 0.16, type: "triangle", vol: 0.06, delay: i * 0.06 });
@@ -682,15 +734,14 @@ export function setup(rt: Runtime): GameHooks {
           const hx = GATE.x + e.hole;
           gateFlash = 1;
           sinks.push({ x: hx, t: 0 });
-          if (e.full) {
-            burst(hx, GATE.y, 12, [TERRA, CREAM], 160);
-            pop(l.stockFull, GATE.x, GATE.y + 56, TERRA, 24);
-            sfx.lost();
-          } else {
-            burst(hx, GATE.y, 18, [HONEY, CREAM, CYAN], 220);
-            pop(l.holeIn, hx, GATE.y - 30, HONEY, 30);
-            sfx.hole();
-          }
+          burst(hx, GATE.y, 18, [HONEY, CREAM, CYAN], 220);
+          pop(l.holeIn, hx, GATE.y - 30, HONEY, 30);
+          sfx.hole();
+        } else if (e.lid) {
+          // On the shut lid: it knocks, and the coin bounces down onto the shelf like a miss
+          lidKnock = 1;
+          burst(GATE.x + e.hole, GATE.y - 6, 8, [TERRA, CREAM], 140);
+          sfx.lidKnock();
         } else {
           // Bounced off the rail: a spark where it struck (the coin's fall is drawn as a flight)
           burst(GATE.x + e.x, GATE.y - 8, 6, [CREAM, HONEY], 130);
@@ -748,7 +799,12 @@ export function setup(rt: Runtime): GameHooks {
           pop(tr().count(s.cards[e.card] ?? 1), p.x, p.y - 30, VIOLET, 34);
           break;
         }
-        fallers.push({ x: e.x, y: e.y, edge: e.edge, stack: e.stack, kind: e.kind, core: e.core, card: e.card, t: 0 });
+        fallers.push({ x: e.x, y: e.y, edge: e.edge, jar: e.jar, stack: e.stack, kind: e.kind, core: e.core, card: e.card, t: 0 });
+        if (e.jar) {
+          // Into the robot jar: it munches happily (the coins are the machine's now)
+          jarFill += e.stack;
+          break;
+        }
         if (e.edge === "front") {
           const p = proj(e.x, SHELF_D);
           if (e.kind === "core") {
@@ -835,6 +891,10 @@ export function setup(rt: Runtime): GameHooks {
     zeroFor = 0;
     stripIn = 0;
     readyGlow = 0;
+    lidK = lidShut(s) ? 1 : 0;
+    lidKnock = 0;
+    jarMunch = 0;
+    jarFill = 0;
   }
 
   function readTrialTickets() {
@@ -1071,29 +1131,56 @@ export function setup(rt: Runtime): GameHooks {
 
   // ---------------------------------------------------------------- allowance and the leaderboard
 
+  /**
+   * Ask the server for what is due: the welcome, the day's streak coins and
+   * every Prize Counter purchase not yet delivered. Coins go on the balance; a
+   * card pack rolls its cards (CARD_WEIGHTS, the machine's seeded random) into
+   * the inventory and shows each in the card viewer. Saved at once: the server
+   * never sends a grant twice.
+   */
   async function claimAllowance() {
     const al = allowance;
     if (!al || claiming || mode !== "account") return;
     claiming = true;
+    lastClaimAt = Date.now();
     claimAt = Date.now() + CLAIM_GAP;
     const mine = gen;
     try {
-      const { grants, nextDailyAt: next } = await al.claim();
+      const claim = await al.claim();
       if (mine !== gen) return;
-      nextDailyAt = next;
-      claimAt = Math.max(next + CLAIM_SLACK, Date.now() + CLAIM_GAP);
-      let got = false;
-      for (const g of grants) {
-        if (g.kind !== "coins") continue;
-        const added = grantCoins(s, g.amount);
-        if (added <= 0) continue;
-        got = true;
-        say(g.type === "welcome" ? tr().welcomeGrant(added) : tr().dailyGrant(added), CYAN, true);
+      nextDailyAt = claim.nextDailyAt;
+      if (Number.isFinite(claim.nextDailyAmount)) nextDailyAmount = claim.nextDailyAmount;
+      claimAt = Math.max(claim.nextDailyAt + CLAIM_SLACK, Date.now() + CLAIM_GAP);
+      const l = tr();
+      let coins = false;
+      let cards = false;
+      for (const g of claim.grants) {
+        if (g.kind === "coins") {
+          const added = grantCoins(s, g.amount);
+          if (added <= 0) continue;
+          coins = true;
+          const line = g.type === "welcome" ? l.welcomeGrant(added) : g.type === "daily" ? l.streakGrant(g.streakDay, added) : l.shopCoins(added);
+          say(line, CYAN, true);
+        } else if (g.kind === "card-pack") {
+          for (let i = 0; i < Math.min(50, Math.max(0, Math.floor(g.amount))); i++) {
+            const card = grantCard(s);
+            cards = true;
+            reveals.push(card);
+            say(l.shopCard(l.cards[CARD_IDS[card]]), VIOLET, true, card);
+          }
+        }
       }
-      if (got) {
+      if (coins) {
         bumpCoins = 1;
         audio.tone({ freq: 880, dur: 0.1, type: "triangle", vol: 0.05 });
-        // The server never sends these again: on the account (and the backup) now
+      }
+      if (cards) {
+        albumPulse = 1;
+        sfx.card(true);
+      }
+      // The server never sends these again: on the account (and the backup) now
+      if (coins || cards) {
+        markDirty();
         saveNow();
       }
     } catch (e) {
@@ -1101,6 +1188,11 @@ export function setup(rt: Runtime): GameHooks {
     } finally {
       claiming = false;
     }
+  }
+
+  /** Claim again soon after coming back (a purchase made in the Prize Counter meanwhile), at most every WAKE_GAP. */
+  function wakeClaim() {
+    if (mode === "account" && !claiming && Date.now() - lastClaimAt >= WAKE_GAP) void claimAllowance();
   }
 
   const detailOf = () => tr().detail(s.lifetimeTickets, s.supers);
@@ -1250,12 +1342,32 @@ export function setup(rt: Runtime): GameHooks {
       }
       // The daily coins: at start, then each Vietnam midnight while the game stays open
       if (mode === "account" && !claiming && Date.now() >= claimAt) void claimAllowance();
+      // Back from a suspend: a purchase may have been made meanwhile
+      if (resumed) {
+        resumed = false;
+        wakeClaim();
+      }
+      // Out of coins: look for Prize Counter coins now and then
+      if (stripIn >= 1 && mode === "account" && !claiming && Date.now() - lastClaimAt >= EMPTY_CLAIM_GAP) void claimAllowance();
+      // Prize Counter cards, one viewer at a time, once nothing else is open
+      if (overlay === null && reveals.length > 0) openViewer(reveals.shift() as number, null, true);
     }
 
     // The ready cue: a shot now drops into the hole
     const cue = ready && overlay === null && s.coins > 0 && readyToShoot(s);
     readyGlow = clamp(readyGlow + (cue ? dt * 14 : -dt * 8), 0, 1);
     stripPulse = Math.max(0, stripPulse - dt * 2);
+    // The lid follows the stock; the jar munches after coins land in it
+    lidK = clamp(lidK + (lidShut(s) ? dt : -dt) / LID_TIME, 0, 1);
+    lidKnock = Math.max(0, lidKnock - dt * 4);
+    jarMunch = Math.max(0, jarMunch - dt / JAR_MUNCH);
+    for (const f of fallers) {
+      if (!f.jar || f.t >= JAR_DROP || f.t + dt < JAR_DROP) continue;
+      jarMunch = 1;
+      sfx.munch();
+      pop(tr().jarYum, JAR_MOUTH.x, JAR_MOUTH.y - 26, HONEY, 26);
+      burst(JAR_MOUTH.x, JAR_MOUTH.y, 8, [HONEY, CREAM, "#F2A6A0"], 120);
+    }
     if (overlay === "viewer") stepViewer(dt);
 
     // Lights and counters
@@ -1332,7 +1444,7 @@ export function setup(rt: Runtime): GameHooks {
     }
     pops = pops.filter((p) => p.t < 1);
     for (const f of fallers) f.t += dt;
-    fallers = fallers.filter((f) => f.t < (f.edge === "front" && f.kind === "coin" ? 0.8 : 0.55));
+    fallers = fallers.filter((f) => f.t < (f.jar ? JAR_DROP : f.edge === "front" && f.kind === "coin" ? 0.8 : 0.55));
     for (const c of cardFlies) c.t += dt;
     cardFlies = cardFlies.filter((c) => c.t < CARD_FLY);
     if (bits.length > 400) bits.splice(0, bits.length - 400);
@@ -1386,7 +1498,7 @@ export function setup(rt: Runtime): GameHooks {
         ctx.translate(end.x, y - w * 0.6);
         ctx.rotate(Math.sin(f.t * 9) * 0.25);
         ctx.scale(Math.max(0.2, Math.abs(Math.cos(f.t * 7))), 1);
-        drawCardBack(ctx, sp, -w / 2, -h / 2, w, h);
+        drawCardBack(ctx, sp, -w / 2, -h / 2, w, h, isRare(f.card));
         ctx.restore();
         continue;
       }
@@ -1410,6 +1522,14 @@ export function setup(rt: Runtime): GameHooks {
   function drawFallers() {
     for (const f of fallers) {
       const p = proj(f.x, f.edge === "front" ? SHELF_D : f.y);
+      if (f.jar) {
+        // Over the edge and down into the jar's mouth, shrinking as it goes in
+        const k = clamp(f.t / JAR_DROP, 0, 1);
+        const x = lerpN(p.x, JAR_MOUTH.x, k);
+        const y = lerpN(p.y, JAR_MOUTH.y + 6, k * k) - Math.sin(k * Math.PI) * 10;
+        for (let i = 0; i < f.stack; i++) drawFlyingCoin(ctx, sp, x + i * 5, y - i * 5, 26 * (1 - 0.45 * k), f.t * 18 + i);
+        continue;
+      }
       if (f.edge === "front") {
         const k = Math.min(f.t, 0.35);
         const x = p.x;
@@ -1439,7 +1559,7 @@ export function setup(rt: Runtime): GameHooks {
           ctx.save();
           ctx.translate(x, y);
           ctx.rotate(dir * f.t * 6);
-          drawCardBack(ctx, sp, -16, -cardBackH(32) / 2, 32, cardBackH(32));
+          drawCardBack(ctx, sp, -16, -cardBackH(32) / 2, 32, cardBackH(32), isRare(f.card));
           ctx.restore();
         } else drawFlyingCoin(ctx, sp, x, y, 26 * p.s, 1.2 + f.t * 8);
         ctx.globalAlpha = 1;
@@ -1461,7 +1581,7 @@ export function setup(rt: Runtime): GameHooks {
     drawCoreLamps(ctx, sp, s.cores, CORE_COUNT, t, superFx > 0, lampPulse);
     drawRobots(ctx, sp, t, cheer);
     drawWheel(ctx, sp, s.wheel, t, chase, wheelLight());
-    drawGate(ctx, sp, holeAt(s.gate), s.stock, gateFlash, s.stock >= PRIZE_QUEUE_MAX, t, readyGlow);
+    drawGate(ctx, sp, holeAt(s.gate), s.stock, gateFlash, s.stock >= PRIZE_QUEUE_MAX, t, readyGlow, lidK, lidKnock);
     drawGlass(ctx, { x: 120, y: 112, w: 300, h: 300 }, t);
 
     // Reels and the spins counter
@@ -1479,8 +1599,10 @@ export function setup(rt: Runtime): GameHooks {
       const k = landed.get(b.id);
       drawBody(ctx, sp, b, t, k === undefined ? 0 : Math.max(0, 1 - k / 0.18));
     }
+    drawJarLane(ctx, t, jarMunch);
     drawFrontLip(ctx, chase, rainbow);
     drawFallers();
+    drawJar(ctx, sp, t, jarMunch, jarFill, l.jar);
     drawGlass(ctx, { x: 30, y: 476, w: 480, h: 340 }, t + 4);
     drawChute(ctx, chuteGlow);
     drawFlights();
@@ -1494,7 +1616,8 @@ export function setup(rt: Runtime): GameHooks {
     drawTray(ctx, sp, shownCoins, view());
     // How to aim, until the player has a few hits
     if (s.gateHits < 3 && s.shots < 40 && overlay === null && s.coins > 0)
-      text(ctx, l.aimHint, W / 2, SHELF_BOTTOM + 15, fitSize(ctx, l.aimHint, 17, 440), readyGlow > 0.5 ? "#C9F2B8" : CREAM);
+      // On the pusher's plate, where toasts go (the jar sits under the shelf's edge)
+      if (!toast) text(ctx, l.aimHint, W / 2, TOAST_Y, fitSize(ctx, l.aimHint, 17, 440), readyGlow > 0.5 ? "#C9F2B8" : CREAM);
     if (stripIn > 0) drawStrip();
   }
 
@@ -1505,10 +1628,13 @@ export function setup(rt: Runtime): GameHooks {
     const l = tr();
     if (mode !== "account") return l.guestHint(WELCOME_COINS);
     const left = nextDailyAt - Date.now();
-    return nextDailyAt > 0 && left > 0 ? l.dailyIn(DAILY_COINS, clock(left)) : l.dailyLater(DAILY_COINS);
+    return nextDailyAt > 0 && left > 0 ? l.dailyIn(nextDailyAmount, clock(left)) : l.dailyLater(nextDailyAmount);
   }
+  /** The strip's second line, signed in: trade tickets for coins at the Prize Counter (the portal's ticket chip). */
+  const showCounterHint = () => mode === "account" && tickets !== null;
   const STRIP_H = 46;
-  const STRIP_Y = SHELF_BOTTOM - STRIP_H - 10;
+  /** Clear of the robot jar, which stands on the middle of the shelf's front edge. */
+  const STRIP_Y = SHELF_BOTTOM - STRIP_H - 40;
   const STRIP_TEXT = 20;
   /** The strip hugs its contents, left-aligned over the coin counter's side of the shelf. */
   function stripRect(): Rect {
@@ -1551,6 +1677,23 @@ export function setup(rt: Runtime): GameHooks {
     drawFlyingCoin(ctx, sp, r.x + 26, r.y + r.h / 2, 24, 0);
     text(ctx, stripText(), r.x + 46, r.y + r.h / 2 + 1, STRIP_TEXT, CYAN, "left", null);
     if (coupons) button(ctx, stripCode(), tr().enterCode, BTN_GO, 18);
+    if (showCounterHint()) {
+      // Above the strip: where tickets turn into coins (the game can't open the counter itself)
+      const hint = tr().counterHint;
+      const size = fitSize(ctx, hint, 16, W - 2 * r.x - 52);
+      ctx.font = `800 ${size}px ${FONT}`;
+      const hw = ctx.measureText(hint).width + 52;
+      const hr: Rect = { x: r.x, y: r.y - 38, w: hw, h: 30 };
+      ctx.fillStyle = "rgba(51,38,33,0.92)";
+      ctx.strokeStyle = HONEY;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(hr.x, hr.y, hr.w, hr.h, hr.h / 2);
+      ctx.fill();
+      ctx.stroke();
+      drawTicketIcon(ctx, sp, hr.x + 20, hr.y + hr.h / 2, 24);
+      text(ctx, hint, hr.x + 38, hr.y + hr.h / 2 + 1, size, HONEY, "left", null);
+    }
     ctx.restore();
   }
 
@@ -1567,6 +1710,8 @@ export function setup(rt: Runtime): GameHooks {
   interface Viewer {
     card: number;
     from: Overlay;
+    /** A card from the Prize Counter: shown with its own title, starting face down and turning over. */
+    reveal: boolean;
     open: number;
     /** 0 = face up, 1 = back up; `flipK` runs toward it. */
     flip: number;
@@ -1583,7 +1728,7 @@ export function setup(rt: Runtime): GameHooks {
   let viewer: Viewer | null = null;
   /** Textures: the faces by card (and the badge's language), the back, and the scratch the shine is drawn into. */
   const faces = new Map<string, HTMLCanvasElement>();
-  let backTex: HTMLCanvasElement | null = null;
+  const backTexes = new Map<string, HTMLCanvasElement>();
   let shineTex: HTMLCanvasElement | null = null;
 
   function viewerBox() {
@@ -1598,11 +1743,13 @@ export function setup(rt: Runtime): GameHooks {
     return { x: Math.min(v.x + v.w - 64, b.cx + b.w / 2 - 8), y: b.cy - b.h / 2 - 96, w: 56, h: 56 };
   }
 
-  function openViewer(card: number, from: Overlay) {
+  function openViewer(card: number, from: Overlay, reveal = false) {
     audio.tone({ freq: 988, dur: 0.07, type: "triangle", vol: 0.045 });
     pointersHeld.clear();
     tap = false;
-    viewer = { card, from, open: 0, flip: 0, flipK: 0, tx: 0, ty: 0, aimX: 0, aimY: 0, movedAt: -99, press: null };
+    // A reveal starts back up and turns over as it pops in
+    viewer = { card, from, reveal, open: 0, flip: 0, flipK: reveal ? 1 : 0, tx: 0, ty: 0, aimX: 0, aimY: 0, movedAt: -99, press: null };
+    if (reveal) sfx.card(true);
     overlay = "viewer";
   }
   function closeViewer() {
@@ -1673,26 +1820,17 @@ export function setup(rt: Runtime): GameHooks {
     }
     return tex;
   }
-  function backTexture(w: number, h: number) {
-    const ok = !!sp.img["card-back"];
-    if (!backTex || backTex.width !== Math.ceil(w) || (ok && backTex.dataset.art !== "1")) {
-      backTex = cardTexture((g, tw, th) => {
-        const r = tw * 0.09;
-        g.save();
-        g.beginPath();
-        g.roundRect(0, 0, tw, th, r);
-        g.clip();
-        drawCardBack(g, sp, 0, 0, tw, th);
-        g.restore();
-        g.strokeStyle = BROWN;
-        g.lineWidth = tw * 0.03;
-        g.beginPath();
-        g.roundRect(0, 0, tw, th, r);
-        g.stroke();
-      }, w, h);
-      if (ok) backTex.dataset.art = "1";
+  function backTexture(card: number, w: number, h: number) {
+    const rare = isRare(card);
+    const ok = !!sp.img[rare ? "card-back-rare" : "card-back"];
+    const key = `${rare}:${ok}:${Math.ceil(w)}`;
+    let tex = backTexes.get(key);
+    if (!tex) {
+      // The whole 3:4 back art, edge to edge (no inset, so nothing is cropped or squashed)
+      tex = cardTexture((g, tw, th) => drawCardBack(g, sp, 0, 0, tw, th, rare), w, h);
+      backTexes.set(key, tex);
     }
-    return backTex;
+    return tex;
   }
 
   function drawViewer() {
@@ -1708,7 +1846,7 @@ export function setup(rt: Runtime): GameHooks {
     const tw = b.w * 2;
     const th = b.h * 2;
     const face = faceTexture(vw.card, tw, th);
-    const back = backTexture(tw, th);
+    const back = backTexture(vw.card, tw, th);
     if (!shineTex || shineTex.width !== face.width) {
       shineTex = document.createElement("canvas");
       shineTex.width = face.width;
@@ -1740,6 +1878,7 @@ export function setup(rt: Runtime): GameHooks {
     ctx.globalAlpha = pop;
     const name = l.cards[CARD_IDS[vw.card]];
     headline(ctx, name, b.cx, b.cy - b.h / 2 - 66, fitSize(ctx, name, 34, b.w - 60), isRare(vw.card) ? HONEY : CREAM);
+    if (vw.reveal) text(ctx, l.shopCardTitle, b.cx, b.cy - b.h / 2 - 108, fitSize(ctx, l.shopCardTitle, 20, b.w - 60), VIOLET, "center", null);
     text(ctx, l.flipHint, b.cx, b.cy + b.h / 2 + 66, fitSize(ctx, l.flipHint, 20, v.w - 60), MUTED, "center", null);
     const c = viewerClose();
     ctx.fillStyle = BROWN;
@@ -1967,8 +2106,8 @@ export function setup(rt: Runtime): GameHooks {
   const EX_CARD = { w: 70, h: 93, gap: 18, row: 118 };
   /** The cat picked for a one-card exchange (-1: none yet). */
   let exPick = -1;
-  /** An exchange waiting for the player's yes. */
-  let exAsk: { set: boolean; reward: Reward } | null = null;
+  /** An exchange waiting for the player's yes: one card, or the set. */
+  let exAsk: { set: boolean } | null = null;
   /** The last exchange's pop on the exchange card. */
   let exPop: { text: string; t: number } | null = null;
   /** What the last full set paid, for the celebration. */
@@ -1978,20 +2117,14 @@ export function setup(rt: Runtime): GameHooks {
     const x0 = W / 2 - (5 * EX_CARD.w + 4 * EX_CARD.gap) / 2;
     return { x: x0 + (i % 5) * (EX_CARD.w + EX_CARD.gap), y: EX.y + 100 + Math.floor(i / 5) * EX_CARD.row, w: EX_CARD.w, h: EX_CARD.h };
   };
-  /** The four exchange buttons: one card or the set, for tickets or coins. */
-  const exButton = (set: boolean, reward: Reward): Rect => ({
-    x: reward === "tickets" ? 40 : 282,
-    y: EX.y + (set ? 498 : 384),
-    w: 218,
-    h: 54,
-  });
+  /** The two exchange buttons, for tickets: one card, or the set. */
+  const exButton = (set: boolean): Rect => ({ x: 110, y: EX.y + (set ? 498 : 384), w: 320, h: 56 });
   const exDone = (): Rect => ({ x: 150, y: EX.y + EX.h - 74, w: 240, h: 56 });
   const ASK: Rect = { x: 44, y: H / 2 - 120, w: 452, h: 240 };
   const askYes = (): Rect => ({ x: 70, y: ASK.y + ASK.h - 82, w: 190, h: 58 });
   const askNo = (): Rect => ({ x: 280, y: ASK.y + ASK.h - 82, w: 190, h: 58 });
   const albumExchange = (): Rect => ({ x: 36, y: ALBUM.y + ALBUM.h - 82, w: 220, h: 58 });
 
-  const rewardText = (reward: Reward, n: number) => (reward === "tickets" ? tr().ticketsN(n) : tr().coinsN(n));
   const canExchange = (set: boolean) => (set ? hasSet(s) : exPick >= 0 && s.cards[exPick] > 0);
 
   function openExchange() {
@@ -2002,18 +2135,17 @@ export function setup(rt: Runtime): GameHooks {
     overlay = "exchange";
   }
 
-  /** The player said yes: consume the cards, pay, save. */
-  function doExchange(set: boolean, reward: Reward) {
-    const n = set ? exchangeSet(s, reward) : exchangeCard(s, exPick, reward);
+  /** The player said yes: consume the cards, pay the tickets, save. */
+  function doExchange(set: boolean) {
+    const n = set ? exchangeSet(s) : exchangeCard(s, exPick);
     exAsk = null;
     if (n <= 0) return;
-    const str = rewardText(reward, n);
+    const str = tr().ticketsN(n);
     payOut();
-    if (reward === "coins") bumpCoins = 1;
-    else bumpTickets = 1;
+    bumpTickets = 1;
     markDirty();
     saveNow();
-    say(tr().exchanged(str), reward === "coins" ? CYAN : HONEY, true);
+    say(tr().exchanged(str), HONEY, true);
     if (set) {
       // A full set: back to the machine for the fanfare
       setWon = str;
@@ -2050,17 +2182,14 @@ export function setup(rt: Runtime): GameHooks {
     const name = pick >= 0 ? l.cards[CARD_IDS[pick]] : "";
     const head = pick >= 0 ? `${l.oneCard}: ${name} ${l.count(s.cards[pick])}` : l.oneCard;
     text(ctx, head, 40, EX.y + 360, fitSize(ctx, head, 20, EX.w - 60), CREAM, "left", null);
-    for (const reward of ["tickets", "coins"] as const) {
-      const n = pick >= 0 ? cardRate(pick, reward) : cardRate(0, reward);
-      dimIf(!canExchange(false), () => button(ctx, exButton(false, reward), rewardText(reward, n), reward === "tickets" ? BTN_GO : BTN_ALT, 22));
-    }
+    const one = l.ticketsN(cardRate(Math.max(pick, 0)));
+    dimIf(!canExchange(false), () => button(ctx, exButton(false), one, BTN_GO, 24));
     // The full set
     const missing = s.cards.filter((n) => n === 0).length;
     const status = missing === 0 ? l.setReady : l.setMissing(missing);
     text(ctx, l.fullSet, 40, EX.y + 474, fitSize(ctx, l.fullSet, 18, EX.w - 210), CREAM, "left", null);
     text(ctx, status, EX.x + EX.w - 24, EX.y + 474, 18, missing === 0 ? HONEY : MUTED, "right", null);
-    for (const reward of ["tickets", "coins"] as const)
-      dimIf(!canExchange(true), () => button(ctx, exButton(true, reward), rewardText(reward, setRate(reward)), reward === "tickets" ? BTN_GO : BTN_ALT, 22));
+    dimIf(!canExchange(true), () => button(ctx, exButton(true), l.ticketsN(setRate()), BTN_GO, 24));
     button(ctx, exDone(), l.done, BTN_CARD, 24);
     if (exPop) {
       const k = exPop.t;
@@ -2073,7 +2202,7 @@ export function setup(rt: Runtime): GameHooks {
       ctx.fillStyle = "rgba(30,22,19,0.6)";
       ctx.fillRect(v.x, v.y, v.w, v.h);
       panel(ctx, ASK, 22);
-      const reward = rewardText(exAsk.reward, exAsk.set ? setRate(exAsk.reward) : cardRate(exPick, exAsk.reward));
+      const reward = l.ticketsN(exAsk.set ? setRate() : cardRate(exPick));
       const q = exAsk.set ? l.confirmSet(reward) : l.confirmCard(name, reward);
       const lines = wrap(ctx, q, ASK.w - 60, 24).slice(0, 3);
       for (const [i, ln] of lines.entries())
@@ -2085,7 +2214,7 @@ export function setup(rt: Runtime): GameHooks {
 
   function exchangeDown(p: PointerInfo) {
     if (exAsk) {
-      if (inRect(p, askYes())) doExchange(exAsk.set, exAsk.reward);
+      if (inRect(p, askYes())) doExchange(exAsk.set);
       else if (inRect(p, askNo()) || !inRect(p, ASK)) exAsk = null;
       return;
     }
@@ -2104,12 +2233,11 @@ export function setup(rt: Runtime): GameHooks {
       }
     }
     for (const set of [false, true])
-      for (const reward of ["tickets", "coins"] as const)
-        if (inRect(p, exButton(set, reward)) && canExchange(set)) {
-          audio.tone({ freq: 660, dur: 0.06, type: "square", vol: 0.04 });
-          exAsk = { set, reward };
-          return;
-        }
+      if (inRect(p, exButton(set)) && canExchange(set)) {
+        audio.tone({ freq: 660, dur: 0.06, type: "square", vol: 0.04 });
+        exAsk = { set };
+        return;
+      }
   }
 
   function drawOverlay() {
@@ -2206,6 +2334,10 @@ export function setup(rt: Runtime): GameHooks {
   }
 
   function down(p: PointerInfo) {
+    // A tap after a while away (a dialog over the game, like the Prize Counter): look for purchases
+    const now = Date.now();
+    if (now - lastTapAt >= AWAY_TAP) wakeClaim();
+    lastTapAt = now;
     if (mode === "loading") return;
     if (mode === "failed") {
       if (inRect(p, RETRY)) press("retry", "start");
@@ -2338,7 +2470,7 @@ export function setup(rt: Runtime): GameHooks {
         else if (overlay === "rules") overlay = rulesFrom;
         else if (overlay === "album") overlay = albumFrom;
         else if (overlay === "exchange") {
-          if (exAsk) doExchange(exAsk.set, exAsk.reward);
+          if (exAsk) doExchange(exAsk.set);
         } else onSpace(true);
       } else if (e.code === "Escape") {
         if (overlay === null) pause();
@@ -2357,6 +2489,8 @@ export function setup(rt: Runtime): GameHooks {
       if (e.code === "Space" || e.code === "Enter") onSpace(false);
     },
     suspend() {
+      // The next step runs once the game is back: claim then (Prize Counter purchases)
+      resumed = true;
       pointersHeld.clear();
       autoOn = false;
       spaceHeld = false;

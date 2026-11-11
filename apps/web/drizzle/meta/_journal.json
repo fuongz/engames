@@ -64,6 +64,13 @@
       "when": 1794380733556,
       "tag": "0008_silky_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794401036284,
+      "tag": "0009_skinny_eternals",
+      "breakpoints": true
     }
   ]
 }

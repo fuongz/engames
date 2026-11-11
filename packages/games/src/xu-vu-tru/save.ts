@@ -40,8 +40,14 @@ import type { Body } from "./physics";
 //      and is seen; a prize spin still running, if it had not paid yet, goes
 //      back into the stock (capped); coins in the air land on LAND_X. Coins,
 //      lifetime tickets and the shelf are kept as they are.
+//   4  (1.2.0) the robot jar and Prize Counter cards: `eaten` (coins the jar
+//      kept) and `packCards` (cards bought, not won). From schema 3 (1.1.0):
+//      both start at 0. Nothing else changes shape: the wheel keeps its 11
+//      slots in the same order (three coin slots pay more, see config.ts), so a
+//      prize spin saved mid-run stays on its slot. 1.1.0 had no pending card
+//      exchanges to carry: an exchange was paid the moment it was made.
 
-export const SCHEMA = 3;
+export const SCHEMA = 4;
 
 /** The server refuses a save bigger than this (MAX_BYTES in apps/web/src/server/saves.ts). */
 export const SAVE_MAX_BYTES = 64 * 1024;
@@ -62,6 +68,10 @@ export interface PackedState {
   cardsWon: number;
   shots: number;
   returned: number;
+  /** Coins the robot jar kept. */
+  eaten: number;
+  /** Cards from the Prize Counter. */
+  packCards: number;
   wheel: number;
   gate: number;
   gateShots: number;
@@ -118,6 +128,8 @@ export function pack(s: State): PackedState {
     cardsWon: s.cardsWon,
     shots: s.shots,
     returned: s.returned,
+    eaten: s.eaten,
+    packCards: s.packCards,
     wheel: r4(s.wheel),
     gate: r4(s.gate),
     gateShots: s.gateShots,
@@ -154,6 +166,8 @@ export function unpack(p: PackedState): State {
     cardsWon: p.cardsWon,
     shots: p.shots,
     returned: p.returned,
+    eaten: p.eaten,
+    packCards: p.packCards,
     wheel: p.wheel,
     gate: p.gate,
     gateShots: p.gateShots,
@@ -196,15 +210,20 @@ const STEPS: Record<number, (state: unknown) => unknown> = {
   1: (state) => packV1(state as State & { album: boolean[] }),
   // 2 → 3: off the 1.0.0 wheel and onto the card inventory (see the schema notes above)
   2: (state) => toV3(state as PackedV2),
+  // 3 → 4: the jar's and the Prize Counter's counters, from 0
+  3: (state) => toV4(state as PackedV3),
 };
 
-/** Schema 2 (1.0.0): today's packed shape with the album as an owned-cats bit mask. */
-export type PackedV2 = Omit<PackedState, "cards" | "seen"> & { album: number };
+/** Schema 3 (1.1.0): today's packed shape without the jar's and the Prize Counter's counters. */
+export type PackedV3 = Omit<PackedState, "eaten" | "packCards">;
+
+/** Schema 2 (1.0.0): schema 3's packed shape with the album as an owned-cats bit mask. */
+export type PackedV2 = Omit<PackedV3, "cards" | "seen"> & { album: number };
 
 /** Schema 1's plain 1.0.0 State packed as schema 2. */
 function packV1(st: State & { album: boolean[] }): PackedV2 {
   if (!isObj(st) || !Array.isArray(st.album)) throw new Error("not a schema-1 state");
-  const { cards: _c, seen: _s, ...rest } = pack({ ...st, cards: [], seen: [] });
+  const { cards: _c, seen: _s, eaten: _e, packCards: _p, ...rest } = pack({ ...st, cards: [], seen: [], eaten: 0, packCards: 0 });
   return { ...rest, album: st.album.reduce((m, owned, i) => (owned === true ? m | (1 << i) : m), 0) };
 }
 
@@ -216,7 +235,7 @@ function packV1(st: State & { album: boolean[] }): PackedV2 {
  * shot. The album's owned cats become one card each in the inventory, and seen.
  * Everything else carries over unchanged.
  */
-export function toV3(p: PackedV2): PackedState {
+export function toV3(p: PackedV2): PackedV3 {
   if (!isObj(p) || !Array.isArray(p.flights) || !isInt(p.album, 0, 2 ** CARD_COUNT - 1)) throw new Error("not a schema-2 state");
   const { album, ...rest } = p;
   const refund = p.prize && !p.prize.paid ? 1 : 0;
@@ -228,6 +247,16 @@ export function toV3(p: PackedV2): PackedState {
     cards: Array.from({ length: CARD_COUNT }, (_, i) => ((album & (1 << i)) !== 0 ? 1 : 0)),
     seen: album,
   };
+}
+
+/**
+ * A 1.1.0 machine moved onto 1.2.0: the jar has kept nothing and no card was
+ * bought yet. Card exchanges in 1.1.0 paid at once (tickets or coins), so there
+ * is nothing waiting to convert; the inventory carries over as it is.
+ */
+export function toV4(p: PackedV3): PackedState {
+  if (!isObj(p) || !Array.isArray(p.cards)) throw new Error("not a schema-3 state");
+  return { ...p, eaten: 0, packCards: 0 };
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -260,7 +289,7 @@ function validFlight(f: unknown) {
 /** The current schema's `state`, if every field has the right type and a sane range. */
 export function validState(x: unknown): x is PackedState {
   if (!isObj(x)) return false;
-  for (const k of ["nextId", "lifetimeTickets", "supers", "sets", "cardsWon", "shots", "returned", "gateShots", "gateHits", "capsules"] as const)
+  for (const k of ["nextId", "lifetimeTickets", "supers", "sets", "cardsWon", "shots", "returned", "eaten", "packCards", "gateShots", "gateHits", "capsules"] as const)
     if (!isInt(x[k], 0, COUNT)) return false;
   if (!isInt(x.seed, -(2 ** 31), 2 ** 32) || !isInt(x.coins, 0, 1e9) || !isInt(x.cores, 0, 1000)) return false;
   if (!isNum(x.t, 0, 1e10) || !isNum(x.wheel, -10, 10) || !isNum(x.gate, -10, 10) || !isNum(x.pusherT, 0, PUSH_PERIOD * 10)) return false;

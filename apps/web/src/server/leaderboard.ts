@@ -6,11 +6,11 @@ import { findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
 import { currentUser } from "#/server/auth";
 import { getDb } from "#/server/db";
-import { saveScore, topScores } from "#/server/db/leaderboard";
+import { saveScore, topScores, weeklyTicketBoard } from "#/server/db/leaderboard";
 
 // Boundary: client-callable server functions and types only (layout rule D).
 
-export type { LeaderboardEntry, SaveResult } from "#/server/db/leaderboard";
+export type { LeaderboardEntry, SaveResult, WeeklyBoard } from "#/server/db/leaderboard";
 
 const slug = z
   .string()
@@ -37,6 +37,23 @@ export const getLeaderboard = createServerFn({ method: "GET" })
   )
   // Online boards live under "<slug>:<mode>" in the same table (online-multiplayer.md §9)
   .handler(({ data }) => topScores(getDb(), boardKey(data.slug, data.mode), data.limit));
+
+/**
+ * This week's board of a ticket game (`manifest.tickets`): tickets EARNED in it
+ * since Monday 00:00 Asia/Ho_Chi_Minh, per player, with the signed-in player's
+ * own rank (docs/standards/tickets.md §5).
+ */
+export const getWeeklyLeaderboard = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      slug: slug.refine((s) => findGame(s)?.tickets === true, "Game takes no tickets"),
+      limit: z.number().int().min(1).max(50).default(10),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const user = await currentUser(getRequestHeaders() as unknown as Headers);
+    return weeklyTicketBoard(getDb(), { slug: data.slug, limit: data.limit, userId: user?.id ?? null, now: Date.now() });
+  });
 
 export const submitScore = createServerFn({ method: "POST" })
   .validator(

@@ -56,7 +56,25 @@ describe("manifest platform options", () => {
       for (const n of [g.allowance.welcome, g.allowance.daily]) {
         expect(Number.isSafeInteger(n) && n >= 0, "allowance amounts are whole and not negative").toBe(true);
       }
-      expect(g.allowance.welcome + g.allowance.daily).toBeGreaterThan(0);
+      const { streak } = g.allowance;
+      if (streak !== undefined) {
+        expect(streak.length, "a streak has at least one day").toBeGreaterThan(0);
+        for (const n of streak) expect(Number.isSafeInteger(n) && n >= 0, "streak amounts are whole and not negative").toBe(true);
+      }
+      expect(g.allowance.welcome + g.allowance.daily + (streak ?? []).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    }
+    // Prize Counter items reach the game through allowance.claim() (tickets.md §4)
+    if (g.shop !== undefined) {
+      expect(g.allowance, "a shop needs manifest.allowance to deliver its items").toBeDefined();
+      const ids = g.shop.map((i) => i.id);
+      expect(new Set(ids).size, "shop item ids are unique").toBe(ids.length);
+      for (const item of g.shop) {
+        expect(item.id).toMatch(/^[a-z0-9][a-z0-9-]{0,39}$/);
+        expect(item.kind).toMatch(/^[a-z][a-z0-9-]*$/);
+        expect(item.name.vi.trim() && item.name.en.trim(), "shop items are named in both languages").toBeTruthy();
+        for (const n of [item.amount, item.price]) expect(Number.isSafeInteger(n) && n > 0, "amount and price are positive whole numbers").toBe(true);
+        if (item.dailyLimit !== undefined) expect(Number.isSafeInteger(item.dailyLimit) && item.dailyLimit > 0, "dailyLimit is a positive whole number").toBe(true);
+      }
     }
     if (g.tickets !== undefined) expect(typeof g.tickets).toBe("boolean");
   });

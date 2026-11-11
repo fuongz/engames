@@ -4,10 +4,11 @@ import { isRoomCode } from "@web-games/core/online";
 import { BoardTabs } from "#/components/features/game-player/board-tabs";
 import { GameDetails } from "#/components/features/game-player/game-details";
 import { GamePlayer } from "#/components/features/game-player/game-player";
+import { TicketBoardTabs } from "#/components/features/game-player/ticket-board-tabs";
 import { GameCard } from "#/components/shared/games/game-card";
 import { LeaderboardList } from "#/components/shared/leaderboard/leaderboard-list";
 import { useLocale, useMessages } from "#/hooks/use-messages";
-import { getLeaderboard } from "#/server/leaderboard";
+import { getLeaderboard, getWeeklyLeaderboard } from "#/server/leaderboard";
 import { onlineMode } from "#/lib/online";
 import { socialMeta } from "#/lib/seo";
 import { useLocaleStore } from "#/stores/locale";
@@ -22,11 +23,13 @@ export const Route = createFileRoute("/games/$slug")({
     const game = findGame(params.slug);
     if (!game) throw notFound();
     // Offline (installed PWA) or API down: the game still plays, the board just hides
-    const [board, coop] = await Promise.all([
+    const [board, coop, week] = await Promise.all([
       getLeaderboard({ data: { slug: game.slug, limit: 10 } }).catch(() => null),
       game.online ? getLeaderboard({ data: { slug: game.slug, limit: 10, mode: onlineMode(game) } }).catch(() => null) : null,
+      // Ticket games also rank this week's earnings (tickets.md §5)
+      game.tickets ? getWeeklyLeaderboard({ data: { slug: game.slug, limit: 10 } }).catch(() => null) : null,
     ]);
-    return { game, board, coop };
+    return { game, board, coop, week };
   },
   head: ({ loaderData }) => {
     if (!loaderData) return { meta: [{ title: "Engames" }] };
@@ -48,13 +51,15 @@ export const Route = createFileRoute("/games/$slug")({
 function GamePage() {
   const locale = useLocale();
   const m = useMessages();
-  const { game, board, coop } = Route.useLoaderData();
+  const { game, board, coop, week } = Route.useLoaderData();
   const { room } = Route.useSearch();
   const others = games.filter((g) => g.slug !== game.slug).slice(0, 6);
   const offline = <p className="text-sm text-muted-foreground">{m.player.boardOffline}</p>;
   const solo = board ? <LeaderboardList entries={board} /> : offline;
   // Online games keep a separate board for online matches
-  const leaderboard = game.online ? <BoardTabs solo={solo} coop={coop ? <LeaderboardList entries={coop} /> : offline} versus={onlineMode(game) === "versus"} /> : solo;
+  const allTime = game.online ? <BoardTabs solo={solo} coop={coop ? <LeaderboardList entries={coop} /> : offline} versus={onlineMode(game) === "versus"} /> : solo;
+  // Ticket games: this week's earnings first, the all-time scores one tab away
+  const leaderboard = game.tickets ? <TicketBoardTabs week={week} allTime={allTime} /> : allTime;
 
   // The player gets the full width; guide + leaderboard, then other games, stack
   // below it. On phones the player is full-screen and both open as dialogs.

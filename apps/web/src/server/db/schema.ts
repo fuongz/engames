@@ -358,7 +358,9 @@ export const ticketWallet = sqliteTable("ticket_wallet", {
 
 /**
  * Every change to a wallet, newest last: the audit trail, and what the daily
- * earn cap is summed from. `reason` is "earn" for now. `created_at` is unix ms.
+ * earn cap and the weekly board are summed from. `reason` is "earn" (a game paid
+ * out), "shop:<slug>:<itemId>" (a Prize Counter purchase, negative delta), or a
+ * hand-written one ("adjust", "refund:…"). `created_at` is unix ms.
  */
 export const ticketLedger = sqliteTable(
   "ticket_ledger",
@@ -372,5 +374,42 @@ export const ticketLedger = sqliteTable(
     reason: text("reason").notNull(),
     createdAt: integer("created_at").notNull(),
   },
-  (t) => [index("ticket_ledger_user_time_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("ticket_ledger_user_time_idx").on(t.userId, t.createdAt),
+    // The weekly board: one game's rows since Monday
+    index("ticket_ledger_game_time_idx").on(t.gameId, t.createdAt),
+  ],
+);
+
+/**
+ * Something bought for a game that the game has not picked up yet
+ * (docs/standards/tickets.md §4). `buyItem` writes it after the ticket spend;
+ * the game's next `ctx.allowance.claim()` delivers it and stamps `claimed_at`
+ * (unix ms; NULL = still waiting). `source` is "shop:<itemId>"; `ledger_id` is
+ * the spend that paid for it, so a purchase can be audited and refunded.
+ */
+export const pendingGrant = sqliteTable(
+  "pending_grant",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    kind: text("kind").notNull(),
+    amount: integer("amount").notNull(),
+    source: text("source").notNull(),
+    ledgerId: integer("ledger_id").references(() => ticketLedger.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at").notNull(),
+    claimedAt: integer("claimed_at"),
+  },
+  (t) => [
+    // What claimAllowance looks for: one player's undelivered grants in one game
+    index("pending_grant_unclaimed_idx")
+      .on(t.userId, t.gameId)
+      .where(sql`claimed_at is null`),
+    uniqueIndex("pending_grant_ledger_idx").on(t.ledgerId),
+  ],
 );
