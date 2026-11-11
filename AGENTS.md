@@ -20,6 +20,7 @@ local repository instruction, then these general rules.
 | How does a game take coupons? | [`docs/standards/coupons.md`](docs/standards/coupons.md) |
 | How does a game grant a welcome/daily allowance or a login streak? | [`docs/standards/allowance.md`](docs/standards/allowance.md) |
 | How do arcade games share tickets, sell at the Prize Counter, rank the week? | [`docs/standards/tickets.md`](docs/standards/tickets.md) |
+| How do arcade games share the Lucky Jar (Hũ may mắn) jackpot? | [`docs/standards/jackpot.md`](docs/standards/jackpot.md) |
 
 Four things you will get wrong without them, so they are worth stating up front:
 

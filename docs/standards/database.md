@@ -15,10 +15,11 @@ coupons have their own doc ([`coupons.md`](coupons.md)).
 | `created_at` | unix ms, defaults to now |
 
 No other table stores a slug. `score`, `game_save`, `game_stat`, `online_match`,
-`favorite`, `coupon`, `coupon_redemption`, `allowance_grant`, `ticket_ledger`
-and `pending_grant` each have a `game_id` referencing `game(id)`
-(`coupon.game_id` may be NULL: any game). See [`allowance.md`](allowance.md) and
-[`tickets.md`](tickets.md) for the last three.
+`favorite`, `coupon`, `coupon_redemption`, `allowance_grant`, `ticket_ledger`,
+`pending_grant`, `jackpot_contribution` and `jackpot_win` each have a `game_id`
+referencing `game(id)` (`coupon.game_id` may be NULL: any game). See
+[`allowance.md`](allowance.md), [`tickets.md`](tickets.md) and
+[`jackpot.md`](jackpot.md) for the last five.
 
 **A new game gets its row by itself.** `gameIdOf(db, slug)`
 (`apps/web/src/server/db/games.ts`) looks the slug up, inserts it with

@@ -358,8 +358,9 @@ export const ticketWallet = sqliteTable("ticket_wallet", {
 
 /**
  * Every change to a wallet, newest last: the audit trail, and what the daily
- * earn cap and the weekly board are summed from. `reason` is "earn" (a game paid
- * out), "shop:<slug>:<itemId>" (a Prize Counter purchase, negative delta), or a
+ * earn cap and the weekly board are summed from (`reason = 'earn'` rows only).
+ * `reason` is "earn" (a game paid out), "shop:<slug>:<itemId>" (a Prize Counter
+ * purchase, negative delta), "jackpot" (a Lucky Jar win, see jackpot.md), or a
  * hand-written one ("adjust", "refund:…"). `created_at` is unix ms.
  */
 export const ticketLedger = sqliteTable(
@@ -412,4 +413,82 @@ export const pendingGrant = sqliteTable(
       .where(sql`claimed_at is null`),
     uniqueIndex("pending_grant_ledger_idx").on(t.ledgerId),
   ],
+);
+
+// ---------------------------------------------------------------- Lucky Jar (jackpot)
+
+/**
+ * The shared arcade jackpot, "Hũ may mắn" (docs/standards/jackpot.md). One row,
+ * `id = 'arcade'`, inserted by migration 0010. `pool` grows as players feed it
+ * (`contribute`) and goes back to `seed` when someone wins (`roll`); it never
+ * passes `cap`, where the next roll always wins. `round` counts jackpots: a roll
+ * claims round N by moving it to N + 1, so only one roll can ever win it. All
+ * amounts are tickets; `updated_at` is unix ms.
+ */
+export const jackpotPool = sqliteTable(
+  "jackpot_pool",
+  {
+    id: text("id").primaryKey(),
+    pool: integer("pool").notNull(),
+    seed: integer("seed").notNull().default(5000),
+    cap: integer("cap").notNull().default(50000),
+    round: integer("round").notNull().default(1),
+    updatedAt: integer("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  // A hand edit that would break the curve (pool over cap, cap at or below seed) fails loudly
+  () => [check("jackpot_pool_shape", sql`seed >= 0 and cap > seed and pool >= 0 and pool <= cap and round >= 1`)],
+);
+
+/**
+ * What each player fed the jar, per game, per Vietnam day (`day` =
+ * "YYYY-MM-DD" in Asia/Ho_Chi_Minh): the ledger the daily contribution cap is
+ * read from. `tickets` only ever grows within a day.
+ */
+export const jackpotContribution = sqliteTable(
+  "jackpot_contribution",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    day: text("day").notNull(),
+    tickets: integer("tickets").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.gameId, t.day] })],
+);
+
+/** How many times each player rolled for the jackpot on a Vietnam day: the roll rate limit. */
+export const jackpotRoll = sqliteTable(
+  "jackpot_roll",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    day: text("day").notNull(),
+    count: integer("count").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
+
+/**
+ * Every jackpot ever won: the Hall of Jackpot. `round` is the round the win
+ * claimed (unique: one winner per round), `amount` the tickets it paid into the
+ * winner's wallet (a `ticket_ledger` row with reason "jackpot" and the same
+ * `created_at`), `won_at` unix ms.
+ */
+export const jackpotWin = sqliteTable(
+  "jackpot_win",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    round: integer("round").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    amount: integer("amount").notNull(),
+    wonAt: integer("won_at").notNull(),
+  },
+  (t) => [index("jackpot_win_won_at_idx").on(t.wonAt), uniqueIndex("jackpot_win_round_uq").on(t.round)],
 );

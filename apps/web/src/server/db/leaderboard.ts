@@ -127,9 +127,9 @@ const WEEK = 7 * 24 * 3_600_000;
 
 /**
  * Tickets EARNED in game `slug` since Monday 00:00 (Vietnam), per player: the sum
- * of `ticket_ledger` rows with `reason = 'earn'`. Spends (`shop:…`) and hand
- * adjustments never count. Ties go to whoever got there first (the earlier last
- * earning). `me.rank` is 1 + the players strictly ahead, like `saveScore`.
+ * of `ticket_ledger` rows with `reason = 'earn'`. Spends (`shop:…`), Lucky Jar
+ * wins (`jackpot`) and hand adjustments never count. Ties go to whoever got
+ * there first (the earlier last earning). `me.rank` is 1 + the players strictly ahead, like `saveScore`.
  */
 export async function weeklyTicketBoard(
   db: Db,

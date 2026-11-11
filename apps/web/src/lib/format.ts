@@ -24,3 +24,22 @@ export function compactCount(n: number, locale: Locale): string {
   const text = Number.isInteger(shown) ? String(shown) : shown.toFixed(1);
   return `${locale === "vi" ? text.replace(".", ",") : text}${unit.suffix}`;
 }
+
+const STEPS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["day", 86_400_000],
+  ["hour", 3_600_000],
+  ["minute", 60_000],
+];
+
+/**
+ * How long ago `then` was, in words: "3 giờ trước" / "3 hours ago", "hôm qua" /
+ * "yesterday". Under a minute reads "now". Both are unix ms.
+ */
+export function timeAgo(then: number, now: number, locale: Locale): string {
+  const rtf = new Intl.RelativeTimeFormat(locale === "vi" ? "vi-VN" : "en-US", { numeric: "auto" });
+  const diff = Math.max(0, now - then);
+  for (const [unit, ms] of STEPS) {
+    if (diff >= ms) return rtf.format(-Math.floor(diff / ms), unit);
+  }
+  return rtf.format(0, "second");
+}

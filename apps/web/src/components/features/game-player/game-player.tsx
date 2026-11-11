@@ -42,6 +42,7 @@ import { OnlineEntry } from "#/components/features/online/online-entry";
 import { OnlineSession } from "#/components/features/online/online-session";
 import { CouponDialog } from "./coupon-dialog";
 import { FavoriteButton } from "./favorite-button";
+import { createJackpotBridge, type JackpotBridge, releaseJackpot } from "./game-player.jackpot";
 import { createTicketQueue, type TicketQueue } from "./game-player.tickets";
 import { ScoreDialog, takePendingScore } from "./score-dialog";
 
@@ -76,6 +77,8 @@ export function GamePlayer({
   const instanceRef = useRef<GameInstance | null>(null);
   // The running mount's ticket batcher, flushed when that mount goes away
   const ticketsRef = useRef<TicketQueue | null>(null);
+  // …and its Lucky Jar bridge (contributions batch the same way)
+  const jackpotRef = useRef<JackpotBridge | null>(null);
   const [module, setModule] = useState<GameModule | null>(null);
   const [failed, setFailed] = useState(false);
   const [started, setStarted] = useState(false);
@@ -116,12 +119,16 @@ export function GamePlayer({
       instanceRef.current = null;
       ticketsRef.current?.flush();
       ticketsRef.current = null;
+      releaseJackpot(jackpotRef);
     };
   }, [game.slug]);
 
   // Leaving the page (tab closed, app switched away on a phone): send waiting tickets now
   useEffect(() => {
-    const leave = () => ticketsRef.current?.flush(true);
+    const leave = () => {
+      ticketsRef.current?.flush(true);
+      void jackpotRef.current?.flush(true);
+    };
     window.addEventListener("pagehide", leave);
     return () => window.removeEventListener("pagehide", leave);
   }, []);
@@ -173,11 +180,14 @@ export function GamePlayer({
     instanceRef.current?.destroy();
     stage.replaceChildren();
     ticketsRef.current?.flush();
+    releaseJackpot(jackpotRef);
     // Account services: signed-in players only, and never in an online match
     // (the room owns the state). `cloud` keeps its original rule: requiresAccount
     // games always had it, online or not.
     const solo = userId && !match ? userId : null;
     ticketsRef.current = game.tickets && solo ? createTicketQueue(game.slug, solo) : null;
+    // The jar is shared and public (its state works signed out), but never online
+    jackpotRef.current = game.jackpot && !match ? createJackpotBridge(game.slug, userId ?? null) : null;
     const cloud: CloudSave | undefined =
       (game.requiresAccount || game.accountSave) && userId
         ? {
@@ -213,6 +223,7 @@ export function GamePlayer({
           ? { claim: () => claimAllowanceFn({ data: { slug: game.slug } }) }
           : undefined,
       tickets: ticketsRef.current?.tickets,
+      jackpot: jackpotRef.current?.jackpot,
       storage: createStorage(game.slug),
       audio: audioBus,
       // Read live: games redraw every frame, so a language switch shows at once
@@ -241,6 +252,7 @@ export function GamePlayer({
     instanceRef.current = null;
     ticketsRef.current?.flush();
     ticketsRef.current = null;
+    releaseJackpot(jackpotRef);
     stageRef.current?.replaceChildren();
   }, []);
 

@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { forgetGameIds } from "./games";
+import { roll } from "./jackpot";
 import { type Db, saveScore, topScores, weeklyTicketBoard } from "./leaderboard";
 import * as schema from "./schema";
 import { buyItem } from "./shop";
@@ -114,6 +115,19 @@ describe("weeklyTicketBoard", () => {
       `insert into ticket_ledger (user_id, game_id, delta, reason, created_at) select 'u1', id, 5000, 'adjust', ${NOW} from game where slug = 'xu-vu-tru'`,
     );
     expect((await board("u1")).me).toEqual({ rank: 1, score: 1000, id: 1 });
+  });
+
+  it("never counts a Lucky Jar win (reason 'jackpot')", async () => {
+    await earn("u1", 300, NOW);
+    await earn("u2", 200, NOW);
+    raw.run("update jackpot_pool set pool = cap where id = 'arcade'");
+    expect(await roll(db, { userId: "u2", slug: "xu-vu-tru", now: NOW, rand: () => 0 })).toMatchObject({ won: true, amount: 50_000 });
+    const { entries, me } = await board("u2");
+    expect(entries.map((e) => [e.name, e.score])).toEqual([
+      ["An", 300],
+      ["Bình", 200],
+    ]);
+    expect(me).toEqual({ rank: 2, score: 200, id: 2 });
   });
 
   it("keeps games apart", async () => {

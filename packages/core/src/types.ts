@@ -102,6 +102,11 @@ export interface GameManifest {
    */
   tickets?: boolean;
   /**
+   * Feeds and rolls for the shared arcade Lucky Jar, "Hũ may mắn"
+   * (docs/standards/jackpot.md). The game gets `GameContext.jackpot`.
+   */
+  jackpot?: boolean;
+  /**
    * Items the portal's Prize Counter sells for shared arcade tickets
    * (docs/standards/tickets.md §4). A bought item reaches the game through
    * `ctx.allowance.claim()` as a `{ type: "shop" }` grant, so a game with a shop
@@ -197,6 +202,12 @@ export interface GameContext {
    * online match.
    */
   tickets?: GameTickets;
+  /**
+   * The shared arcade Lucky Jar, for games with `manifest.jackpot`. Present
+   * signed out too (`state` and `onState` work; `contribute` does nothing and
+   * `roll` rejects). Missing outside the portal and always in an online match.
+   */
+  jackpot?: GameJackpot;
 }
 
 /**
@@ -244,6 +255,46 @@ export interface GameTickets {
   deposit(amount: number): Promise<{ balance: number; accepted: number }>;
   /** Called with the new balance whenever it changes; returns an unsubscribe. */
   onBalance(cb: (balance: number) => void): () => void;
+}
+
+/** One past Lucky Jar win, as everyone sees it. */
+export interface JackpotWinner {
+  /** The winner's first name (at most 12 characters); the portal's "a player" when nothing safe can be shown. */
+  name: string;
+  /** Tickets won. */
+  amount: number;
+  /** The game it was won in. */
+  gameSlug: string;
+  /** Unix ms. */
+  wonAt: number;
+}
+
+/** What one roll did. */
+export interface JackpotRoll {
+  won: boolean;
+  /** Tickets paid into the shared wallet; only when `won`. */
+  amount?: number;
+  /** The pool after the roll (back at the seed after a win). */
+  pool: number;
+}
+
+export interface GameJackpot {
+  /**
+   * Feed the jar `coins` of the game's own coins (a positive integer): each adds
+   * 2 tickets to the shared pool, up to a daily cap per player per game. Paid by
+   * the house, not the player. Batched by the portal; a no-op signed out.
+   */
+  contribute(coins: number): void;
+  /**
+   * Roll once for the whole pool (a few rolls per player per day; over the limit
+   * it resolves `won: false`). A win is already in the player's ticket wallet
+   * when this resolves. Rejects with "sign-in-required" when signed out.
+   */
+  roll(): Promise<JackpotRoll>;
+  /** The pool, its cap and the latest winners (newest first). Works signed out. */
+  state(): Promise<{ pool: number; cap: number; recent: JackpotWinner[] }>;
+  /** Called whenever the pool or cap changes; returns an unsubscribe. Works signed out. */
+  onState(cb: (s: { pool: number; cap: number }) => void): () => void;
 }
 
 /** One reward a coupon carries. `kind` is game-defined, e.g. "coins". */

@@ -7,7 +7,7 @@ export const H = 960;
 // ---------------------------------------------------------------- economy
 
 /** The game's version (manifest.version, the save envelope's `v`). */
-export const VERSION = "1.2.0";
+export const VERSION = "1.3.0";
 /** Coins a guest's local trial machine starts with (no daily coins, no deposits). */
 export const TRIAL_COINS = 100;
 /** The signed-in allowance (manifest.allowance): a welcome once, then a daily. */

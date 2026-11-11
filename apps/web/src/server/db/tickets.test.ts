@@ -125,6 +125,18 @@ describe("tickets", () => {
     consistent();
   });
 
+  it("only 'earn' rows use up the daily cap and earned_total", async () => {
+    // A jackpot win, an adjustment and a refund, all today in this game
+    for (const [delta, reason] of [[40_000, "jackpot"], [9_000, "adjust"], [600, "refund:1"]] as const) {
+      sqlite.run(
+        `insert into ticket_ledger (user_id, game_id, delta, reason, created_at) select 'u1', id, ${delta}, '${reason}', ${NOW} from game where slug = 'xu-vu-tru'`,
+      );
+    }
+    for (let i = 0; i < 10; i++) expect(await deposit(5000)).toMatchObject({ accepted: 5000, clamped: null });
+    expect(await deposit(1)).toMatchObject({ accepted: 0, clamped: "daily" });
+    expect((await getTicketBalance(db, "u1")).earnedTotal).toBe(DAILY_EARN_CAP);
+  });
+
   it("concurrent deposits never pass the daily cap and never lose a ticket", async () => {
     await deposit(5000);
     const results = await Promise.all(

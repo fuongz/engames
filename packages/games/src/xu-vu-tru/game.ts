@@ -3,6 +3,7 @@ import "@fontsource/handjet/700.css";
 import {
   type CloudSlot,
   type GameHooks,
+  type JackpotRoll,
   type PointerInfo,
   type Rect,
   type Runtime,
@@ -60,7 +61,13 @@ import {
   drawFrontLip,
   drawGate,
   drawJar,
+  drawJarBadge,
   drawJarLane,
+  drawCodeCoin,
+  drawConfetti,
+  drawSunburst,
+  type Confetto,
+  type MarqueeOpts,
   JAR_MOUTH,
   drawGlass,
   drawMarquee,
@@ -176,6 +183,7 @@ import {
   setRate,
   update,
 } from "./logic";
+import { createJarFeed, supersPaid } from "./jackpot";
 import { type MachineSave, fromSave, migrate, toSave } from "./save";
 import { STRINGS } from "./strings";
 
@@ -202,6 +210,13 @@ import { STRINGS } from "./strings";
 // save itself (save.ts rules.score), and one rides along about once a minute
 // while the lifetime tickets grow, and when the coins run out, on suspend and on
 // dispose. The plain debounced saves carry no detail.
+//
+// The Lucky Jar (1.3.0, docs/standards/jackpot.md, jackpot.ts): signed in, every
+// coin the robot jar eats feeds the shared pool and every Super spin that pays
+// rolls for it once. The marquee follows the live pool for everyone (guests get
+// a sign-in hint), runs a short suspense while a roll is out, then shows the
+// outcome: a celebration (the jar bursting, a coin rain and confetti drawn in
+// code, the amount counting up) or a gentle "not this time". Errors are silent.
 
 /** The guest's trial machine and its trial tickets: { save, tickets }. */
 const TRIAL_KEY = "trial";
@@ -209,6 +224,14 @@ const TRIAL_KEY = "trial";
 const PENDING_KEY = "pendingCoins";
 /** manifest.version when the player last closed the What's new card. */
 const SEEN_KEY = "seenVersion";
+/**
+ * Dev builds only (`import.meta.env.DEV`; the branch is dropped from production
+ * builds): `{ won: boolean, amount?: number }` stored here plays one Lucky Jar
+ * roll with that answer a moment after the game starts, without a Super spin or
+ * a server, so the suspense and both outcomes can be checked in a browser. Read
+ * once and cleared.
+ */
+const DEV_JAR_KEY = "devJackpot";
 /** The beta's keys: its run (discarded), album (seeds a new trial machine) and best. */
 const LEGACY_RUN_KEY = "run";
 const LEGACY_ALBUM_KEY = "album";
@@ -300,6 +323,19 @@ const cellsOf = (kind: SpinKind) => (kind === "mini" ? MINI_CELLS : SUPER_CELLS)
 const spinTimeOf = (kind: SpinKind) => (kind === "mini" ? SPIN_TIME : SUPER_SPIN_TIME);
 /** Seconds of Super spin win celebration. */
 const SUPER_FX = 3.2;
+/** The Lucky Jar: the suspense plays at least this long, and gives up silently after the max. */
+const JAR_SUSPENSE_MIN = 1.8;
+const JAR_SUSPENSE_MAX = 15;
+/** Seconds the marquee shows "not this time". */
+const JAR_MISSED_TIME = 3.2;
+/** Seconds of the win celebration, when the jar bursts in it, and the amount's count-up. */
+const JAR_WIN_FX = 6;
+const JAR_BURST = 0.55;
+const JAR_COUNT_FROM = 0.7;
+const JAR_COUNT_TIME = 1.8;
+/** Seconds each marquee line stays up (the Super line, the pool, a guest's sign-in hint), and its fade. */
+const MARQUEE_EVERY = 4;
+const MARQUEE_FADE = 0.25;
 /** Seconds a coin takes to sink into the gate's hole. */
 const SINK = 0.2;
 /** Seconds a won card takes to fly to the album button. */
@@ -364,6 +400,17 @@ interface Bit {
   max: number;
   color: string;
   size: number;
+}
+
+/** A coin of the Lucky Jar's rain (drawn in code). */
+interface RainCoin {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  spin: number;
+  vs: number;
+  r: number;
 }
 
 /** Something that just went over an edge, animated until it is gone. */
@@ -498,6 +545,46 @@ export function setup(rt: Runtime): GameHooks {
   let resumed = false;
   /** The last tap on the game (unix ms). */
   let lastTapAt = Date.now();
+
+  // The Lucky Jar (jackpot.ts): contributions and rolls go through the feed, signed in only
+  const hasJar = rt.game.jackpot !== undefined;
+  /** The marquee's Lucky Jar line: a roll's suspense, then its outcome for a while. */
+  let jarPhase: "rolling" | "won" | "lost" | null = null;
+  let jarPhaseT = 0;
+  /** Answers waiting for the suspense to play out (a second Super spin can roll while the first shows). */
+  const jarAnswers: JackpotRoll[] = [];
+  /** The win: seconds of celebration left, the amount, and its coin rain and confetti. */
+  let jarWinFx = 0;
+  let jarWinAmount = 0;
+  let rain: RainCoin[] = [];
+  let confetti: Confetto[] = [];
+  let lastJarTick = 0;
+  /** The jar badge's glow after the jar eats (signed in: those coins just fed the pool). */
+  let jarGlow = 0;
+  const jarFeed = createJarFeed({
+    jackpot: rt.game.jackpot,
+    signedIn: () => mode === "account",
+    onRollStart() {
+      if (jarPhase === null) {
+        jarPhase = "rolling";
+        jarPhaseT = 0;
+      }
+    },
+    onRoll(r) {
+      jarAnswers.push(r);
+    },
+  });
+  /** Dev builds only: one scripted roll (DEV_JAR_KEY), and when its answer arrives. */
+  let devRoll: JackpotRoll | null = null;
+  let devAnswerAt = -1;
+  if (import.meta.env.DEV) {
+    const raw = storage.get<{ won?: unknown; amount?: unknown } | null>(DEV_JAR_KEY, null);
+    if (raw) {
+      storage.set(DEV_JAR_KEY, null);
+      const amount = Math.max(1, Math.floor(Number(raw.amount) || 23410));
+      devRoll = raw.won === true ? { won: true, amount, pool: 5000 } : { won: false, pool: 12345 };
+    }
+  }
 
   // Input
   /** Every pointer currently pressing SHOOT (a Set: a second finger must not overwrite the first). */
@@ -638,6 +725,19 @@ export function setup(rt: Runtime): GameHooks {
     dry() {
       audio.tone({ freq: 110, dur: 0.18, type: "square", vol: 0.05 });
     },
+    /** A Lucky Jar roll is out: a light tick that climbs while the marquee lamps race. */
+    jarTick(k: number) {
+      audio.tone({ freq: 1200 + 600 * Math.min(1, k), dur: 0.02, type: "square", vol: 0.016 });
+    },
+    /** The Lucky Jar tips: the Super tune, then a cascade of coins. */
+    jarWin() {
+      sfx.superBonus();
+      for (let i = 0; i < 14; i++) audio.tone({ freq: 2300 + ((i * 337) % 900), dur: 0.05, type: "triangle", vol: 0.04, delay: 0.5 + i * 0.07 });
+    },
+    /** Not this time: a soft, kind two-note sigh. */
+    jarMissed() {
+      for (const [i, f] of [784, 659].entries()) audio.tone({ freq: f, dur: 0.18, type: "sine", vol: 0.035, delay: i * 0.14 });
+    },
     /** The machine settles at zero coins: a soft two-note wind-down, not a game-over. */
     rest() {
       for (const [i, f] of [659, 523].entries()) audio.tone({ freq: f, dur: 0.16, type: "triangle", vol: 0.035, delay: i * 0.12 });
@@ -673,6 +773,215 @@ export function setup(rt: Runtime): GameHooks {
     if (wait && toast) {
       if (toasts.length < 4) toasts.push({ text: str, color, card });
     } else toast = { text: str, t: 0, color, card };
+  }
+
+  // ---------------------------------------------------------------- the Lucky Jar
+
+  /** Advance the marquee's roll line and the win celebration (only while the machine shows). */
+  function stepJar(dt: number) {
+    jarPhaseT += dt;
+    // Dev builds: the scripted roll starts once the machine shows, and answers a moment later
+    if (devRoll && devAnswerAt < 0 && jarPhase === null) {
+      jarPhase = "rolling";
+      jarPhaseT = 0;
+      devAnswerAt = t + 1.4;
+    } else if (devRoll && devAnswerAt >= 0 && t >= devAnswerAt) {
+      jarAnswers.push(devRoll);
+      devRoll = null;
+    }
+    const waitingRoll = jarFeed.rolling || (devRoll !== null && devAnswerAt >= 0);
+    if (jarPhase === "rolling") {
+      // The Super spin's own celebration finishes first
+      if (jarAnswers.length > 0 && jarPhaseT >= JAR_SUSPENSE_MIN && superFx <= 0.3) resolveJar(jarAnswers.shift() as JackpotRoll);
+      // A failed roll (offline, signed out, the server) or no answer in time: the line just goes, silently
+      else if (jarAnswers.length === 0 && (!waitingRoll || jarPhaseT > JAR_SUSPENSE_MAX)) jarPhase = null;
+      else if (t - lastJarTick > 0.09) {
+        lastJarTick = t;
+        sfx.jarTick(jarPhaseT / JAR_SUSPENSE_MIN);
+      }
+    } else if (jarPhase === "lost" && jarPhaseT > JAR_MISSED_TIME) jarPhase = null;
+    else if (jarPhase === "won" && jarWinFx <= 0) {
+      jarPhase = null;
+      // The toast stays after the celebration, over the machine
+      say(tr().jarWon(jarWinAmount), HONEY, true);
+    }
+    // A late answer, or the next Super spin's: show it
+    if (jarPhase === null && (jarAnswers.length > 0 || jarFeed.rolling)) {
+      jarPhase = "rolling";
+      jarPhaseT = jarAnswers.length > 0 ? JAR_SUSPENSE_MIN : 0;
+    }
+    jarGlow = Math.max(0, jarGlow - dt * 1.4);
+    if (jarWinFx > 0) stepJarWin(dt);
+  }
+
+  function resolveJar(r: JackpotRoll) {
+    jarPhaseT = 0;
+    const amount = Math.floor(r.amount ?? 0);
+    if (r.won && amount > 0) {
+      jarPhase = "won";
+      startJarWin(amount);
+    } else {
+      jarPhase = "lost";
+      sfx.jarMissed();
+    }
+  }
+
+  /** The win: the tickets are already in the wallet (the server paid them), so its balance is read again. */
+  function startJarWin(amount: number) {
+    jarWinFx = JAR_WIN_FX;
+    jarWinAmount = amount;
+    rain = [];
+    confetti = [];
+    shake = Math.max(shake, 0.5);
+    cheer = JAR_WIN_FX;
+    sfx.jarWin();
+    const tk = tickets;
+    const mine = gen;
+    tk?.balance().then(
+      (b) => {
+        if (mine === gen) wallet = b;
+      },
+      () => {},
+    );
+  }
+
+  /** Where the big jar stands in the celebration (logical px), and how much bigger than on the lip. */
+  const JAR_FX = { x: W / 2, y: 430, scale: 2.6 };
+
+  function stepJarWin(dt: number) {
+    const before = JAR_WIN_FX - jarWinFx;
+    jarWinFx = Math.max(0, jarWinFx - dt);
+    const k = JAR_WIN_FX - jarWinFx;
+    const v = view();
+    if (before < JAR_BURST && k >= JAR_BURST) {
+      // It bursts: coins and confetti out of its mouth
+      shake = Math.max(shake, 0.9);
+      const mouthY = JAR_FX.y - 30;
+      for (let i = 0; i < 46; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2;
+        const sp0 = 520 + Math.random() * 520;
+        rain.push({ x: JAR_FX.x, y: mouthY, vx: Math.cos(a) * sp0, vy: Math.sin(a) * sp0, spin: Math.random() * 6, vs: 6 + Math.random() * 10, r: 9 + Math.random() * 7 });
+      }
+      const colors = [HONEY, CREAM, TERRA, TEAL, VIOLET, CYAN, ...CORE_COLORS];
+      for (let i = 0; i < 110; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.8;
+        const sp0 = 300 + Math.random() * 600;
+        confetti.push({
+          x: JAR_FX.x,
+          y: mouthY,
+          vx: Math.cos(a) * sp0,
+          vy: Math.sin(a) * sp0,
+          rot: Math.random() * 6,
+          vr: (Math.random() - 0.5) * 14,
+          w: 6 + Math.random() * 6,
+          h: 10 + Math.random() * 8,
+          color: colors[i % colors.length],
+        });
+      }
+    }
+    // Then it rains coins from the top for a while
+    if (k > JAR_BURST && jarWinFx > 1.2) {
+      const n = Math.random() < dt * 34 ? 1 : 0;
+      for (let i = 0; i < n; i++)
+        rain.push({ x: v.x + Math.random() * v.w, y: v.y - 20, vx: (Math.random() - 0.5) * 60, vy: 120 + Math.random() * 160, spin: Math.random() * 6, vs: 5 + Math.random() * 8, r: 10 + Math.random() * 8 });
+    }
+    for (const c of rain) {
+      c.vy += 1100 * dt;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.spin += c.vs * dt;
+    }
+    rain = rain.filter((c) => c.y < v.y + v.h + 40);
+    for (const c of confetti) {
+      c.vy += 420 * dt;
+      c.vx *= 1 - dt * 1.6;
+      c.vy = Math.min(c.vy, 170);
+      c.x += (c.vx + Math.sin(c.rot * 2) * 30) * dt;
+      c.y += c.vy * dt;
+      c.rot += c.vr * dt;
+    }
+    confetti = confetti.filter((c) => c.y < v.y + v.h + 30);
+    if (jarWinFx <= 0) {
+      rain = [];
+      confetti = [];
+    }
+  }
+
+  /** What the marquee shows: a roll's line, else the Super line taking turns with the pool (and a guest's hint). */
+  function marqueeLine(rainbow: boolean): { label: string; opts: MarqueeOpts; hot: boolean } {
+    const l = tr();
+    if (jarPhase === "rolling") return { label: l.jarRolling, opts: { jar: true, suspense: true }, hot: false };
+    if (jarPhase === "lost") return { label: l.jarMissed, opts: { jar: true, color: TEAL }, hot: false };
+    if (jarPhase === "won") return { label: l.jarWinTitle, opts: { jar: true }, hot: true };
+    const superLine = l.marquee(Math.max(...SUPER_PRIZES));
+    if (rainbow || !hasJar) return { label: superLine, opts: {}, hot: rainbow };
+    const lines: { label: string; opts: MarqueeOpts }[] = [{ label: superLine, opts: {} }];
+    if (jarFeed.pool !== null) lines.push({ label: l.jarPool(jarFeed.pool), opts: { jar: true } });
+    if (mode === "guest") lines.push({ label: l.jarSignIn, opts: { jar: true, color: TEAL } });
+    const i = Math.floor(t / MARQUEE_EVERY) % lines.length;
+    const u = t % MARQUEE_EVERY;
+    const alpha = lines.length > 1 ? Math.min(1, u / MARQUEE_FADE, (MARQUEE_EVERY - u) / MARQUEE_FADE) : 1;
+    return { label: lines[i].label, opts: { ...lines[i].opts, alpha }, hot: false };
+  }
+
+  /** The Lucky Jar win, over everything: the robot jar bursting, a coin rain and confetti, the amount counting up. */
+  function drawJarWin() {
+    const l = tr();
+    const k = JAR_WIN_FX - jarWinFx;
+    const v = view();
+    const fade = jarWinFx < 0.6 ? jarWinFx / 0.6 : Math.min(1, k / 0.25);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = "rgba(40,29,25,0.74)";
+    ctx.fillRect(v.x, v.y, v.w, v.h);
+    drawSunburst(ctx, JAR_FX.x, JAR_FX.y - 20, 300, t, k < JAR_BURST ? k / JAR_BURST : 1);
+    // The jar: swells and trembles, then bursts (a squash) and bounces happily
+    const pre = clamp(k / JAR_BURST, 0, 1);
+    const post = k - JAR_BURST;
+    const tremble = k < JAR_BURST ? Math.sin(t * 70) * 3 * pre : 0;
+    const bounce = post > 0 ? Math.exp(-post * 3) * Math.sin(post * 18) * 0.12 : 0;
+    const sc = JAR_FX.scale * (0.6 + 0.4 * easeOutCubic(pre) + 0.06 * pre * pre) * (1 + bounce);
+    ctx.save();
+    ctx.translate(JAR_FX.x + tremble, JAR_FX.y);
+    ctx.scale(sc, sc);
+    ctx.translate(-JAR_MOUTH.x, -JAR_MOUTH.y - 25);
+    drawJar(ctx, sp, t, post > 0 ? Math.max(0.2, 1 - post / 3) : 0, 40, "");
+    ctx.restore();
+    // The burst's flash ring
+    if (post > 0 && post < 0.5) {
+      const q = post / 0.5;
+      ctx.globalAlpha = fade * (1 - q);
+      ctx.strokeStyle = CREAM;
+      ctx.lineWidth = 10 * (1 - q) + 2;
+      ctx.beginPath();
+      ctx.arc(JAR_FX.x, JAR_FX.y - 30, 40 + q * 220, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = fade;
+    }
+    drawConfetti(ctx, confetti);
+    for (const c of rain) drawCodeCoin(ctx, c.x, c.y, c.r, c.spin);
+    // The title and the amount counting up
+    const pop = clamp((k - 0.1) / 0.35, 0, 1);
+    ctx.save();
+    ctx.translate(W / 2, 228);
+    ctx.scale(easeOutCubic(pop), easeOutCubic(pop));
+    ctx.rotate(Math.sin(t * 5) * 0.03);
+    headline(ctx, l.jarWinTitle, 0, 0, fitSize(ctx, l.jarWinTitle, 64, 470), CORE_COLORS[Math.floor(t * 10) % 6]);
+    ctx.restore();
+    if (k >= JAR_COUNT_FROM) {
+      const q = clamp((k - JAR_COUNT_FROM) / JAR_COUNT_TIME, 0, 1);
+      const shown = Math.round(jarWinAmount * easeOutCubic(q));
+      const str = l.jarWinAmount(shown);
+      const full = l.jarWinAmount(jarWinAmount);
+      const size = fitSize(ctx, full, 56, 470);
+      const beat = q >= 1 ? 1 + 0.04 * Math.sin(t * 8) : 1;
+      ctx.save();
+      ctx.translate(W / 2, 640);
+      ctx.scale(beat, beat);
+      headline(ctx, str, 0, 0, size, HONEY);
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   /** The chute's mouth, where a shot coin hops out onto the gate. */
@@ -895,6 +1204,7 @@ export function setup(rt: Runtime): GameHooks {
     lidKnock = 0;
     jarMunch = 0;
     jarFill = 0;
+    jarGlow = 0;
   }
 
   function readTrialTickets() {
@@ -1240,13 +1550,27 @@ export function setup(rt: Runtime): GameHooks {
   ];
   const RULE_LINE = 28;
   const RULE_GAP = 14;
-  /** The rules card hugs its text (the line count depends on the language). */
-  const rulesRect = (): Rect => {
-    let lines = 0;
-    for (const line of tr().rulesLines) lines += wrap(ctx, line, 400, 19).length;
-    const h = 106 + lines * RULE_LINE + tr().rulesLines.length * RULE_GAP + 96;
-    return { x: 24, y: H / 2 - h / 2, w: 492, h };
-  };
+  /**
+   * The rules card hugs its text (the line count depends on the language). On a
+   * short screen the text steps down from 19 px until the card, its title and
+   * its close button fit the visible view (1.3.0 added the Lucky Jar's line).
+   */
+  function rulesLayout() {
+    const v = view();
+    const n = tr().rulesLines.length;
+    let fit = { size: 19, line: RULE_LINE, gap: RULE_GAP, h: 0 };
+    for (let size = 19; size >= 14; size--) {
+      const line = Math.round(size * 1.47);
+      const gap = Math.round(size * 0.6);
+      let lines = 0;
+      for (const ln of tr().rulesLines) lines += wrap(ctx, ln, 410, size).length;
+      fit = { size, line, gap, h: 106 + lines * line + n * gap + 96 };
+      if (fit.h <= v.h - 16) break;
+    }
+    const r: Rect = { x: 24, y: Math.max(v.y + 8, v.y + (v.h - fit.h) / 2), w: 492, h: fit.h };
+    return { ...fit, r };
+  }
+  const rulesRect = (): Rect => rulesLayout().r;
   const rulesClose = (): Rect => {
     const r = rulesRect();
     return { x: 150, y: r.y + r.h - 84, w: 240, h: 60 };
@@ -1315,6 +1639,9 @@ export function setup(rt: Runtime): GameHooks {
       const hadCoins = s.coins > 0;
       const shoot = pointersHeld.size > 0 || spaceHeld || tap || (autoOn && s.coins > 0);
       const evs = update(s, { shoot }, dt);
+      // The Lucky Jar: eaten coins feed it and a paid Super spin rolls (signed in only); a guest's Super gets a hint
+      jarFeed.feed(evs);
+      if (hasJar && mode === "guest" && supersPaid(evs) > 0) say(tr().jarGuestSuper, CYAN, true);
       // A tap is spent once the machine has answered it (a shot, or the dry click)
       if (evs.some((e) => e.type === "shoot" || e.type === "dry")) tap = false;
       for (const e of evs) onEvent(e);
@@ -1364,11 +1691,13 @@ export function setup(rt: Runtime): GameHooks {
     for (const f of fallers) {
       if (!f.jar || f.t >= JAR_DROP || f.t + dt < JAR_DROP) continue;
       jarMunch = 1;
+      if (hasJar && mode === "account") jarGlow = 1;
       sfx.munch();
       pop(tr().jarYum, JAR_MOUTH.x, JAR_MOUTH.y - 26, HONEY, 26);
       burst(JAR_MOUTH.x, JAR_MOUTH.y, 8, [HONEY, CREAM, "#F2A6A0"], 120);
     }
     if (overlay === "viewer") stepViewer(dt);
+    if (ready && overlay === null) stepJar(dt);
 
     // Lights and counters
     const busyReels = s.spin !== null || s.prize !== null;
@@ -1574,7 +1903,8 @@ export function setup(rt: Runtime): GameHooks {
     drawCabinet(ctx, sp, v);
     // Title above the cabinet when the phone is tall enough to show it
     if (v.y < -50) headline(ctx, l.title, W / 2, v.y / 2, fitSize(ctx, l.title, 40, 380), CREAM);
-    drawMarquee(ctx, l.marquee(Math.max(...SUPER_PRIZES)), t, rainbow);
+    const mq = marqueeLine(rainbow);
+    drawMarquee(ctx, mq.label, t, mq.hot, mq.opts);
     drawMenuButton(ctx, MENU_BTN, l.menu);
     drawAlbumButton(ctx, sp, ALBUM_BTN, l.album, ownedCount(s.cards), CARD_COUNT, albumPulse);
     versionTag(ctx, 493, 76, l.versionLabel(version));
@@ -1603,6 +1933,7 @@ export function setup(rt: Runtime): GameHooks {
     drawFrontLip(ctx, chase, rainbow);
     drawFallers();
     drawJar(ctx, sp, t, jarMunch, jarFill, l.jar);
+    if (hasJar) drawJarBadge(ctx, t, jarGlow, l.jarBadge);
     drawGlass(ctx, { x: 30, y: 476, w: 480, h: 340 }, t + 4);
     drawChute(ctx, chuteGlow);
     drawFlights();
@@ -1972,6 +2303,7 @@ export function setup(rt: Runtime): GameHooks {
       ctx.restore();
       if (Math.random() < 0.5) burst(Math.random() * W, WHEEL_C.y - 70, 3, CORE_COLORS, 160);
     }
+    if (jarWinFx > 0) drawJarWin();
   }
 
   /** All ten cards fanned out over the wheel, with the set bonus. */
@@ -2282,17 +2614,17 @@ export function setup(rt: Runtime): GameHooks {
         button(ctx, b.rect, label, b.id === "go" ? BTN_GO : BTN_ALT, b.id === "go" ? 28 : 20);
       }
     } else if (overlay === "rules") {
-      const r = rulesRect();
+      const { r, size, line: lineH, gap } = rulesLayout();
       panel(ctx, r, 24);
       headline(ctx, l.rules, W / 2, r.y + 50, 38, CREAM);
       let y = r.y + 106;
       l.rulesLines.forEach((line, i) => {
         bullet(i, y);
-        for (const ln of wrap(ctx, line, 400, 19)) {
-          text(ctx, ln, 84, y, 19, CREAM, "left", null);
-          y += RULE_LINE;
+        for (const ln of wrap(ctx, line, 410, size)) {
+          text(ctx, ln, 84, y, size, CREAM, "left", null);
+          y += lineH;
         }
-        y += RULE_GAP;
+        y += gap;
       });
       button(ctx, rulesClose(), l.close, BTN_GO, 26);
     } else if (overlay === "news") {
@@ -2501,6 +2833,7 @@ export function setup(rt: Runtime): GameHooks {
       if (!fileScore()) saveNow();
     },
     dispose() {
+      jarFeed.dispose();
       offGrant?.();
       offBalance?.();
       if (mode === "account" || mode === "guest") {

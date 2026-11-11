@@ -77,5 +77,10 @@ describe("manifest platform options", () => {
       }
     }
     if (g.tickets !== undefined) expect(typeof g.tickets).toBe("boolean");
+    // The Lucky Jar pays into the shared ticket wallet (jackpot.md)
+    if (g.jackpot !== undefined) {
+      expect(typeof g.jackpot).toBe("boolean");
+      if (g.jackpot) expect(g.tickets, "a jackpot game is a ticket game").toBe(true);
+    }
   });
 });

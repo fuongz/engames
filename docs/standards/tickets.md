@@ -27,7 +27,9 @@ change. Ticket games also rank **this week's** earnings.
 - **The Prize Counter** (§4) sells `manifest.shop` items for tickets. A purchase
   is a negative ledger row plus a `pending_grant`, delivered by the game's next
   `ctx.allowance.claim()`. **Spends never count as earnings**: the daily earn cap,
-  `earned_total` and the weekly board read `reason = 'earn'` rows only.
+  `earned_total` and the weekly board read `reason = 'earn'` rows only. Neither
+  do **Lucky Jar wins** (`reason = 'jackpot'`, see [`jackpot.md`](jackpot.md)):
+  they add to the balance and nothing else.
 - **The weekly board** (§5): a ticket game's leaderboard opens on "This week"
   (tickets earned since Monday 00:00 Vietnam time), with "All time" (the score
   board) one tab away.
@@ -46,11 +48,19 @@ change. Ticket games also rank **this week's** earnings.
 | --- | --- | --- |
 | `earn` | `depositTickets` (a game paid out) | **yes**: the daily cap, `earned_total`, the weekly board |
 | `shop:<slug>:<itemId>` | `buyItem` (a Prize Counter purchase, negative) | no |
+| `jackpot` | `roll` (a Lucky Jar win, positive; `created_at` equals `jackpot_win.won_at`, see [`jackpot.md`](jackpot.md)) | no |
 | `adjust`, `refund:<ledger id>` | an admin, by hand (§3) | no |
 
 **The ledger is the record; the wallet is its running total.** For every player
 `balance = SUM(delta)` over their ledger, and `earned_total = SUM(delta)` over
 the `earn` rows.
+
+**Only `earn` is earnings.** Every query that measures earning (the daily cap in
+`depositTickets`, `earned_total`, `weeklyTicketBoard`) filters on
+`reason = 'earn'`, never on `delta > 0`, so a jackpot win, a refund or a positive
+`adjust` can never use up a player's cap or lift them on the weekly board.
+`tickets.test.ts` and `leaderboard.test.ts` hold that line. A new kind of credit
+gets its own reason and changes none of them.
 
 ### How a deposit is written
 
@@ -378,5 +388,5 @@ For games with `tickets: true`, the game page's leaderboard has two tabs:
 
 `weeklyTicketBoard` (`apps/web/src/server/db/leaderboard.ts`) is the query;
 `getWeeklyLeaderboard` (`server/leaderboard.ts`) the boundary, which adds the
-signed-in player. Spends and adjustments never move it. The week is the
+signed-in player. Spends, adjustments and Lucky Jar wins never move it. The week is the
 Vietnam week: `vnWeekStart` in `server/db/allowance.ts`, next to `vnDayStart`.

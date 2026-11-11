@@ -181,6 +181,12 @@ export type GameEvent =
   | { type: "land"; id: number; x: number; y: number; kind: Body["kind"]; stacked: boolean }
   /** Something left the shelf. `jar`: coins over the front into the robot jar (kept, nothing paid). */
   | { type: "fall"; x: number; y: number; edge: "front" | "side"; stack: number; kind: Body["kind"]; core: number; card: number; jar: boolean }
+  /**
+   * The robot jar kept `coins` coins (a pile counts each of its coins). Coins
+   * only: a capsule or a card in the jar's section is never eaten. The shell
+   * feeds the shared Lucky Jar with these (jackpot.ts, docs/standards/jackpot.md).
+   */
+  | { type: "eaten"; coins: number }
   | { type: "coreIn"; count: number }
   | { type: "spinStart"; kind: SpinKind; idx: number }
   | { type: "spinWin"; kind: SpinKind; idx: number; prize: Prize }
@@ -650,8 +656,10 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
     const jar = x.edge === "front" && b.kind === "coin" && inJar(b.x);
     ev.push({ type: "fall", x: b.x, y: b.y, edge: x.edge, stack: b.stack, kind: b.kind, core: b.core, card: b.card, jar });
     if (x.edge !== "front") continue;
-    if (jar) s.eaten += b.stack;
-    else if (b.kind === "coin") {
+    if (jar) {
+      s.eaten += b.stack;
+      ev.push({ type: "eaten", coins: b.stack });
+    } else if (b.kind === "coin") {
       s.coins += b.stack;
       s.returned += b.stack;
       earn(s, b.stack * FRONT_TICKETS);

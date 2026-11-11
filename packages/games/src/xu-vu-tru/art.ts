@@ -6,7 +6,8 @@
 // that is text or live state (counters, marquee, reels, lamps, lights, pops) is
 // drawn here in code, in the same palette, and so are the 1.2.0 parts: the
 // robot jar on the front lip with its lane, and the hole's lid (no sprites, no
-// art-src). The cat cards (img/cards-v3/<id>.webp)
+// art-src), and the 1.3.0 Lucky Jar parts: the marquee's pool line and roll
+// suspense, the jar's badge, and the win's coin rain, confetti and sunburst. The cat cards (img/cards-v3/<id>.webp)
 // are loaded by game.ts too. The shelf is 2D physics seen from above; `proj`
 // tilts it into a 3/4 view.
 import { type Rect, clamp, lerp, mulberry32 } from "@web-games/core";
@@ -600,9 +601,20 @@ function plainCabinet(ctx: Ctx, view: Rect) {
   ctx.strokeRect(26, SHELF_BOTTOM, W - 52, 30);
 }
 
+/** How the marquee shows its line: faded (`alpha`), the Lucky Jar's glyph before it, the roll's suspense, a colour. */
+export interface MarqueeOpts {
+  alpha?: number;
+  /** A small Lucky Jar glyph before the text (the pool line). */
+  jar?: boolean;
+  /** A Lucky Jar roll is out: a bright group of lamps races round the sign and its rim pulses. */
+  suspense?: boolean;
+  color?: string;
+}
+
 /** The top marquee: a cream sign with chase lights round its prize line, flashing when it pays. */
-export function drawMarquee(ctx: Ctx, label: string, t: number, hot: boolean) {
+export function drawMarquee(ctx: Ctx, label: string, t: number, hot: boolean, o: MarqueeOpts = {}) {
   const r = MARQUEE;
+  const suspense = o.suspense === true;
   ctx.save();
   ctx.fillStyle = BROWN;
   ctx.beginPath();
@@ -615,20 +627,67 @@ export function drawMarquee(ctx: Ctx, label: string, t: number, hot: boolean) {
   ctx.roundRect(r.x, r.y, r.w, r.h, 16);
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = hot && Math.floor(t * 8) % 2 === 0 ? TERRA : HONEY;
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = suspense ? (Math.floor(t * 10) % 2 === 0 ? TERRA : HONEY) : hot && Math.floor(t * 8) % 2 === 0 ? TERRA : HONEY;
+  ctx.lineWidth = suspense ? 3.5 : 2.5;
   ctx.beginPath();
   ctx.roundRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10, 12);
   ctx.stroke();
   const n = 14;
+  // Suspense: a group of three lamps runs along the top and back along the bottom, a full lap ~0.6 s
+  const head = Math.floor(t * 44) % (n * 2);
   for (let i = 0; i < n; i++) {
     const x = r.x + 22 + (i / (n - 1)) * (r.w - 44);
+    if (suspense) {
+      const top = (head - i + n * 2) % (n * 2);
+      const bot = (head - (n * 2 - 1 - i) + n * 2) % (n * 2);
+      bulb(ctx, x, r.y + 5, 2.4, top === 0 ? CREAM : HONEY, top < 3);
+      bulb(ctx, x, r.y + r.h - 5, 2.4, bot === 0 ? CREAM : HONEY, bot < 3);
+      continue;
+    }
     const on = (i + Math.floor(t * (hot ? 14 : 5))) % 2 === 0;
     bulb(ctx, x, r.y + 5, 2.4, hot ? CORE_COLORS[i % 6] : HONEY, on);
     bulb(ctx, x, r.y + r.h - 5, 2.4, hot ? CORE_COLORS[(i + 3) % 6] : HONEY, !on);
   }
-  const size = fitSize(ctx, label, 28, r.w - 44);
-  text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 2, size, hot ? HONEY : TERRA);
+  ctx.globalAlpha = clamp(o.alpha ?? 1, 0, 1);
+  const icon = o.jar ? 22 : 0;
+  const size = fitSize(ctx, label, 28, r.w - 44 - icon);
+  const color = o.color ?? (hot ? HONEY : TERRA);
+  if (o.jar) {
+    ctx.font = `800 ${size}px ${FONT}`;
+    const w = ctx.measureText(label).width;
+    const x0 = r.x + r.w / 2 - (w + icon) / 2;
+    drawJarGlyph(ctx, x0 + 8, r.y + r.h / 2 + 1, 9, t);
+    text(ctx, label, x0 + icon + w / 2, r.y + r.h / 2 + 2, size, color);
+  } else text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 2, size, color);
+  ctx.restore();
+}
+
+/** A tiny Lucky Jar: a honey jar with a cream lid and a coin peeking out, `r` its half-width. */
+export function drawJarGlyph(ctx: Ctx, x: number, y: number, r: number, t: number) {
+  ctx.save();
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2;
+  // A coin bobbing out of the mouth
+  const bob = Math.sin(t * 4) * 1.2;
+  ctx.fillStyle = "#F6CF6B";
+  ctx.beginPath();
+  ctx.arc(x + r * 0.25, y - r * 1.05 + bob, r * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = HONEY;
+  ctx.beginPath();
+  ctx.roundRect(x - r, y - r * 0.75, r * 2, r * 1.85, [r * 0.5, r * 0.5, r * 0.8, r * 0.8]);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = CREAM;
+  ctx.beginPath();
+  ctx.roundRect(x - r * 1.15, y - r * 0.95, r * 2.3, r * 0.5, r * 0.25);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,252,240,0.7)";
+  ctx.beginPath();
+  ctx.ellipse(x - r * 0.45, y + r * 0.1, r * 0.18, r * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -1754,6 +1813,125 @@ export function drawJar(ctx: Ctx, sp: Sprites, t: number, munch: number, fill: n
     text(ctx, label, 0, 0.5, 13, CREAM, "center", null);
     ctx.restore();
   }
+}
+
+/**
+ * The robot jar's Lucky Jar badge: a small glowing tag beside it saying its
+ * coins feed the shared pool. `glow` (0..1) brightens it after the jar eats.
+ */
+export function drawJarBadge(ctx: Ctx, t: number, glow: number, label: string) {
+  const { x, y } = JAR_MOUTH;
+  ctx.save();
+  ctx.font = `800 12px ${FONT}`;
+  const w = ctx.measureText(label).width + 30;
+  const cx = x + JAR_HALF + 22 + w / 2;
+  ctx.translate(cx, y + 40);
+  ctx.rotate(0.1);
+  const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+  ctx.shadowColor = HONEY;
+  ctx.shadowBlur = 6 + 6 * pulse + 14 * glow;
+  ctx.fillStyle = "rgba(51,38,33,0.94)";
+  ctx.strokeStyle = HONEY;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(-w / 2, -10, w, 20, 10);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.stroke();
+  // A sparkle, then the line
+  const sx = -w / 2 + 12;
+  const k = 4 + 1.2 * pulse + 2 * glow;
+  ctx.fillStyle = glow > 0.05 ? CREAM : HONEY;
+  ctx.beginPath();
+  ctx.moveTo(sx, -k);
+  ctx.quadraticCurveTo(sx, 0, sx + k, 0);
+  ctx.quadraticCurveTo(sx, 0, sx, k);
+  ctx.quadraticCurveTo(sx, 0, sx - k, 0);
+  ctx.quadraticCurveTo(sx, 0, sx, -k);
+  ctx.fill();
+  // Centred between the sparkle and the right end
+  text(ctx, label, 6, 0.5, 12, glow > 0.05 ? CREAM : HONEY, "center", null);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- the Lucky Jar win (drawn in code)
+
+/** A coin of the Lucky Jar's rain, drawn in code (no sprite): it tumbles, so its width follows cos(spin). */
+export function drawCodeCoin(ctx: Ctx, x: number, y: number, r: number, spin: number) {
+  const k = Math.max(0.12, Math.abs(Math.cos(spin)));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(k, 1);
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.arc(0, 0, r + 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = Math.cos(spin) >= 0 ? "#F6CF6B" : HONEY;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(73,51,44,0.45)";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,252,240,0.8)";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.36, -r * 0.36, r * 0.2, r * 0.12, -0.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** One confetti strip. */
+export interface Confetto {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  vr: number;
+  w: number;
+  h: number;
+  color: string;
+}
+
+export function drawConfetti(ctx: Ctx, list: readonly Confetto[]) {
+  for (const c of list) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.rot);
+    ctx.scale(1, Math.cos(c.rot * 1.7));
+    ctx.fillStyle = c.color;
+    ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+    ctx.restore();
+  }
+}
+
+/** Soft honey rays turning behind the bursting jar. */
+export function drawSunburst(ctx: Ctx, x: number, y: number, r: number, t: number, alpha: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(t * 0.35);
+  const n = 14;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    ctx.globalAlpha = alpha * (i % 2 === 0 ? 0.32 : 0.18);
+    ctx.fillStyle = i % 2 === 0 ? HONEY : CREAM;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, r, a, a + (Math.PI * 2) / n / 1.6);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.6);
+  g.addColorStop(0, "rgba(255,243,207,0.75)");
+  g.addColorStop(1, "rgba(255,243,207,0)");
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /** The launch button (shoot-idle / shoot-pressed), greyed out with no coins; its label sits on the base. */

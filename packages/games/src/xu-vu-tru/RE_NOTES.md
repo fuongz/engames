@@ -29,6 +29,45 @@ characters, logos, sounds or layouts).
 | Cards | a card pushed off the **front** goes into the card inventory (`State.cards`, a count per cat: duplicates stack) and pays nothing by itself. `State.seen` marks cats ever collected. The player exchanges cards for tickets when they choose (below) |
 | Out of coins | coins at 0 and nothing in the air, on the wheel, in the stock or on the reels, and nothing has fallen for ~5.7 s: the machine **idles** (`State.idle`). There is no end state and no blocking panel: a strip over the shelf shows the next daily coins (the streak's next amount; for a guest, a sign-in hint) and the code button, and, signed in, a line pointing at the Prize Counter. `grantCoins` or a coin pushed off the shelf (not into the jar) wakes it where it stood |
 
+## 1.3.0: the Lucky Jar
+
+The machine joins the shared Lucky Jar (Hũ may mắn, `manifest.jackpot`,
+docs/standards/jackpot.md). Nothing in the machine's rules or its save changes:
+the jar lives on the server.
+
+- **Feeding.** logic.ts emits `{ type: "eaten", coins }` whenever the robot jar
+  keeps coins (a pile counts each coin; never a capsule or a card). jackpot.ts
+  (`createJarFeed`) turns each one into `ctx.jackpot.contribute(coins)`; the
+  portal batches them and the server turns coins into pool tickets (×2, capped
+  per player per game per day). The house pays: the player's wallet is untouched.
+- **Rolling.** Each Super spin that pays (`spinWin` with `kind: "super"`) asks
+  for exactly one `ctx.jackpot.roll()`. Rolls go one at a time: a second Super
+  spin waits for the first's answer. Signed in only: a guest's trial machine
+  never contributes or rolls (after a guest's Super spin a toast says to sign in).
+  Every failure (offline, signed out, the server) is swallowed; the server's
+  daily roll limit answers `won: false` like any miss.
+- **The marquee** takes turns, 4 s each with a short fade: the Super line, the
+  live pool ("Hũ may mắn 12.345 vé", from `state()` and `onState`) and, for a
+  guest, "Đăng nhập để Super có cơ hội trúng Hũ". While a roll is out the lamps
+  race round the sign ("Hũ may mắn…", at least 1.8 s, given up silently after
+  15 s); then either "Hũ may mắn chưa nổ lần này" for 3.2 s, or the win.
+- **The win** waits for the Super spin's own celebration, then 6 s over the
+  whole machine, all drawn in code: the robot jar swells, trembles and bursts
+  (sunburst, a flash ring, coins and confetti out of its mouth), a coin rain,
+  "HŨ MAY MẮN!" and the amount counting up. Then a toast ("Bạn trúng Hũ may
+  mắn 23.410 vé!"). The tickets are already in the wallet (the server paid
+  them); the game reads the balance again so its counter rolls up.
+- **The jar's badge**: a small glowing tag beside the robot jar, "Nuôi Hũ may
+  mắn" / "Feeds the Lucky Jar", glowing brighter when the jar eats (signed in).
+- **Rules and What's new**: one rules line for the jar; the rules card now steps
+  its text down (19 → 14 px) until it fits a short screen.
+- **Dev only**: `engames:xu-vu-tru:devJackpot` = `{ "won": true, "amount": 23410 }`
+  (or `{ "won": false }`) in localStorage plays one scripted roll after the game
+  starts, with no Super spin and no server (`import.meta.env.DEV`; the branch is
+  not in production builds). Used for the screenshots.
+- **Saves**: still schema 4; the envelope's `v` is "1.3.0". A 1.2.0 save loads
+  unchanged (jackpot.test.ts).
+
 ## 1.2.0
 
 - **The robot jar** is the machine's drain (above). Every shot ends up as about

@@ -5,6 +5,11 @@ import type { Localized } from "@web-games/core/i18n";
 // (SUPER, MINI, BONUS) stay as they are in both languages, like on a real cabinet.
 import type { CardId } from "./config";
 
+/** A ticket count with thousands grouped the local way: 12.345 (vi), 12,345 (en). */
+const grouped = (n: number, sep: string) => String(Math.max(0, Math.floor(n))).replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+const vn = (n: number) => grouped(n, ".");
+const en = (n: number) => grouped(n, ",");
+
 export interface Strings {
   title: string;
   subtitle: string;
@@ -31,6 +36,20 @@ export interface Strings {
   jarYum: string;
   youWin: string;
   marquee: (n: number) => string;
+  /**
+   * The Lucky Jar (Hũ may mắn, shared by every arcade game): the robot jar's
+   * badge, the marquee's pool line and sign-in hint, the roll's suspense and
+   * its two outcomes, and the toast a guest sees after a Super spin.
+   */
+  jarBadge: string;
+  jarPool: (n: number) => string;
+  jarSignIn: string;
+  jarRolling: string;
+  jarMissed: string;
+  jarWinTitle: string;
+  jarWinAmount: (n: number) => string;
+  jarWon: (n: number) => string;
+  jarGuestSuper: string;
   superSpin: string;
   miniSpin: string;
   coreIn: (n: number, of: number) => string;
@@ -136,6 +155,15 @@ export const STRINGS: Localized<Strings> = {
     jarYum: "Măm!",
     youWin: "BẠN THẮNG",
     marquee: (n) => `SUPER tới ${n} vé`,
+    jarBadge: "Nuôi Hũ may mắn",
+    jarPool: (n) => `Hũ may mắn ${vn(n)} vé`,
+    jarSignIn: "Đăng nhập để Super có cơ hội trúng Hũ",
+    jarRolling: "Hũ may mắn…",
+    jarMissed: "Hũ may mắn chưa nổ lần này",
+    jarWinTitle: "HŨ MAY MẮN!",
+    jarWinAmount: (n) => `+${vn(n)} vé`,
+    jarWon: (n) => `Bạn trúng Hũ may mắn ${vn(n)} vé!`,
+    jarGuestSuper: "Đăng nhập để Super trúng được Hũ may mắn",
     superSpin: "SUPER SPIN!",
     miniSpin: "MINI SPIN!",
     coreIn: (n, of) => `Lõi năng lượng ${n}/${of}`,
@@ -188,6 +216,7 @@ export const STRINGS: Localized<Strings> = {
       "Tối đa 4 lượt chờ (đèn dưới cổng). Đủ 4 lượt thì nắp lỗ đóng: xu nảy xuống kệ, không mất xu nào.",
       "Xu bị đẩy rơi mép trước: +1 xu, +1 vé (hai bên có vách). Riêng khúc giữa có hũ robot: xu rơi vào hũ thì máy giữ.",
       "Ô LÕI: lõi rơi xuống kệ + 1 MINI SPIN. Đẩy 6 lõi rơi mép trước: SUPER SPIN 80–500 vé! Lõi và thẻ rơi vào hũ vẫn được tính.",
+      "Hũ may mắn: xu rơi vào hũ robot nuôi một hũ vé chung của mọi game thùng. Đã đăng nhập, mỗi SUPER SPIN có một cơ hội trúng cả hũ (hũ càng đầy càng dễ nổ), vé vào ví.",
       "Ô THẺ: thẻ mèo rơi xuống kệ. Đẩy rơi mép trước: vào kho thẻ, thẻ trùng cộng dồn. Mèo Ragdoll hiếm hơn.",
       "Đổi thẻ lấy vé khi bạn muốn: 1 thẻ = 60 vé (Ragdoll 300 vé); cả bộ 10 giống = 1000 vé.",
       "Đăng nhập: 100 xu chào mừng, xu mỗi ngày tăng theo chuỗi ngày (50 tới 150 xu), máy lưu vào tài khoản, vé vào ví vé chung của các game thùng.",
@@ -218,12 +247,10 @@ export const STRINGS: Localized<Strings> = {
     legacyNote: "Lượt chơi bản beta cũ đã được dọn: máy 1.0 bắt đầu mới.",
     newsTitle: (v) => `Có gì mới · v${v}`,
     newsLines: [
-      "Hũ robot: giữa mép trước có một bé robot hũ, xu rơi vào hũ thì máy giữ. Quay thưởng giờ trả nhiều xu hơn, nên ngắm giỏi chỉ được thêm vé.",
-      "Không phí xu nào: đủ 4 lượt quay thì nắp lỗ đóng, xu nảy xuống kệ.",
-      "Thẻ mèo đổi lấy vé: 60 vé một thẻ, 300 vé thẻ Ragdoll, 1000 vé cả bộ.",
-      "Quầy đổi thưởng: bấm ô vé ngoài trang để đổi vé lấy xu hoặc gói thẻ mèo.",
-      "Chuỗi ngày đăng nhập: xu mỗi ngày tăng từ 50 tới 150 xu ở ngày thứ 7.",
-      "Bảng xếp hạng tuần: xếp theo vé kiếm được trong tuần, mỗi thứ Hai bắt đầu lại.",
+      "Hũ may mắn: một hũ vé dùng chung cho mọi game thùng. Xu rơi vào hũ robot giúp hũ đầy thêm, máy góp thay bạn.",
+      "Mỗi lần Super Spin trả thưởng xong là một cơ hội trúng cả hũ (cần đăng nhập). Hũ càng đầy càng dễ nổ; vé trúng vào thẳng ví vé.",
+      "Bảng đèn trên máy hiện số vé đang có trong hũ. Người trúng được báo trên thanh trên cùng của trang.",
+      "Chưa đăng nhập vẫn xem được hũ; đăng nhập để Super Spin của bạn có thể trúng.",
     ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} vé · ${supers} lần Super` : `${tickets} vé`),
     summary: (n) => `Đã gom ${n} vé`,
@@ -248,6 +275,15 @@ export const STRINGS: Localized<Strings> = {
     jarYum: "Yum!",
     youWin: "YOU WIN",
     marquee: (n) => `SUPER UP TO ${n}`,
+    jarBadge: "Feeds the Lucky Jar",
+    jarPool: (n) => `Lucky Jar ${en(n)} tickets`,
+    jarSignIn: "Sign in so Supers can win the Jar",
+    jarRolling: "Lucky Jar…",
+    jarMissed: "The Lucky Jar didn't tip this time",
+    jarWinTitle: "LUCKY JAR!",
+    jarWinAmount: (n) => `+${en(n)} tickets`,
+    jarWon: (n) => `You won the Lucky Jar: ${en(n)} tickets!`,
+    jarGuestSuper: "Sign in so your Supers can win the Lucky Jar",
     superSpin: "SUPER SPIN!",
     miniSpin: "MINI SPIN!",
     coreIn: (n, of) => `Energy core ${n}/${of}`,
@@ -300,6 +336,7 @@ export const STRINGS: Localized<Strings> = {
       "Up to 4 spins wait (lamps under the gate). With all 4 lit the hole's lid shuts: coins bounce onto the shelf, none is wasted.",
       "Coins pushed off the front: +1 coin, +1 ticket each (walls guard the sides). In the middle sits the robot jar: coins that fall in are kept by the machine.",
       "CORE: a core drops onto the shelf + a MINI SPIN. Push 6 cores off the front: SUPER SPIN, 80–500 tickets! Cores and cards still count in the jar's spot.",
+      "Lucky Jar: coins the robot jar eats fill a jar shared by all arcade games. Signed in, each SUPER SPIN can win it all (the fuller, the likelier).",
       "CARD: a cat card drops onto the shelf. Pushed off the front, it goes into your card stash; duplicates stack. The Ragdoll is rare.",
       "Exchange cards for tickets when you like: one card = 60 tickets (Ragdoll 300); a full set of 10 cats = 1000 tickets.",
       "Signed in: 100 welcome coins, daily coins that grow with your login streak (50 up to 150), your machine saved to your account, tickets in the shared arcade wallet.",
@@ -330,12 +367,10 @@ export const STRINGS: Localized<Strings> = {
     legacyNote: "Your old beta run was cleared: the 1.0 machine starts fresh.",
     newsTitle: (v) => `What's new · v${v}`,
     newsLines: [
-      "The robot jar: a little jar robot sits in the middle of the front edge and keeps the coins that fall in. Prize spins now pay more coins, so good aim only adds tickets.",
-      "Never a wasted coin: with 4 spins waiting the hole's lid shuts and coins bounce onto the shelf.",
-      "Cards for tickets: 60 tickets a card, 300 for the Ragdoll, 1000 for a full set.",
-      "The Prize Counter: tap your ticket count outside the game to trade tickets for coins or cat card packs.",
-      "Login streak: daily coins grow from 50 up to 150 on day 7.",
-      "Weekly leaderboard: ranked by the tickets you earn this week, starting over every Monday.",
+      "The Lucky Jar: one ticket jar shared by every arcade game. Coins the robot jar eats help fill it, paid by the machine, not you.",
+      "Every Super spin that pays is a chance to win the whole jar (signed in). The fuller it is, the likelier it tips; the tickets go straight to your wallet.",
+      "The marquee shows how many tickets are in the jar. Winners are announced on the site's top bar.",
+      "Signed out you can watch the jar; sign in so your Super spins can win it.",
     ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} tickets · ${supers}× Super` : `${tickets} tickets`),
     summary: (n) => `${n} tickets collected`,
