@@ -34,6 +34,7 @@ import { useSession } from "#/hooks/use-session";
 import { signInWithGoogle } from "#/lib/auth-client";
 import { EASE_OUT, FADE, RISE_BLUR, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
+import { claimAllowanceFn } from "#/server/allowance";
 import { deleteGameSave, listGameSaves, loadGameSave, storeGameSave } from "#/server/saves";
 import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
@@ -41,6 +42,7 @@ import { OnlineEntry } from "#/components/features/online/online-entry";
 import { OnlineSession } from "#/components/features/online/online-session";
 import { CouponDialog } from "./coupon-dialog";
 import { FavoriteButton } from "./favorite-button";
+import { createTicketQueue, type TicketQueue } from "./game-player.tickets";
 import { ScoreDialog, takePendingScore } from "./score-dialog";
 
 /** Give the game's own result screen a moment before the save dialog covers it. */
@@ -72,6 +74,8 @@ export function GamePlayer({
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<GameInstance | null>(null);
+  // The running mount's ticket batcher, flushed when that mount goes away
+  const ticketsRef = useRef<TicketQueue | null>(null);
   const [module, setModule] = useState<GameModule | null>(null);
   const [failed, setFailed] = useState(false);
   const [started, setStarted] = useState(false);
@@ -110,8 +114,17 @@ export function GamePlayer({
       alive = false;
       instanceRef.current?.destroy();
       instanceRef.current = null;
+      ticketsRef.current?.flush();
+      ticketsRef.current = null;
     };
   }, [game.slug]);
+
+  // Leaving the page (tab closed, app switched away on a phone): send waiting tickets now
+  useEffect(() => {
+    const leave = () => ticketsRef.current?.flush(true);
+    window.addEventListener("pagehide", leave);
+    return () => window.removeEventListener("pagehide", leave);
+  }, []);
 
   useEffect(() => {
     setMuted(audioBus.muted);
@@ -159,8 +172,14 @@ export function GamePlayer({
     if (!module || !stage) return;
     instanceRef.current?.destroy();
     stage.replaceChildren();
+    ticketsRef.current?.flush();
+    // Account services: signed-in players only, and never in an online match
+    // (the room owns the state). `cloud` keeps its original rule: requiresAccount
+    // games always had it, online or not.
+    const solo = userId && !match ? userId : null;
+    ticketsRef.current = game.tickets && solo ? createTicketQueue(game.slug, solo) : null;
     const cloud: CloudSave | undefined =
-      game.requiresAccount && userId
+      (game.requiresAccount || game.accountSave) && userId
         ? {
             player: userName ?? "",
             playerId: userId,
@@ -187,6 +206,13 @@ export function GamePlayer({
     instanceRef.current = module.mount(stage, {
       online: match,
       cloud,
+      version: game.version,
+      // The server records each grant before answering: the game persists it at once
+      allowance:
+        game.allowance && solo
+          ? { claim: () => claimAllowanceFn({ data: { slug: game.slug } }) }
+          : undefined,
+      tickets: ticketsRef.current?.tickets,
       storage: createStorage(game.slug),
       audio: audioBus,
       // Read live: games redraw every frame, so a language switch shows at once
@@ -208,11 +234,13 @@ export function GamePlayer({
         reportTimer.current = setTimeout(() => setReport(r), REPORT_DELAY);
       },
     });
-  }, [module, game.slug, game.requiresAccount, game.coupons, userId, userName, toggleCoupon]);
+  }, [module, game, userId, userName, toggleCoupon]);
 
   const unmount = useCallback(() => {
     instanceRef.current?.destroy();
     instanceRef.current = null;
+    ticketsRef.current?.flush();
+    ticketsRef.current = null;
     stageRef.current?.replaceChildren();
   }, []);
 

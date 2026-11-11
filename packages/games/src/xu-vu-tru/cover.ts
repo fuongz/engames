@@ -2,7 +2,7 @@
 // poster.webp / poster-en.webp / banner.webp. The paintings in img/ are generated
 // art (art-src/xu-vu-tru/gen.sh → process.sh); only the titles are drawn here.
 import { type Locale, fitFontSize } from "@web-games/core";
-import { FONT, NEON, neon } from "./art";
+import { CREAM, FONT, headline } from "./art";
 import bannerArt from "./img/banner-art.webp";
 import posterArt from "./img/poster-art.webp";
 import { STRINGS } from "./strings";
@@ -18,7 +18,7 @@ async function painted(src: string): Promise<HTMLImageElement | null> {
   }
 }
 
-/** 600×800 poster with the neon title over the calm starry sky at the top. */
+/** 600×800 poster with the title over the calm starry sky at the top. */
 export async function renderPoster(canvas: HTMLCanvasElement, locale: Locale = "vi") {
   canvas.width = 600;
   canvas.height = 800;
@@ -36,7 +36,7 @@ export async function renderPoster(canvas: HTMLCanvasElement, locale: Locale = "
   ctx.fillStyle = fade;
   ctx.fillRect(0, 0, 600, 220);
   const title = STRINGS[locale].title;
-  neon(ctx, title, 300, 96, fitFontSize(ctx, title, 96, 540, FONT), NEON, 1.6);
+  headline(ctx, title, 300, 96, fitFontSize(ctx, title, 96, 540, FONT), CREAM);
 }
 
 /** 1200×600 banner: the machine on the right, calm space on the left for the HTML title. */

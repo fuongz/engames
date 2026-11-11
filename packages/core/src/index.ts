@@ -24,17 +24,20 @@ export { type PointerInfo, Stage, type StageHandlers } from "./stage";
 export { type GameStorage, createStorage } from "./storage";
 export { fitFontSize } from "./text";
 export {
+  type AllowanceGrant,
   type CloudSave,
   type CloudSaveResult,
   type CloudSlot,
   type CouponGrant,
   type CouponReward,
+  type GameAllowance,
   type GameCategory,
   type GameContext,
   type GameCoupons,
   type GameInstance,
   type GameManifest,
   type GameModule,
+  type GameTickets,
   type OnlineMatch,
   type ScoreReport,
   SUMMARY_KEY,

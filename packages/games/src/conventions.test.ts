@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { games } from "./registry";
+import { findSaveRules } from "./saves";
 
 // The folder rules in docs/standards/game-engine.md, checked on every game so a
 // new one can't quietly drift from them.
@@ -29,5 +31,33 @@ describe("game conventions", () => {
 
   it.each(entries)("%s mounts through defineGame", (_, src) => {
     expect(src).toMatch(/export default defineGame\(/);
+  });
+});
+
+// semver.org's own pattern: MAJOR.MINOR.PATCH, optional -prerelease and +build
+const SEMVER =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+
+describe("manifest platform options", () => {
+  it("the semver pattern means what it says", () => {
+    for (const ok of ["0.1.0", "1.4.12", "2.0.0-beta.1", "1.0.0+build.7"]) expect(ok).toMatch(SEMVER);
+    for (const bad of ["1.0", "v1.0.0", "01.0.0", "1.0.0-", "1.0.0 "]) expect(bad).not.toMatch(SEMVER);
+  });
+
+  it.each(games.map((g) => [g.slug, g] as const))("%s", (_, g) => {
+    if (g.version !== undefined) expect(g.version, "version is semver").toMatch(SEMVER);
+    // An optional account save goes through the same server checks as requiresAccount
+    if (g.accountSave) {
+      expect(findSaveRules(g.slug), "accountSave needs a save.ts").toBeDefined();
+      expect(g.requiresAccount, "accountSave and requiresAccount are exclusive").not.toBe(true);
+    }
+    if (g.allowance) {
+      expect(g.allowance.kind).toMatch(/^[a-z][a-z0-9-]*$/);
+      for (const n of [g.allowance.welcome, g.allowance.daily]) {
+        expect(Number.isSafeInteger(n) && n >= 0, "allowance amounts are whole and not negative").toBe(true);
+      }
+      expect(g.allowance.welcome + g.allowance.daily).toBeGreaterThan(0);
+    }
+    if (g.tickets !== undefined) expect(typeof g.tickets).toBe("boolean");
   });
 });

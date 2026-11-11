@@ -149,6 +149,11 @@ export const vi = {
     inspiredBy: "Lấy cảm hứng từ {source}",
     signInToPlay: "Đăng nhập để chơi",
     accountHint: "Game này lưu tiến trình theo tài khoản Google của bạn.",
+    version: "v{version}",
+    versionLabel: "Phiên bản {version}",
+  },
+  tickets: {
+    balance: "Vé của bạn: {n}",
   },
   online: {
     coop: "Chơi online cùng bạn",

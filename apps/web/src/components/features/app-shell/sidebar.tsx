@@ -16,6 +16,7 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { AccountButton } from "#/components/shared/auth/account-button";
 import { LanguageMenu } from "#/components/shared/i18n/language-menu";
+import { TicketChip } from "#/components/shared/tickets/ticket-chip";
 import { useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
 import { INDICATOR_SPRING } from "#/lib/motion";
@@ -117,6 +118,8 @@ export function Sidebar() {
         </button>
         <HelpDialog triggerClassName={SIDEBAR_ITEM} />
         <LanguageMenu variant="sidebar" triggerClassName={SIDEBAR_ITEM} />
+        {/* The arcade ticket wallet, beside the account it belongs to */}
+        <TicketChip className="mx-3 mt-1" />
         <AccountButton variant="sidebar" />
       </div>
 

@@ -72,6 +72,30 @@ export interface GameManifest {
    * are dropped before redemption.
    */
   coupons?: { kinds: string[] };
+  /**
+   * The game's own version, semver ("1.4.0"). Shown as a small "v1.4.0" on the
+   * game page and handed to the game as `GameContext.version`. Bump it with
+   * changes a player would notice.
+   */
+  version?: string;
+  /**
+   * Keeps progress on the account when the player is signed in, but stays
+   * playable signed out (local storage only). Signed in, the portal provides
+   * `GameContext.cloud` exactly as for `requiresAccount` games, with the same
+   * server checks (the game ships a `save.ts`) and conflict handling.
+   */
+  accountSave?: boolean;
+  /**
+   * A server-granted allowance (docs/standards/allowance.md): `welcome` once per
+   * account, then `daily` once per Vietnam day, both of currency `kind` (e.g.
+   * "coins"). Signed-in players get `GameContext.allowance`.
+   */
+  allowance?: { kind: string; welcome: number; daily: number };
+  /**
+   * Pays out into the shared arcade ticket wallet (docs/standards/tickets.md).
+   * Signed-in players get `GameContext.tickets`.
+   */
+  tickets?: boolean;
 }
 
 /**
@@ -122,8 +146,9 @@ export interface GameContext {
    */
   online?: OnlineMatch;
   /**
-   * The signed-in player's save slot, for `requiresAccount` games. Missing when
-   * nobody is signed in (or outside the portal).
+   * The signed-in player's save slots, for `requiresAccount` and `accountSave`
+   * games. Missing when nobody is signed in (or outside the portal); an
+   * `accountSave` game must then fall back to `storage`.
    */
   cloud?: CloudSave;
   /**
@@ -132,6 +157,53 @@ export interface GameContext {
    * apply there (the room owns the state).
    */
   coupons?: GameCoupons;
+  /** `manifest.version`, when the game declares one. */
+  version?: string;
+  /**
+   * The daily allowance, for games with `manifest.allowance`. Missing when nobody
+   * is signed in, outside the portal, and always in an online match.
+   */
+  allowance?: GameAllowance;
+  /**
+   * The player's shared arcade ticket wallet, for games with `manifest.tickets`.
+   * Missing when nobody is signed in, outside the portal, and always in an
+   * online match.
+   */
+  tickets?: GameTickets;
+}
+
+/** One allowance payout the server just recorded. */
+export interface AllowanceGrant {
+  kind: string;
+  amount: number;
+  type: "welcome" | "daily";
+}
+
+export interface GameAllowance {
+  /**
+   * Ask the server for whatever is due now: the welcome once per account, then
+   * one daily per Vietnam day (the first daily comes the Vietnam day after the
+   * welcome). `grants` is empty when nothing is due; `nextDailyAt` is the next
+   * Vietnam midnight (unix ms), for a countdown.
+   *
+   * The server has ALREADY recorded every grant it returns, and will never send
+   * it again: persist it IMMEDIATELY (storage or cloud save), before anything
+   * else can go wrong.
+   */
+  claim(): Promise<{ grants: AllowanceGrant[]; nextDailyAt: number }>;
+}
+
+export interface GameTickets {
+  /** The wallet's current balance (shared by every ticket game). */
+  balance(): Promise<number>;
+  /**
+   * Earn `amount` tickets (a positive integer). The portal batches calls for a
+   * couple of seconds and sends them together; the promise settles when the
+   * server answers. `accepted` can be less than `amount` when a cap applies.
+   */
+  deposit(amount: number): Promise<{ balance: number; accepted: number }>;
+  /** Called with the new balance whenever it changes; returns an unsubscribe. */
+  onBalance(cb: (balance: number) => void): () => void;
 }
 
 /** One reward a coupon carries. `kind` is game-defined, e.g. "coins". */

@@ -303,3 +303,74 @@ export const couponRedemption = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.code, t.userId] }), index("coupon_redemption_user_idx").on(t.userId)],
 );
+
+// ---------------------------------------------------------------- Allowance
+
+/**
+ * Every allowance payout (docs/standards/allowance.md). The primary key is the
+ * guard: a welcome (`day` = "first") can exist once per player per game, and a
+ * daily once per Vietnam day (`day` = "YYYY-MM-DD" in Asia/Ho_Chi_Minh). Delete a
+ * player's rows to reset them. Times are unix ms.
+ */
+export const allowanceGrant = sqliteTable(
+  "allowance_grant",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    /** "welcome" | "daily". */
+    type: text("type").notNull(),
+    /** "first" for the welcome, the Vietnam date for a daily. */
+    day: text("day").notNull(),
+    /** The currency granted (`manifest.allowance.kind`), for reading the table by hand. */
+    kind: text("kind").notNull(),
+    amount: integer("amount").notNull(),
+    grantedAt: integer("granted_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.gameId, t.type, t.day] }),
+    check(
+      "allowance_grant_day_shape",
+      sql`(type = 'welcome' and day = 'first') or (type = 'daily' and day glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------- Arcade tickets
+
+/**
+ * One ticket balance per player, shared by every game with `manifest.tickets`
+ * (docs/standards/tickets.md). A running total kept in step with `ticket_ledger`
+ * by `depositTickets`. `updated_at` is unix ms.
+ */
+export const ticketWallet = sqliteTable("ticket_wallet", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  balance: integer("balance").notNull().default(0),
+  /** Every ticket ever earned, never lowered by spending. */
+  earnedTotal: integer("earned_total").notNull().default(0),
+  updatedAt: integer("updated_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
+/**
+ * Every change to a wallet, newest last: the audit trail, and what the daily
+ * earn cap is summed from. `reason` is "earn" for now. `created_at` is unix ms.
+ */
+export const ticketLedger = sqliteTable(
+  "ticket_ledger",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    delta: integer("delta").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [index("ticket_ledger_user_time_idx").on(t.userId, t.createdAt)],
+);

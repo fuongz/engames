@@ -1,6 +1,6 @@
 import { nextRandom } from "@web-games/core/math";
 import {
-  BETA_START_COINS,
+  AIM_SPREAD,
   CARD_COUNT,
   CARD_R,
   CARD_TICKETS,
@@ -12,20 +12,26 @@ import {
   FLIGHT_DOWN,
   FLIGHT_UP,
   FRONT_TICKETS,
+  GATE_AMP,
+  GATE_PERIOD,
+  GATE_WOBBLE,
+  GATE_WOBBLE_PERIOD,
+  HOLE_HALF,
   MAX_BODIES,
   MAX_STACK,
   MINI_PRIZES,
   MINI_WEIGHTS,
-  POINTER_ANGLE,
   PREFILL_CORES,
   PREFILL_FILL,
   PREFILL_STACK2,
   PREFILL_STACK3,
+  PRIZE_HOLD,
+  PRIZE_QUEUE_MAX,
+  PRIZE_SPIN_TIME,
   type Prize,
   PUSH_MAX,
   PUSH_MIN,
   PUSH_PERIOD,
-  SEG_START,
   SETTLE_TIME,
   SET_TICKETS,
   SHELF_D,
@@ -35,6 +41,7 @@ import {
   SUPER_SPIN_TIME,
   SUPER_WEIGHTS,
   type Segment,
+  WEIGHTS,
   WHEEL,
   WHEEL_SPEED,
   WHEEL_WOBBLE,
@@ -42,26 +49,34 @@ import {
 } from "./config";
 import { type Body, stepShelf } from "./physics";
 
-// The rules of the machine: spend a coin, the wheel decides a prize when it
-// arrives (tickets, a rain of coins, an energy capsule or a cat card), anything
-// dropped lands on the shelf, and the shelf pushes things off. Pure and seeded:
-// the random state is a number in the state, so a run replays exactly and the
-// whole state (the card album included) can be saved as JSON.
+// The rules of the machine: spend a coin, it lands on the swinging gate under the
+// wheel's hub; in the hole it starts a prize spin (a weighted pick of a wheel slot:
+// tickets, a rain of coins, an energy capsule or a cat card), off the hole it
+// bounces down onto the shelf. Anything dropped lands on the shelf, and the shelf
+// pushes things off. Pure and seeded:
+// the random state is a number in the state, so a session replays exactly and the
+// whole state (the card album included) can be saved as JSON (see save.ts).
+//
+// The machine never ends. Out of coins it settles and idles (`idle`); coins
+// granted later (grantCoins: allowance, coupons) wake it up where it stood.
+// Tickets are counted twice: `lifetimeTickets` (everything this machine ever
+// paid, the leaderboard number) and `unpaid` (earned but not yet handed to the
+// shell, which drains it with drainTickets into the wallet or the trial counter).
 
 const TAU = Math.PI * 2;
 /** Seconds a landed spin result stays on the reels before the next one starts. */
 export const SPIN_HOLD = 0.9;
-/** Bumped when the State shape changes, so an old saved run is not resumed. */
-export const RULES_VERSION = 2;
 
 export interface Flight {
   id: number;
   /** Seconds into the current phase; negative = still waiting its turn (a coin rain). */
   t: number;
-  /** "up": the chute to the wheel. "down": from the wheel onto the shelf. */
+  /** "up": the chute to the gate. "down": from the gate onto the shelf. */
   phase: "up" | "down";
   /** Where on the shelf it lands (world x). */
   x: number;
+  /** Where on the gate it lands (or bounced from), px from the gate's centre; seeded when shot. */
+  aim: number;
   /** What lands: a coin, a capsule (`core` = its colour) or a card (`card` = its index). */
   kind: "coin" | "core" | "card";
   core: number;
@@ -78,28 +93,45 @@ export interface Spin {
   paid: boolean;
 }
 
+/** A prize spin on the wheel: the light chases round and stops on slot `seg`. */
+export interface PrizeSpin {
+  seg: number;
+  t: number;
+  paid: boolean;
+}
+
 export interface State {
-  v: number;
   seed: number;
   t: number;
   nextId: number;
   coins: number;
-  tickets: number;
+  /** Every ticket this machine has paid out, ever. Never goes down. */
+  lifetimeTickets: number;
+  /** Tickets earned and not yet drained by the shell (drainTickets). */
+  unpaid: number;
   supers: number;
-  /** Albums completed this run. */
+  /** Albums completed on this machine. */
   sets: number;
-  /** Cards pushed off the front this run. */
+  /** Cards pushed off the front on this machine. */
   cardsWon: number;
   shots: number;
   /** Coins pushed off the front (and given back). */
   returned: number;
   wheel: number;
+  /** The gate's swing phase (radians); the hole is at GATE_AMP·sin(gate). */
+  gate: number;
+  /** Coins that reached the gate, and how many of them dropped in the hole. */
+  gateShots: number;
+  gateHits: number;
+  /** Prize spins waiting their turn (0..PRIZE_QUEUE_MAX), and the one running. */
+  stock: number;
+  prize: PrizeSpin | null;
   pusherT: number;
   bodies: Body[];
   flights: Flight[];
   /** Capsules pushed off the front toward the next Super spin (can pass 6 while one waits). */
   cores: number;
-  /** Which of the ten cards the player owns (persists across runs through game.ts). */
+  /** Which of the ten cards the player owns. */
   album: boolean[];
   /** Spins waiting their turn on the reels. */
   queue: SpinKind[];
@@ -109,7 +141,8 @@ export interface State {
   cooldown: number;
   /** Seconds since anything landed, fell or was shot. */
   quiet: number;
-  over: boolean;
+  /** Out of coins and settled: nothing moves until coins are granted. */
+  idle: boolean;
 }
 
 export interface Input {
@@ -119,7 +152,10 @@ export interface Input {
 export type GameEvent =
   | { type: "shoot" }
   | { type: "dry" }
-  | { type: "hit"; seg: number; segment: Segment }
+  /** A coin reached the gate at `x` (px from its centre) with the hole at `hole`. `full`: in the hole, but the stock was full. */
+  | { type: "gate"; hit: boolean; full: boolean; x: number; hole: number }
+  | { type: "prizeStart"; seg: number }
+  | { type: "prizeWin"; seg: number; segment: Segment }
   | { type: "tickets"; amount: number; source: "wheel" | "front" | "mini" | "super" | "card" | "set" }
   | { type: "coinsWon"; amount: number }
   | { type: "land"; id: number; x: number; y: number; kind: Body["kind"]; stacked: boolean }
@@ -130,9 +166,23 @@ export type GameEvent =
   | { type: "superReset" }
   | { type: "card"; card: number; fresh: boolean; owned: number }
   | { type: "setComplete" }
-  | { type: "over"; tickets: number; supers: number };
+  /** The machine ran out of coins and settled (once per time it happens). */
+  | { type: "idle" };
 
 const rand = (s: State) => nextRandom(s);
+
+/** Tickets paid out: on the machine's lifetime count, and waiting for the shell. */
+function earn(s: State, n: number) {
+  s.lifetimeTickets += n;
+  s.unpaid += n;
+}
+
+/** Hand the tickets earned since the last call to the shell (and forget them here). */
+export function drainTickets(s: State): number {
+  const n = s.unpaid;
+  s.unpaid = 0;
+  return n;
+}
 
 /** The pusher's front face, and its speed toward the front. */
 export function pusherAt(t: number) {
@@ -143,15 +193,17 @@ export function pusherAt(t: number) {
   };
 }
 
-/** The wheel's motor surges and eases a little, so a held button can't lock onto a slot. */
+/** The wheel's motor surges and eases a little (decoration only). */
 export const wheelSpeed = (t: number) => WHEEL_SPEED * (1 + WHEEL_WOBBLE * Math.sin((TAU * t) / WOBBLE_PERIOD));
 
-/** The wheel segment in front of the chute at this wheel angle. */
-export function segmentAt(wheel: number) {
-  const a = (((POINTER_ANGLE - wheel) % TAU) + TAU) % TAU;
-  for (let i = WHEEL.length - 1; i > 0; i--) if (a >= SEG_START[i]) return i;
-  return 0;
-}
+/** The gate's swing speed (radians of phase per second), drifting a little so a held button can't lock onto it. */
+export const gateSpeed = (t: number) => (TAU / GATE_PERIOD) * (1 + GATE_WOBBLE * Math.sin((TAU * t) / GATE_WOBBLE_PERIOD));
+
+/** The hole's centre, px from the gate's centre, at this swing phase. */
+export const holeAt = (gate: number) => GATE_AMP * Math.sin(gate);
+
+/** Whether a coin landing at `x` on the gate drops into a hole centred at `hole`. */
+export const inHole = (x: number, hole: number) => Math.abs(x - hole) <= HOLE_HALF;
 
 /** The prize a spin of this kind pays at reel index `idx`. */
 export function prizeOf(kind: SpinKind, idx: number): Prize {
@@ -181,21 +233,30 @@ const body = (s: State, kind: Body["kind"], x: number, y: number, extra: Partial
   ...extra,
 });
 
-/** A fresh run: the shelf pre-filled with coins and a couple of capsules, then left to settle. */
-export function createRun(seed: number, startCoins = BETA_START_COINS, album: unknown = null): State {
+/**
+ * A new machine: the shelf pre-filled with coins and a couple of capsules, then
+ * left to settle. `coins` is the player's starting balance (0 for an account
+ * machine, whose coins come from the allowance; TRIAL_COINS for a guest).
+ */
+export function createMachine(seed: number, coins = 0, album: unknown = null): State {
   const s: State = {
-    v: RULES_VERSION,
     seed: seed | 0,
     t: 0,
     nextId: 1,
-    coins: startCoins,
-    tickets: 0,
+    coins: Math.max(0, Math.floor(coins)),
+    lifetimeTickets: 0,
+    unpaid: 0,
     supers: 0,
     sets: 0,
     cardsWon: 0,
     shots: 0,
     returned: 0,
     wheel: 0,
+    gate: 0,
+    gateShots: 0,
+    gateHits: 0,
+    stock: 0,
+    prize: null,
     pusherT: 0,
     bodies: [],
     flights: [],
@@ -206,9 +267,10 @@ export function createRun(seed: number, startCoins = BETA_START_COINS, album: un
     capsules: 0,
     cooldown: 0,
     quiet: 0,
-    over: false,
+    idle: false,
   };
   s.wheel = rand(s) * TAU;
+  s.gate = rand(s) * TAU;
   // A couple of capsules in the middle of the shelf
   const cores: Body[] = [];
   for (let i = 0; i < PREFILL_CORES; i++) {
@@ -243,47 +305,48 @@ export function createRun(seed: number, startCoins = BETA_START_COINS, album: un
 
 const dropX = (s: State, r: number) => r + 6 + rand(s) * (SHELF_W - 2 * r - 12);
 
-/** The shot coin meets the wheel. Returns true if the flight carries on down to the shelf (as a capsule or a card). */
-function hitWheel(s: State, f: Flight, ev: GameEvent[]) {
-  const seg = segmentAt(s.wheel);
+/** Something falling from the gate onto the shelf at world x (a coin, a capsule or a card). */
+function drop(s: State, kind: Flight["kind"], x: number, t = 0, extra: Partial<Flight> = {}) {
+  s.flights.push({ id: s.nextId++, t, phase: "down", x, aim: 0, kind, core: -1, card: -1, ...extra });
+}
+
+/**
+ * The shot coin lands on the gate. In the hole: swallowed, and one more prize
+ * spin in the stock (none if the stock is full). Off the hole: it bounces and
+ * falls onto the shelf as one coin at a seeded spot.
+ */
+function hitGate(s: State, f: Flight, ev: GameEvent[]) {
+  const hole = holeAt(s.gate);
+  const hit = inHole(f.aim, hole);
+  const full = hit && s.stock >= PRIZE_QUEUE_MAX;
+  s.gateShots++;
+  if (hit) {
+    s.gateHits++;
+    if (!full) s.stock++;
+  } else drop(s, "coin", dropX(s, COIN_R), 0, { aim: f.aim });
+  ev.push({ type: "gate", hit, full, x: f.aim, hole });
+}
+
+/** A prize spin stopped on slot `seg`: pay it by the slot's rules. */
+function payPrize(s: State, seg: number, ev: GameEvent[]) {
   const segment = WHEEL[seg];
-  ev.push({ type: "hit", seg, segment });
+  ev.push({ type: "prizeWin", seg, segment });
   if (segment.kind === "tickets") {
-    s.tickets += segment.value;
+    earn(s, segment.value);
     ev.push({ type: "tickets", amount: segment.value, source: "wheel" });
-    return false;
-  }
-  if (segment.kind === "coins") {
+  } else if (segment.kind === "coins") {
     // Spread across the shelf: one coin per equal band, at a random spot in it
     const n = segment.value;
     const lo = COIN_R + 6;
     const band = (SHELF_W - 2 * lo) / n;
-    for (let i = 0; i < n; i++) {
-      s.flights.push({
-        id: s.nextId++,
-        t: -i * COIN_DROP_GAP,
-        phase: "down",
-        x: lo + (i + rand(s)) * band,
-        kind: "coin",
-        core: -1,
-        card: -1,
-      });
-    }
-    return false;
-  }
-  // A capsule or a card takes the shot coin's place on its way down
-  f.phase = "down";
-  if (segment.kind === "core") {
-    f.kind = "core";
-    f.core = s.capsules++ % CORE_COUNT;
-    f.x = dropX(s, CORE_R);
+    for (let i = 0; i < n; i++) drop(s, "coin", lo + (i + rand(s)) * band, -i * COIN_DROP_GAP);
+  } else if (segment.kind === "core") {
+    drop(s, "core", dropX(s, CORE_R), 0, { core: s.capsules++ % CORE_COUNT });
     s.queue.push("mini");
   } else {
-    f.kind = "card";
-    f.card = Math.min(CARD_COUNT - 1, Math.floor(rand(s) * CARD_COUNT));
-    f.x = dropX(s, CARD_R);
+    const card = Math.min(CARD_COUNT - 1, Math.floor(rand(s) * CARD_COUNT));
+    drop(s, "card", dropX(s, CARD_R), 0, { card });
   }
-  return true;
 }
 
 function land(s: State, f: Flight, ev: GameEvent[]) {
@@ -367,12 +430,12 @@ function collectCard(s: State, card: number, ev: GameEvent[]) {
   const fresh = !s.album[card];
   s.album[card] = true;
   s.cardsWon++;
-  s.tickets += CARD_TICKETS;
+  earn(s, CARD_TICKETS);
   ev.push({ type: "card", card, fresh, owned: ownedCount(s.album) });
   ev.push({ type: "tickets", amount: CARD_TICKETS, source: "card" });
   if (s.album.every(Boolean)) {
     s.sets++;
-    s.tickets += SET_TICKETS;
+    earn(s, SET_TICKETS);
     s.album = s.album.map(() => false);
     ev.push({ type: "setComplete" }, { type: "tickets", amount: SET_TICKETS, source: "set" });
   }
@@ -380,27 +443,29 @@ function collectCard(s: State, card: number, ev: GameEvent[]) {
 
 const spinTime = (kind: SpinKind) => (kind === "super" ? SUPER_SPIN_TIME : SPIN_TIME);
 
-/** Whether the run can still change: something in the air, on the reels, or coins left. */
-export const busy = (s: State) => s.coins > 0 || s.flights.length > 0 || s.spin !== null || s.queue.length > 0;
+/** Whether the machine can still change: something in the air, on the wheel or the reels, or coins left. */
+export const busy = (s: State) =>
+  s.coins > 0 || s.flights.length > 0 || s.spin !== null || s.queue.length > 0 || s.prize !== null || s.stock > 0;
 
 /**
- * Add coupon coins to a run still in play. Returns the coins added (0 when the
- * run is over or the amount is not a positive whole number). Tickets, the
- * leaderboard score, are never touched.
+ * Add granted coins (allowance, coupons) to the machine, waking it if it idled
+ * at zero. Returns the coins added (0 when the amount is not a positive whole
+ * number). Tickets, the leaderboard number, are never touched.
  */
 export function grantCoins(s: State, n: number): number {
-  if (s.over || !Number.isFinite(n)) return 0;
+  if (!Number.isFinite(n)) return 0;
   const add = Math.floor(n);
   if (add <= 0) return 0;
   s.coins += add;
+  s.idle = false;
   return add;
 }
 
 export function update(s: State, input: Input, dt: number): GameEvent[] {
   const ev: GameEvent[] = [];
-  if (s.over) return ev;
   s.t += dt;
   s.wheel = (s.wheel + wheelSpeed(s.t) * dt) % TAU;
+  s.gate = (s.gate + gateSpeed(s.t) * dt) % TAU;
   s.pusherT = (s.pusherT + dt) % PUSH_PERIOD;
   s.cooldown = Math.max(0, s.cooldown - dt);
   s.quiet += dt;
@@ -412,7 +477,8 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
       s.coins--;
       s.shots++;
       s.quiet = 0;
-      s.flights.push({ id: s.nextId++, t: 0, phase: "up", x: SHELF_W / 2, kind: "coin", core: -1, card: -1 });
+      const aim = (rand(s) * 2 - 1) * AIM_SPREAD;
+      s.flights.push({ id: s.nextId++, t: 0, phase: "up", x: SHELF_W / 2, aim, kind: "coin", core: -1, card: -1 });
       ev.push({ type: "shoot" });
     } else ev.push({ type: "dry" });
   }
@@ -423,11 +489,9 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
     f.t += dt;
     if (f.phase === "up" && f.t >= FLIGHT_UP) {
       s.quiet = 0;
-      if (!hitWheel(s, f, ev)) {
-        s.flights.splice(i--, 1);
-        continue;
-      }
-      f.t -= FLIGHT_UP;
+      hitGate(s, f, ev);
+      s.flights.splice(i--, 1);
+      continue;
     }
     if (f.phase === "down" && f.t >= FLIGHT_DOWN) {
       land(s, f, ev);
@@ -445,12 +509,28 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
     if (b.kind === "coin") {
       s.coins += b.stack;
       s.returned += b.stack;
-      s.tickets += b.stack * FRONT_TICKETS;
+      earn(s, b.stack * FRONT_TICKETS);
       ev.push({ type: "tickets", amount: b.stack * FRONT_TICKETS, source: "front" });
     } else if (b.kind === "core") collectCore(s, ev);
     else collectCard(s, b.card, ev);
   }
   capBodies(s);
+
+  // The wheel: prize spins, one at a time from the stock
+  if (!s.prize && s.stock > 0) {
+    s.stock--;
+    s.prize = { seg: pick(s, WEIGHTS), t: 0, paid: false };
+    ev.push({ type: "prizeStart", seg: s.prize.seg });
+  }
+  if (s.prize) {
+    const pz = s.prize;
+    pz.t += dt;
+    if (!pz.paid && pz.t >= PRIZE_SPIN_TIME) {
+      pz.paid = true;
+      payPrize(s, pz.seg, ev);
+    }
+    if (pz.t >= PRIZE_SPIN_TIME + PRIZE_HOLD) s.prize = null;
+  }
 
   // The reels: Mini and Super spins, one at a time
   if (!s.spin && s.queue.length > 0) {
@@ -467,7 +547,7 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
       const prize = prizeOf(sp.kind, sp.idx);
       ev.push({ type: "spinWin", kind: sp.kind, idx: sp.idx, prize });
       if (prize.kind === "tickets") {
-        s.tickets += prize.value;
+        earn(s, prize.value);
         ev.push({ type: "tickets", amount: prize.value, source: sp.kind });
       } else {
         s.coins += prize.value;
@@ -483,9 +563,11 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
     if (sp.t >= time + SPIN_HOLD) s.spin = null;
   }
 
-  if (!busy(s) && s.quiet >= SETTLE_TIME) {
-    s.over = true;
-    ev.push({ type: "over", tickets: s.tickets, supers: s.supers });
+  // Out of coins and settled: idle (once), until coins come back from anywhere
+  if (s.idle && s.coins > 0) s.idle = false;
+  else if (!s.idle && !busy(s) && s.quiet >= SETTLE_TIME) {
+    s.idle = true;
+    ev.push({ type: "idle" });
   }
   return ev;
 }

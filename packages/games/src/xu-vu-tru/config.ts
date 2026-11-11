@@ -6,21 +6,45 @@ export const H = 960;
 
 // ---------------------------------------------------------------- economy
 
-/**
- * Coins every run starts with. BETA value: generous on purpose so testers see a
- * few Super spins; tune it down once the machine is balanced.
- */
-export const BETA_START_COINS = 200;
+/** The game's version (manifest.version, the save envelope's `v`). */
+export const VERSION = "1.0.0";
+/** Coins a guest's local trial machine starts with (no daily coins, no deposits). */
+export const TRIAL_COINS = 100;
+/** The signed-in allowance (manifest.allowance): a welcome once, then a daily. */
+export const WELCOME_COINS = 100;
+export const DAILY_COINS = 50;
 /** Each coin (or each coin in a stack) pushed over the front edge comes back, plus this many tickets. */
 export const FRONT_TICKETS = 1;
 
+// ---------------------------------------------------------------- the gate
+
+/**
+ * Under the wheel's hub a gate swings left and right with a hole (a cup) in it.
+ * The shot coin lands on the gate FLIGHT_UP seconds after the press, somewhere in
+ * a band ±AIM_SPREAD around the gate's centre (it rattles out of the chute). If
+ * its centre is within ±HOLE_HALF of the hole's centre it drops in and starts a
+ * prize spin; otherwise it bounces off and falls onto the shelf.
+ *
+ * All three are screen px across the gate (drawn 1:1). Measured in logic.test.ts:
+ * random fire times hit ≈ 25%, a perfectly timed shot (hole centred under the
+ * band when the coin arrives) ≈ HOLE_HALF / AIM_SPREAD ≈ 45%.
+ */
+export const GATE_AMP = 45;
+export const HOLE_HALF = 15;
+export const AIM_SPREAD = 33;
+/** One full left-right-left swing, seconds. */
+export const GATE_PERIOD = 1.45;
+/** The swing speed drifts ±this share over GATE_WOBBLE_PERIOD, so a held button can't lock onto it. */
+export const GATE_WOBBLE = 0.1;
+export const GATE_WOBBLE_PERIOD = 5.9;
+
 // ---------------------------------------------------------------- the wheel
 
-/** What a wheel slot pays. Expected values per shot are worked out in RE_NOTES.md. */
+/** What a wheel slot pays when a prize spin stops on it. Expected values are in RE_NOTES.md. */
 export type Segment =
-  /** Tickets straight to the counter; the shot coin stays in the wheel. */
+  /** Tickets straight to the counter. */
   | { kind: "tickets"; value: number }
-  /** This many coins rain onto the shelf instead of the shot coin. */
+  /** This many coins rain onto the shelf. */
   | { kind: "coins"; value: number }
   /** An energy capsule drops onto the shelf, and a Mini spin starts. */
   | { kind: "core" }
@@ -32,53 +56,68 @@ const c = (value: number): Segment => ({ kind: "coins", value });
 const CORE: Segment = { kind: "core" };
 const CARD: Segment = { kind: "card" };
 /**
- * The target wheel, clockwise from angle 0: 14 ticket slots, 8 coin slots, one
- * energy-core slot and one card slot. The side walls keep every coin on the
- * shelf, so ticket slots (which keep the shot coin) are the machine's drain. Big prizes sit on narrow slots, so
- * hitting them takes timing.
+ * The prize wheel, clockwise from angle 0. It turns as decoration; what it pays is
+ * a weighted pick (see weightOf), and every slot is drawn exactly as wide as its
+ * weight, so the wheel reads honestly: a slot's share of the circle is its chance.
  */
 export const WHEEL: Segment[] = [
-  t(2), c(1), t(3), t(2), c(2), t(5), CORE, t(2), c(1), t(3),
-  c(8), t(2), t(3), c(4), t(5), t(2), c(1), t(10), t(2), CARD,
-  t(3), c(6), t(2), c(2),
+  t(10), t(5), c(1), t(20), t(10), t(50), t(5), CORE, t(10), t(30),
+  c(8), t(5), t(20), t(10), c(4), t(100), t(5), t(30), c(2), t(10),
+  CARD, t(20), c(6), t(50),
 ];
 /**
- * Slot widths in units (a unit is 1/UNITS of the turn). The coin meets the wheel
- * at an effectively random angle, so a slot's chance is its width over UNITS.
+ * A slot's weight: its chance in percent (the weights add up to 100), and so its
+ * share of the wheel's circle. Tuned by simulation, see RE_NOTES.md.
  */
-export function widthOf(s: Segment) {
-  if (s.kind === "tickets") return 2;
-  if (s.kind === "coins") return s.value === 1 ? 2 : s.value === 2 ? 1.5 : s.value === 4 ? 1 : 0.75;
-  return s.kind === "core" ? 1.25 : 0.75;
+export function weightOf(s: Segment) {
+  if (s.kind === "tickets") return TICKET_WEIGHT[s.value] ?? 1;
+  if (s.kind === "coins") return COIN_WEIGHT[s.value] ?? 1;
+  return s.kind === "core" ? CORE_WEIGHT : CARD_WEIGHT;
 }
-export const UNITS = WHEEL.reduce((a, s) => a + widthOf(s), 0);
+const TICKET_WEIGHT: Record<number, number> = { 5: 3.6, 10: 5.3, 20: 6, 30: 5.5, 50: 3.4, 100: 3.9 };
+const COIN_WEIGHT: Record<number, number> = { 1: 1.5, 2: 1.2, 4: 1, 6: 0.9, 8: 0.8 };
+const CORE_WEIGHT = 8;
+const CARD_WEIGHT = 6;
+export const WEIGHTS = WHEEL.map(weightOf);
+export const UNITS = WEIGHTS.reduce((a, w) => a + w, 0);
 /** Where each segment starts and how wide it is, in radians from the wheel's zero mark. */
 export const SEG_START: number[] = [];
 export const SEG_SIZE: number[] = [];
 {
   let at = 0;
-  for (const s of WHEEL) {
+  for (const w of WEIGHTS) {
     SEG_START.push(at);
-    SEG_SIZE.push((widthOf(s) / UNITS) * Math.PI * 2);
+    SEG_SIZE.push((w / UNITS) * Math.PI * 2);
     at += SEG_SIZE[SEG_SIZE.length - 1];
   }
 }
-/** Wheel speed, radians per second (clockwise on screen). */
-export const WHEEL_SPEED = Math.PI * 2 * 0.2;
+/** Wheel speed, radians per second (clockwise on screen). Decoration only. */
+export const WHEEL_SPEED = Math.PI * 2 * 0.12;
 /** The speed swings ±this share over WOBBLE_PERIOD seconds. */
 export const WHEEL_WOBBLE = 0.22;
 export const WOBBLE_PERIOD = 7.3;
-/** Where the chute meets the wheel: angle 0 is 3 o'clock (canvas convention). */
-export const POINTER_ANGLE = 0;
 
-/** Seconds from pressing SHOOT to the coin striking the wheel (the lead to aim with). */
+/** Seconds from pressing SHOOT to the coin landing on the gate (the lead to aim with). */
 export const FLIGHT_UP = 0.42;
-/** Seconds from the wheel down onto the shelf. */
+/** Seconds from the gate down onto the shelf. */
 export const FLIGHT_DOWN = 0.4;
 /** Seconds between the coins of a coin slot's drop. */
 export const COIN_DROP_GAP = 0.06;
 /** Holding SHOOT fires this often (seconds). */
 export const FIRE_INTERVAL = 0.24;
+
+/** Seconds the light chases round the wheel, slowing, before it stops on the picked slot. */
+export const PRIZE_SPIN_TIME = 1.7;
+/** Seconds the stopped slot stays lit before the next prize spin starts. */
+export const PRIZE_HOLD = 0.45;
+/**
+ * Prize spins waiting their turn, at most (the lamps under the gate). A coin that
+ * drops in the hole while all of them are lit is still swallowed but adds no spin
+ * (as with a pachinko stock). With the button held, coins reach the hole about once
+ * a second while a spin takes ~2.15 s, so the stock fills and stays full: pacing
+ * shots to the lamps pays. Four keeps the wait once the coins run out under ~9 s.
+ */
+export const PRIZE_QUEUE_MAX = 4;
 
 // ---------------------------------------------------------------- spins
 
@@ -97,7 +136,7 @@ export const MINI_PRIZES: Prize[] = [
   { kind: "tickets", value: 50 },
   { kind: "coins", value: 35 },
 ];
-export const MINI_WEIGHTS = [30, 8, 22, 5, 12, 3, 6, 1];
+export const MINI_WEIGHTS = [40, 1, 30, 1, 15, 1, 8, 1];
 /** The Super spin (six cores collected): tickets only. */
 export const SUPER_PRIZES = [80, 100, 150, 200, 250, 300, 500];
 export const SUPER_WEIGHTS = [26, 26, 20, 13, 8, 5, 2];
@@ -146,7 +185,7 @@ export const CORE_MASS = 6;
 /** A card's footprint (a disc for the physics; drawn as a small tilted card). */
 export const CARD_R = 19;
 export const CARD_MASS = 2;
-/** Capsules already on the shelf when a run starts. */
+/** Capsules already on the shelf when a machine is new. */
 export const PREFILL_CORES = 2;
 /** Coins per pile at most (a dropped coin landing on a coin stacks on it). */
 export const MAX_STACK = 3;
@@ -165,9 +204,9 @@ export const RESTITUTION = 0.08;
 /** Collision passes per step, and how much of an overlap each pass removes. */
 export const ITERATIONS = 5;
 export const RELAX = 0.55;
-/** Seconds with nothing moving off the shelf, after the last coin, before the run ends. */
+/** Seconds with nothing moving off the shelf, after the last coin, before the machine idles at zero coins. */
 export const SETTLE_TIME = PUSH_PERIOD * 2.2;
-/** The shelf at the start: coin rows, and the share of them that are stacks of 2 or 3. */
+/** A new machine's shelf: coin rows, and the share of them that are stacks of 2 or 3. */
 export const PREFILL_FILL = 0.92;
 export const PREFILL_STACK2 = 0.2;
 export const PREFILL_STACK3 = 0.07;

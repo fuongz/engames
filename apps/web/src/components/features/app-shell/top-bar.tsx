@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "#/components/ui/button";
 import { AccountButton } from "#/components/shared/auth/account-button";
 import { LanguageMenu } from "#/components/shared/i18n/language-menu";
+import { TicketChip } from "#/components/shared/tickets/ticket-chip";
 import { Kbd } from "#/components/ui/kbd";
 import { useMessages } from "#/hooks/use-messages";
 
@@ -37,6 +38,7 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
         </Button>
         {/* Desktop has both in the sidebar */}
         <div className="flex items-center gap-2 lg:hidden">
+          <TicketChip />
           <LanguageMenu variant="compact" />
           <AccountButton variant="compact" />
         </div>

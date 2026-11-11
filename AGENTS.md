@@ -18,6 +18,8 @@ local repository instruction, then these general rules.
 | How is a game built? | [`docs/standards/game-engine.md`](docs/standards/game-engine.md) |
 | How does a game play online? | [`docs/standards/online-multiplayer.md`](docs/standards/online-multiplayer.md) |
 | How does a game take coupons? | [`docs/standards/coupons.md`](docs/standards/coupons.md) |
+| How does a game grant a welcome/daily allowance? | [`docs/standards/allowance.md`](docs/standards/allowance.md) |
+| How do arcade games share tickets? | [`docs/standards/tickets.md`](docs/standards/tickets.md) |
 
 Four things you will get wrong without them, so they are worth stating up front:
 

@@ -74,10 +74,15 @@ export function GameDetails({ game }: { game: GameManifest }) {
           ))}
         </ol>
       </div>
-      {game.inspiredBy && (
-        <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-          {fmt(m.player.inspiredBy, { source: game.inspiredBy[locale] })}
-        </p>
+      {(game.inspiredBy || game.version) && (
+        <div className="flex items-baseline gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
+          {game.inspiredBy && <p className="flex-1">{fmt(m.player.inspiredBy, { source: game.inspiredBy[locale] })}</p>}
+          {game.version && (
+            <p className="ml-auto font-mono tabular-nums" title={fmt(m.player.versionLabel, { version: game.version })}>
+              {fmt(m.player.version, { version: game.version })}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

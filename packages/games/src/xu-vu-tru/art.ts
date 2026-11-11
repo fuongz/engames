@@ -1,11 +1,27 @@
-// Drawing for Xu Vũ Trụ: the cabinet, wheel, shelf and LED counters are drawn
-// here (static parts cached to offscreen canvases); the two robot mascots are
-// generated art (img/robots.webp, see art-src/xu-vu-tru/), and so are the cat
-// cards (img/cards/<id>.webp), loaded by game.ts and handed in. The shelf is 2D
-// physics seen from above; `proj` tilts it into a 3/4 view and every disc is
-// drawn squashed, with a rim, a shadow and a size that grows toward the front.
+// Drawing for Xu Vũ Trụ in the chibi-cozy style. The painted parts are the v2
+// sprites in img/v2/ (see its README): the cabinet, the wheel's prize tiles and
+// hub, the gate, coins, orbs, the card back, the shelf floor, the pusher, the
+// launch button and the two robots. game.ts imports them and makeSprites decodes
+// each once; until one has decoded, a plain shape stands in for it. Everything
+// that is text or live state (counters, marquee, reels, lamps, lights, pops) is
+// drawn here in code, in the same palette. The cat cards (img/cards/<id>.webp)
+// are loaded by game.ts too. The shelf is 2D physics seen from above; `proj`
+// tilts it into a 3/4 view.
 import { type Rect, clamp, lerp, mulberry32 } from "@web-games/core";
-import { PUSH_MAX, SEG_SIZE, SEG_START, SHELF_D, SHELF_W, SIDE_WALL_D, type Segment, W, WHEEL } from "./config";
+import {
+  AIM_SPREAD,
+  GATE_AMP,
+  HOLE_HALF,
+  PRIZE_QUEUE_MAX,
+  SEG_SIZE,
+  SEG_START,
+  SHELF_D,
+  SHELF_W,
+  SIDE_WALL_D,
+  type Segment,
+  W,
+  WHEEL,
+} from "./config";
 import type { Body } from "./physics";
 
 type Ctx = CanvasRenderingContext2D;
@@ -13,45 +29,68 @@ type Ctx = CanvasRenderingContext2D;
 export const FONT = '"Baloo 2", system-ui, sans-serif';
 export const LED_FONT = '"Handjet", "Baloo 2", monospace';
 
-export const INK = "#0b0820";
-export const NEON = "#4ff3ff";
-export const GOLD = "#ffcf4a";
-export const PINK = "#ff4fa3";
-export const AMBER = "#ffb43c";
-export const MINT = "#5dffb0";
-/** The six energy cores: red, orange, yellow, green, cyan, violet. */
-export const CORE_COLORS = ["#ff4d5e", "#ff9a3c", "#ffe14d", "#4dff88", "#4dd8ff", "#b77bff"];
+// ---------------------------------------------------------------- palette (art/v2 style guide)
+
+/** Outlines, and dark text strokes. */
+export const BROWN = "#49332C";
+export const CREAM = "#F5E4BE";
+export const HONEY = "#EAB85D";
+export const TERRA = "#CF795A";
+export const TEAL = "#659E95";
+/** Small light accents: cyan for coins, violet for the cat cards. */
+export const CYAN = "#78E2D5";
+export const VIOLET = "#B893DE";
+/** Secondary text on the dark panels. */
+export const MUTED = "#CDB98F";
+/** Panels and windows: the cabinet's dusty space blue, darkened so cream text reads on it. */
+const NIGHT = "#33404F";
+const NIGHT_HI = "#46566A";
+/** A deep brown for LED windows. */
+const WELL = "#2E2420";
+/** The six energy cores (the orb sprites): red, orange, yellow, green, blue, purple. */
+export const CORE_COLORS = ["#E2584B", "#EE8E3E", "#F2CB4A", "#6CBF6A", "#4FA9D9", "#9C77D1"];
 
 // ---------------------------------------------------------------- layout (logical px)
 
 export const WHEEL_C = { x: 270, y: 262 };
+/** The prize tiles fill the ring from WHEEL_IN to WHEEL_R; the rim with its bulbs sits outside it. */
 export const WHEEL_R = 138;
-export const MARQUEE: Rect = { x: 94, y: 8, w: 352, h: 54 };
-export const LAMPS_Y = 86;
+export const WHEEL_IN = 70;
+const RIM = 14;
+export const MARQUEE: Rect = { x: 106, y: 12, w: 328, h: 48 };
+export const LAMPS_Y = 88;
 export const REEL: Rect = { x: 104, y: 420, w: 292, h: 52 };
 export const SPINS_BOX: Rect = { x: 404, y: 420, w: 104, h: 52 };
 export const MENU_BTN: Rect = { x: 8, y: 8, w: 78, h: 54 };
 /** The card album, opposite the menu button. */
 export const ALBUM_BTN: Rect = { x: 454, y: 8, w: 78, h: 54 };
-export const COINS_BOX: Rect = { x: 14, y: 852, w: 168, h: 60 };
-export const TICKETS_BOX: Rect = { x: 358, y: 852, w: 150, h: 60 };
-export const SHOOT = { x: 270, y: 886, r: 60 };
-/** AUTO toggle under the tickets counter: clear of the SHOOT bezel (ends at x 340) and 8 px inside the canvas bottom. */
-export const AUTO_BTN: Rect = { x: 358, y: 920, w: 150, h: 32 };
+/** The controls deck: two counters either side of the launch button, AUTO under the tickets. */
+export const COINS_BOX: Rect = { x: 30, y: 860, w: 156, h: 56 };
+export const TICKETS_BOX: Rect = { x: 354, y: 860, w: 156, h: 56 };
+/** The launch button: `r` is its cap's radius (the hit circle adds a margin in game.ts). */
+export const SHOOT = { x: 270, y: 880, r: 52 };
+/** AUTO toggle under the tickets counter: clear of the button's hit circle and inside the canvas bottom. */
+export const AUTO_BTN: Rect = { x: 354, y: 922, w: 156, h: 30 };
 /** Screen rows of the shelf's back wall line and front edge, and the front's screen span. */
 export const SHELF_TOP = 494;
 export const SHELF_BOTTOM = 802;
 const FRONT_L = 38;
 const FRONT_R = 502;
 const BACK_SCALE = 0.8;
-/** The chute from the button round to the wheel's 3 o'clock. */
+/** The gate's centre: under the wheel's hub, where the hole swings (logic x 0 is here, 1 px = 1 px). */
+export const GATE = { x: WHEEL_C.x, y: WHEEL_C.y + 82 };
+/** Half the gate's swing room: the hole's full swing plus its rim. */
+export const GATE_HALF = GATE_AMP + HOLE_HALF + 18;
+/** The gate sprite's width: its U opening (43% of it) is the hole plus a coin's radius each side. */
+const GATE_W = 110;
+/** The chute from the button round the right side, ending at the wheel's rim level with the gate. */
 export const CHUTE_X = 524;
 export const CHUTE: { x: number; y: number }[] = [
   { x: SHOOT.x + 20, y: SHOOT.y + 30 },
   { x: 330, y: 944 },
   { x: CHUTE_X, y: 944 },
-  { x: CHUTE_X, y: WHEEL_C.y },
-  { x: WHEEL_C.x + WHEEL_R + 10, y: WHEEL_C.y },
+  { x: CHUTE_X, y: GATE.y - 34 },
+  { x: GATE.x + GATE_HALF + 58, y: GATE.y - 34 },
 ];
 
 // ---------------------------------------------------------------- projection
@@ -83,6 +122,200 @@ export function along(pts: { x: number; y: number }[], k: number) {
   return pts[pts.length - 1];
 }
 
+// ---------------------------------------------------------------- sprites
+
+/** The v2 sprites, by file name (img/v2/<name>.webp). */
+export const ART = [
+  "cabinet-bg",
+  "wheel-hub",
+  "gate",
+  "coin",
+  "coin-stack2",
+  "coin-stack3",
+  "card-back",
+  "ticket",
+  "orb-red",
+  "orb-orange",
+  "orb-yellow",
+  "orb-green",
+  "orb-blue",
+  "orb-purple",
+  "tile-t5",
+  "tile-t10",
+  "tile-t20",
+  "tile-t30",
+  "tile-t50",
+  "tile-t100",
+  "tile-c1",
+  "tile-c2",
+  "tile-c4",
+  "tile-c6",
+  "tile-c8",
+  "tile-core",
+  "tile-card",
+  "shelf-floor",
+  "pusher",
+  "shoot-idle",
+  "shoot-pressed",
+  "robot-left",
+  "robot-right",
+] as const;
+export type ArtName = (typeof ART)[number];
+export type ArtSrc = Record<ArtName, string>;
+/** The orb sprite of each energy core, in CORE_COLORS order. */
+const ORBS: ArtName[] = ["orb-red", "orb-orange", "orb-yellow", "orb-green", "orb-blue", "orb-purple"];
+
+export interface Sprites {
+  /** The v2 sprites that have decoded (a missing one draws its stand-in). */
+  img: Partial<Record<ArtName, HTMLImageElement>>;
+  /** The ten cat cards, in CARD_IDS order (they may still be loading). */
+  cards: HTMLImageElement[];
+  /** The wheel's prize ring at 2×, rotated as one image each frame (plain wedges until the tiles decode). */
+  wheel: HTMLCanvasElement;
+  /** The shelf's floor, back wall and side walls at 2× (a plain floor until its texture decodes). */
+  shelf: HTMLCanvasElement;
+  /** One coin lying flat in the 3/4 view, built from coin.webp. */
+  coin: HTMLCanvasElement | null;
+  /** The launch button greyed out, for when there are no coins. */
+  shootOff: HTMLCanvasElement | null;
+}
+
+/** Start decoding every sprite; the caches built from them are swapped in as they land. */
+export function makeSprites(cards: HTMLImageElement[], src: ArtSrc): Sprites {
+  const sp: Sprites = { img: {}, cards, wheel: wheelRing(null), shelf: shelfDeck(null), coin: null, shootOff: null };
+  const loads = new Map<ArtName, Promise<void>>();
+  for (const name of ART) {
+    const img = new Image();
+    img.src = src[name];
+    loads.set(
+      name,
+      img.decode().then(
+        () => {
+          sp.img[name] = img;
+        },
+        () => {
+          // Stays on its stand-in
+        },
+      ),
+    );
+  }
+  const after = (names: readonly ArtName[], build: () => void) => {
+    void Promise.all(names.map((n) => loads.get(n))).then(build);
+  };
+  after([...new Set(WHEEL.map(tileOf))], () => {
+    sp.wheel = wheelRing(sp.img);
+  });
+  after(["shelf-floor"], () => {
+    sp.shelf = shelfDeck(sp.img["shelf-floor"] ?? null);
+  });
+  after(["coin"], () => {
+    sp.coin = sp.img.coin ? coinSide(sp.img.coin) : null;
+  });
+  after(["shoot-idle"], () => {
+    sp.shootOff = sp.img["shoot-idle"] ? dimmed(sp.img["shoot-idle"]) : null;
+  });
+  return sp;
+}
+
+/** Draw `img` with its bottom centre at (x, bottom), `w` wide, at its own aspect. */
+function stand(ctx: Ctx, img: HTMLImageElement | HTMLCanvasElement, x: number, bottom: number, w: number) {
+  const h = (w * img.height) / img.width;
+  ctx.drawImage(img, x - w / 2, bottom - h, w, h);
+}
+
+const COIN_FACE = 96;
+const COIN_RY = COIN_FACE * 0.29;
+const COIN_TH = COIN_FACE * 0.13;
+/** A coin lying flat, seen at 3/4: the round face squashed onto its honey edge. */
+function coinSide(face: HTMLImageElement) {
+  const c = document.createElement("canvas");
+  c.width = COIN_FACE + 6;
+  c.height = Math.ceil(COIN_RY * 2 + COIN_TH + 6);
+  const g = c.getContext("2d") as Ctx;
+  const cx = c.width / 2;
+  const top = 3 + COIN_RY;
+  const rx = COIN_FACE / 2;
+  g.beginPath();
+  g.moveTo(cx - rx, top);
+  g.lineTo(cx - rx, top + COIN_TH);
+  g.ellipse(cx, top + COIN_TH, rx, COIN_RY, 0, Math.PI, 0, true);
+  g.lineTo(cx + rx, top);
+  g.closePath();
+  g.fillStyle = "#C38A33";
+  g.fill();
+  g.strokeStyle = BROWN;
+  g.lineWidth = 4;
+  g.stroke();
+  g.drawImage(face, cx - rx - 1.5, top - COIN_RY - 1.5, COIN_FACE + 3, COIN_RY * 2 + 3);
+  return c;
+}
+
+/** The launch button with a brown wash: there is nothing to shoot. */
+function dimmed(img: HTMLImageElement) {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const g = c.getContext("2d") as Ctx;
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = "source-atop";
+  g.fillStyle = "rgba(73,51,44,0.55)";
+  g.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+/** A coin, top view, `w` across (flying coins squash it as they spin). */
+function coinFace(ctx: Ctx, sp: Sprites, x: number, y: number, w: number, h: number) {
+  const img = sp.img.coin;
+  if (img) {
+    ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+    return;
+  }
+  ctx.fillStyle = HONEY;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = Math.max(1, w * 0.08);
+  ctx.beginPath();
+  ctx.ellipse(x, y, w / 2, h / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+/** An energy orb standing with its bottom at (x, bottom), `w` across. */
+export function drawOrb(ctx: Ctx, sp: Sprites, core: number, x: number, bottom: number, w: number) {
+  const img = sp.img[ORBS[core]];
+  if (img) {
+    stand(ctx, img, x, bottom, w);
+    return;
+  }
+  ctx.fillStyle = CORE_COLORS[core];
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = Math.max(1.5, w * 0.06);
+  ctx.beginPath();
+  ctx.arc(x, bottom - w / 2, w / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = CREAM;
+  ctx.fillRect(x - w / 2, bottom - w * 0.56, w, w * 0.14);
+}
+
+/** The card back (a card whose cat is still a surprise), filling the rect. */
+export function drawCardBack(ctx: Ctx, sp: Sprites, x: number, y: number, w: number, h: number) {
+  const img = sp.img["card-back"];
+  if (img) {
+    ctx.drawImage(img, x, y, w, h);
+    return;
+  }
+  ctx.fillStyle = TEAL;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = Math.max(1.2, w * 0.05);
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, w * 0.12);
+  ctx.fill();
+  ctx.stroke();
+}
+
+/** The card back's height for a width. */
+export const cardBackH = (w: number) => (w * 160) / 124;
+
 // ---------------------------------------------------------------- text and UI
 
 export function text(
@@ -91,9 +324,9 @@ export function text(
   x: number,
   y: number,
   size: number,
-  fill = "#ffffff",
+  fill = CREAM,
   align: CanvasTextAlign = "center",
-  stroke: string | null = INK,
+  stroke: string | null = BROWN,
   font = FONT,
   weight = 800,
 ) {
@@ -110,20 +343,21 @@ export function text(
   ctx.fillText(str, x, y);
 }
 
-/** Neon text: a coloured glow under a white-hot core. */
-export function neon(ctx: Ctx, str: string, x: number, y: number, size: number, color: string, glow = 1, font = FONT) {
+/** A title: chunky letters with a brown outline over a brown drop, like a sticker. */
+export function headline(ctx: Ctx, str: string, x: number, y: number, size: number, color = CREAM, font = FONT) {
   ctx.save();
   ctx.font = `800 ${size}px ${font}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 18 * glow;
   ctx.lineJoin = "round";
-  ctx.lineWidth = size * 0.16;
-  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(4, size * 0.22);
+  ctx.strokeStyle = BROWN;
+  ctx.fillStyle = BROWN;
+  const drop = Math.max(2, size * 0.07);
+  ctx.strokeText(str, x, y + drop);
+  ctx.fillText(str, x, y + drop);
   ctx.strokeText(str, x, y);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = color;
   ctx.fillText(str, x, y);
   ctx.restore();
 }
@@ -138,526 +372,253 @@ export function fitSize(ctx: Ctx, str: string, size: number, maxW: number, font 
   return s;
 }
 
+/** A dusty-blue card with a brown outline and a cream inner border. */
 export function panel(ctx: Ctx, r: Rect, radius = 22) {
   ctx.save();
-  ctx.shadowColor = "rgba(79,243,255,0.45)";
-  ctx.shadowBlur = 24;
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y + 6, r.w, r.h, radius);
+  ctx.fill();
   const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
-  g.addColorStop(0, "#1b1446");
-  g.addColorStop(1, "#0c0a26");
+  g.addColorStop(0, NIGHT_HI);
+  g.addColorStop(1, NIGHT);
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.w, r.h, radius);
   ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = NEON;
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 4;
   ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = CREAM;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.roundRect(r.x + 6, r.y + 6, r.w - 12, r.h - 12, radius - 6);
+  ctx.roundRect(r.x + 7, r.y + 7, r.w - 14, r.h - 14, Math.max(4, radius - 6));
   ctx.stroke();
   ctx.restore();
 }
 
-/** A chunky arcade button; `colors` top→bottom. */
+/** A chunky toy button; `colors` top→bottom. */
 export function button(ctx: Ctx, r: Rect, label: string, colors: [string, string], size = 26, pressed = false) {
   ctx.save();
   const dy = pressed ? 3 : 0;
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  const rad = r.h / 2.4;
+  ctx.fillStyle = BROWN;
   ctx.beginPath();
-  ctx.roundRect(r.x, r.y + 6, r.w, r.h, r.h / 2.4);
+  ctx.roundRect(r.x, r.y + 6, r.w, r.h, rad);
   ctx.fill();
   const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
   g.addColorStop(0, colors[0]);
   g.addColorStop(1, colors[1]);
   ctx.fillStyle = g;
-  ctx.strokeStyle = INK;
+  ctx.strokeStyle = BROWN;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.roundRect(r.x, r.y + dy, r.w, r.h, r.h / 2.4);
+  ctx.roundRect(r.x, r.y + dy, r.w, r.h, rad);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.3)";
+  ctx.fillStyle = "rgba(255,248,230,0.32)";
   ctx.beginPath();
-  ctx.roundRect(r.x + 10, r.y + dy + 5, r.w - 20, r.h * 0.26, r.h * 0.13);
+  ctx.roundRect(r.x + 10, r.y + dy + 5, r.w - 20, r.h * 0.24, r.h * 0.12);
   ctx.fill();
-  text(ctx, label, r.x + r.w / 2, r.y + dy + r.h / 2 + 2, fitSize(ctx, label, size, r.w - 24), "#ffffff");
+  text(ctx, label, r.x + r.w / 2, r.y + dy + r.h / 2 + 2, fitSize(ctx, label, size, r.w - 24), CREAM);
   ctx.restore();
 }
 
-// ---------------------------------------------------------------- cached sprites
-
-export interface Sprites {
-  coin: HTMLCanvasElement;
-  cores: HTMLCanvasElement[];
-  wheel: HTMLCanvasElement;
-  stars: { x: number; y: number; r: number; tw: number }[];
-  /** The ten cat cards, in CARD_IDS order (they may still be loading). */
-  cards: HTMLImageElement[];
+/** A cream tile with a brown outline: the menu and album buttons. */
+function tile(ctx: Ctx, r: Rect, edge = BROWN, lw = 3) {
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y + 4, r.w, r.h, 14);
+  ctx.fill();
+  ctx.fillStyle = CREAM;
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.w, r.h, 14);
+  ctx.fill();
+  ctx.stroke();
 }
 
-const COIN_PX = 64;
-/** The coin sprite: a tilted disc with its rim, drawn at COIN_PX across. */
-function coinSprite() {
-  const c = document.createElement("canvas");
-  c.width = COIN_PX + 4;
-  c.height = Math.round(COIN_PX * 0.62 + 14);
-  const g = c.getContext("2d") as Ctx;
-  const cx = c.width / 2;
-  const rx = COIN_PX / 2;
-  const ry = rx * 0.62;
-  const top = ry + 2;
-  // Rim (the coin's edge, seen below the face)
-  g.fillStyle = "#9a5a08";
-  g.beginPath();
-  g.ellipse(cx, top + 8, rx, ry, 0, 0, Math.PI * 2);
-  g.fill();
-  g.fillRect(cx - rx, top, rx * 2, 8);
-  g.fillStyle = "#c97d12";
-  g.beginPath();
-  g.ellipse(cx, top + 5, rx, ry, 0, 0, Math.PI);
-  g.fill();
-  // Face
-  const face = g.createLinearGradient(cx - rx, top - ry, cx + rx, top + ry);
-  face.addColorStop(0, "#fff3a8");
-  face.addColorStop(0.45, "#ffcc33");
-  face.addColorStop(1, "#e08a10");
-  g.fillStyle = face;
-  g.beginPath();
-  g.ellipse(cx, top, rx, ry, 0, 0, Math.PI * 2);
-  g.fill();
-  g.strokeStyle = "#a8640a";
-  g.lineWidth = 2;
-  g.stroke();
-  g.strokeStyle = "rgba(160,92,8,0.8)";
-  g.lineWidth = 2;
-  g.beginPath();
-  g.ellipse(cx, top, rx * 0.7, ry * 0.7, 0, 0, Math.PI * 2);
-  g.stroke();
-  // An embossed four-point star
-  g.fillStyle = "rgba(255,250,210,0.9)";
-  g.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-    const rr = i % 2 === 0 ? rx * 0.42 : rx * 0.13;
-    g.lineTo(cx + Math.cos(a) * rr, top + Math.sin(a) * rr * 0.62);
-  }
-  g.fill();
-  g.fillStyle = "rgba(255,255,255,0.55)";
-  g.beginPath();
-  g.ellipse(cx - rx * 0.35, top - ry * 0.4, rx * 0.28, ry * 0.18, -0.3, 0, Math.PI * 2);
-  g.fill();
-  return c;
-}
-
-const CORE_PX = 96;
-/** An energy-core capsule: a glowing orb standing in a chrome ring, seen at 3/4. */
-function coreSprite(color: string) {
-  const c = document.createElement("canvas");
-  c.width = CORE_PX + 8;
-  c.height = Math.round(CORE_PX * 1.15);
-  const g = c.getContext("2d") as Ctx;
-  const cx = c.width / 2;
-  const rx = CORE_PX / 2;
-  const base = c.height - rx * 0.62 - 6;
-  // Chrome base ring
-  const chrome = g.createLinearGradient(cx - rx, 0, cx + rx, 0);
-  chrome.addColorStop(0, "#5d6b80");
-  chrome.addColorStop(0.35, "#f2f6ff");
-  chrome.addColorStop(0.6, "#9aa7bd");
-  chrome.addColorStop(1, "#3c4658");
-  g.fillStyle = "#2a3140";
-  g.beginPath();
-  g.ellipse(cx, base + 7, rx, rx * 0.62, 0, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = chrome;
-  g.beginPath();
-  g.ellipse(cx, base, rx, rx * 0.62, 0, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = "#1a1f2b";
-  g.beginPath();
-  g.ellipse(cx, base, rx * 0.72, rx * 0.44, 0, 0, Math.PI * 2);
-  g.fill();
-  // The orb
-  const oy = base - rx * 0.55;
-  const or = rx * 0.78;
-  const orb = g.createRadialGradient(cx - or * 0.35, oy - or * 0.35, or * 0.1, cx, oy, or);
-  orb.addColorStop(0, "#ffffff");
-  orb.addColorStop(0.3, color);
-  orb.addColorStop(1, shade(color, 0.35));
-  g.fillStyle = orb;
-  g.beginPath();
-  g.arc(cx, oy, or, 0, Math.PI * 2);
-  g.fill();
-  // Facets: a hex cage over the orb
-  g.strokeStyle = "rgba(230,240,255,0.75)";
-  g.lineWidth = 3;
-  g.beginPath();
-  for (let i = 0; i <= 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    g.lineTo(cx + Math.cos(a) * or * 0.55, oy + Math.sin(a) * or * 0.55);
-  }
-  g.stroke();
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    g.beginPath();
-    g.moveTo(cx + Math.cos(a) * or * 0.55, oy + Math.sin(a) * or * 0.55);
-    g.lineTo(cx + Math.cos(a) * or * 0.97, oy + Math.sin(a) * or * 0.97);
-    g.stroke();
-  }
-  g.strokeStyle = "rgba(255,255,255,0.5)";
-  g.lineWidth = 2.5;
-  g.beginPath();
-  g.arc(cx, oy, or, 0, Math.PI * 2);
-  g.stroke();
-  g.fillStyle = "rgba(255,255,255,0.85)";
-  g.beginPath();
-  g.ellipse(cx - or * 0.38, oy - or * 0.45, or * 0.22, or * 0.12, -0.6, 0, Math.PI * 2);
-  g.fill();
-  return c;
-}
-
-/** Darken a #rrggbb colour by `k` (0 = black, 1 = unchanged). */
-export function shade(hex: string, k: number) {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const r = Math.round(((n >> 16) & 255) * k);
-  const g = Math.round(((n >> 8) & 255) * k);
-  const b = Math.round((n & 255) * k);
-  return `rgb(${r},${g},${b})`;
-}
-
-/** Segment colours, outer→inner: cool for tickets, warm gold for coins. */
-function segColors(seg: Segment): [string, string] {
-  if (seg.kind === "tickets")
-    return seg.value >= 10 ? ["#ff5fc0", "#9a1070"] : seg.value >= 5 ? ["#9a5bff", "#5420b0"] : seg.value >= 3 ? ["#3a7bff", "#1d3fa8"] : ["#19b8c9", "#0c6f7d"];
-  if (seg.kind === "coins") return seg.value >= 6 ? ["#ffe066", "#d08a00"] : seg.value >= 4 ? ["#ffc23a", "#c06a00"] : ["#ff9f3c", "#a8460a"];
-  if (seg.kind === "core") return ["#2a2f5a", "#0d1030"];
-  return ["#ff7eb6", "#a8205e"];
-}
-
-/** A paper ticket stub, centred at (0,0), `w` wide. */
-export function ticketIcon(g: Ctx, w: number) {
-  const h = w * 0.58;
-  g.save();
-  g.fillStyle = "#ffb43c";
-  g.strokeStyle = "rgba(10,8,32,0.9)";
-  g.lineWidth = Math.max(1.5, w * 0.08);
-  g.beginPath();
-  g.moveTo(-w / 2, -h / 2);
-  g.lineTo(w / 2, -h / 2);
-  g.arc(w / 2, 0, h * 0.22, -Math.PI / 2, Math.PI / 2, true);
-  g.lineTo(w / 2, h / 2);
-  g.lineTo(-w / 2, h / 2);
-  g.arc(-w / 2, 0, h * 0.22, Math.PI / 2, -Math.PI / 2, true);
-  g.closePath();
-  g.fill();
-  g.stroke();
-  g.setLineDash([w * 0.08, w * 0.08]);
-  g.lineWidth = Math.max(1, w * 0.05);
-  g.beginPath();
-  g.moveTo(w * 0.18, -h / 2 + 2);
-  g.lineTo(w * 0.18, h / 2 - 2);
-  g.stroke();
-  g.restore();
-}
-
-/** A flat gold coin with a star, centred at (0,0). */
-export function coinIcon(g: Ctx, r: number) {
-  g.save();
-  g.fillStyle = "#a8640a";
-  g.beginPath();
-  g.arc(0, r * 0.12, r, 0, Math.PI * 2);
-  g.fill();
-  const face = g.createLinearGradient(-r, -r, r, r);
-  face.addColorStop(0, "#fff3a8");
-  face.addColorStop(0.5, "#ffcc33");
-  face.addColorStop(1, "#e08a10");
-  g.fillStyle = face;
-  g.beginPath();
-  g.arc(0, 0, r, 0, Math.PI * 2);
-  g.fill();
-  g.strokeStyle = "rgba(10,8,32,0.85)";
-  g.lineWidth = Math.max(1.2, r * 0.14);
-  g.stroke();
-  g.fillStyle = "rgba(255,250,210,0.95)";
-  g.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-    const rr = i % 2 === 0 ? r * 0.6 : r * 0.2;
-    g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
-  }
-  g.fill();
-  g.restore();
-}
-
-/** A glowing energy orb in a hex cage, centred at (0,0). */
-export function coreIcon(g: Ctx, r: number, color = "#4dd8ff") {
-  g.save();
-  const orb = g.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
-  orb.addColorStop(0, "#ffffff");
-  orb.addColorStop(0.35, color);
-  orb.addColorStop(1, shade(color, 0.4));
-  g.shadowColor = color;
-  g.shadowBlur = r * 0.8;
-  g.fillStyle = orb;
-  g.beginPath();
-  g.arc(0, 0, r, 0, Math.PI * 2);
-  g.fill();
-  g.shadowBlur = 0;
-  g.strokeStyle = "rgba(240,248,255,0.85)";
-  g.lineWidth = Math.max(1.2, r * 0.12);
-  g.beginPath();
-  for (let i = 0; i <= 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    g.lineTo(Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.55);
-  }
-  g.stroke();
-  g.restore();
-}
-
-/** A little card with a paw print, centred at (0,0), `w` wide (3:4). */
-export function cardIcon(g: Ctx, w: number, fill = "#fff4fa") {
-  const h = (w * 4) / 3;
-  g.save();
-  g.fillStyle = fill;
-  g.strokeStyle = "rgba(10,8,32,0.9)";
-  g.lineWidth = Math.max(1.4, w * 0.09);
-  g.beginPath();
-  g.roundRect(-w / 2, -h / 2, w, h, w * 0.16);
-  g.fill();
-  g.stroke();
-  g.fillStyle = "#ff4fa3";
-  g.beginPath();
-  g.ellipse(0, h * 0.1, w * 0.2, w * 0.16, 0, 0, Math.PI * 2);
-  g.fill();
-  for (const [dx, dy] of [
-    [-0.24, -0.1],
-    [-0.08, -0.2],
-    [0.08, -0.2],
-    [0.24, -0.1],
-  ]) {
-    g.beginPath();
-    g.arc(dx * w, dy * h, w * 0.075, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.restore();
-}
-
-/** The wheel face at 2× (it is rotated as one image each frame). */
-function wheelSprite() {
-  const R = WHEEL_R * 2;
-  const c = document.createElement("canvas");
-  c.width = R * 2 + 8;
-  c.height = R * 2 + 8;
-  const g = c.getContext("2d") as Ctx;
-  const cx = c.width / 2;
-  const cy = c.height / 2;
-  for (let i = 0; i < WHEEL.length; i++) {
-    const a0 = SEG_START[i];
-    const a1 = a0 + SEG_SIZE[i];
-    const seg = WHEEL[i];
-    const cols = segColors(seg);
-    const grad = g.createRadialGradient(cx, cy, R * 0.2, cx, cy, R);
-    grad.addColorStop(0, cols[1]);
-    grad.addColorStop(0.7, cols[0]);
-    grad.addColorStop(1, cols[1]);
-    g.fillStyle = grad;
-    g.beginPath();
-    g.moveTo(cx, cy);
-    g.arc(cx, cy, R, a0, a1);
-    g.closePath();
-    g.fill();
-    g.strokeStyle = "rgba(255,255,255,0.55)";
-    g.lineWidth = 3;
-    g.stroke();
-    // Icon and value along the radius, reading outward
-    const mid = (a0 + a1) / 2;
-    const arc = (r: number) => SEG_SIZE[i] * r;
-    g.save();
-    g.translate(cx, cy);
-    g.rotate(mid);
-    if (seg.kind === "tickets" || seg.kind === "coins") {
-      const size = Math.min(48, arc(R * 0.78) * 1.25);
-      g.font = `800 ${size}px ${FONT}`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.lineWidth = 8;
-      g.strokeStyle = "rgba(10,8,32,0.85)";
-      g.save();
-      g.translate(R * 0.8, 0);
-      g.rotate(Math.PI / 2);
-      g.strokeText(String(seg.value), 0, 0);
-      g.fillStyle = seg.kind === "coins" ? "#fffbe6" : "#ffffff";
-      g.fillText(String(seg.value), 0, 0);
-      g.restore();
-      g.save();
-      g.translate(R * 0.6, 0);
-      g.rotate(Math.PI / 2);
-      if (seg.kind === "tickets") ticketIcon(g, Math.min(34, arc(R * 0.6) * 0.85));
-      else coinIcon(g, Math.min(15, arc(R * 0.6) * 0.42));
-      g.restore();
-    } else if (seg.kind === "core") {
-      const r = Math.min(17, arc(R * 0.76) * 0.42);
-      g.save();
-      g.translate(R * 0.76, 0);
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * Math.PI * 2;
-        g.fillStyle = CORE_COLORS[k];
-        g.beginPath();
-        g.arc(Math.cos(a) * r * 1.5, Math.sin(a) * r * 1.5, r * 0.32, 0, Math.PI * 2);
-        g.fill();
-      }
-      coreIcon(g, r * 0.95);
-      g.restore();
-    } else {
-      g.save();
-      g.translate(R * 0.76, 0);
-      g.rotate(Math.PI / 2);
-      cardIcon(g, Math.min(24, arc(R * 0.76) * 0.85));
-      g.restore();
-    }
-    g.restore();
-  }
-  // Inner ring and hub
-  g.strokeStyle = "rgba(255,255,255,0.35)";
-  g.lineWidth = 4;
-  g.beginPath();
-  g.arc(cx, cy, R * 0.42, 0, Math.PI * 2);
-  g.stroke();
-  return c;
-}
-
-export function makeSprites(cards: HTMLImageElement[]): Sprites {
-  const rnd = mulberry32(0xc0115);
-  const stars = Array.from({ length: 90 }, () => ({
-    x: rnd() * W,
-    y: -140 + rnd() * 1240,
-    r: 0.6 + rnd() * 1.8,
-    tw: rnd() * Math.PI * 2,
-  }));
-  return { coin: coinSprite(), cores: CORE_COLORS.map(coreSprite), wheel: wheelSprite(), stars, cards };
-}
-
-// ---------------------------------------------------------------- background and cabinet
-
-export function drawBackground(ctx: Ctx, sp: Sprites, view: Rect, t: number) {
-  const g = ctx.createLinearGradient(0, view.y, 0, view.y + view.h);
-  g.addColorStop(0, "#160b3a");
-  g.addColorStop(0.5, "#0c0826");
-  g.addColorStop(1, "#05040f");
-  ctx.fillStyle = g;
-  ctx.fillRect(view.x, view.y, view.w, view.h);
-  for (const s of sp.stars) {
-    ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 2 + s.tw);
-    ctx.fillStyle = "#cfe9ff";
+export function drawMenuButton(ctx: Ctx, r: Rect, label: string) {
+  ctx.save();
+  tile(ctx, r);
+  ctx.fillStyle = BROWN;
+  for (let i = 0; i < 3; i++) {
     ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.roundRect(r.x + r.w / 2 - 12, r.y + 11 + i * 7, 24, 4, 2);
     ctx.fill();
   }
-  ctx.globalAlpha = 1;
-}
-
-/** The cabinet body: metal sides, the dark glass-backed interior and a chase of bulbs. */
-export function drawCabinet(ctx: Ctx, view: Rect, t: number, chase: number, rainbow: boolean) {
-  const top = Math.min(view.y + 4, -10);
-  const bottom = Math.max(view.y + view.h - 4, 970);
-  // Body
-  const body = ctx.createLinearGradient(0, 0, W, 0);
-  body.addColorStop(0, "#0a3a48");
-  body.addColorStop(0.08, "#16798a");
-  body.addColorStop(0.5, "#0d2c3c");
-  body.addColorStop(0.92, "#16798a");
-  body.addColorStop(1, "#0a3a48");
-  ctx.fillStyle = body;
-  ctx.beginPath();
-  ctx.roundRect(2, top, W - 4, bottom - top, 26);
-  ctx.fill();
-  // Interior behind the glass
-  const inner = ctx.createLinearGradient(0, 100, 0, 820);
-  inner.addColorStop(0, "#1b1150");
-  inner.addColorStop(0.45, "#120c38");
-  inner.addColorStop(1, "#0a0820");
-  ctx.fillStyle = inner;
-  ctx.beginPath();
-  ctx.roundRect(14, 104, W - 28, 724, 18);
-  ctx.fill();
-  // Neon trim
-  ctx.save();
-  ctx.shadowColor = NEON;
-  ctx.shadowBlur = 14;
-  ctx.strokeStyle = NEON;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.roundRect(14, 104, W - 28, 724, 18);
-  ctx.stroke();
+  text(ctx, label, r.x + r.w / 2, r.y + 42, fitSize(ctx, label, 14, r.w - 10), BROWN, "center", null);
   ctx.restore();
-  // Bulbs down both sides
-  const n = 22;
-  for (let side = 0; side < 2; side++) {
-    for (let i = 0; i < n; i++) {
-      const y = 118 + (i / (n - 1)) * 690;
-      const x = side === 0 ? 8 : W - 8;
-      const on = (i + Math.floor(chase)) % 3 === (side === 0 ? 0 : 1);
-      const col = rainbow ? CORE_COLORS[(i + Math.floor(chase)) % 6] : on ? GOLD : "#6a5a2a";
-      bulb(ctx, x, y, 4.2, col, on || rainbow);
-    }
-  }
-  void t;
 }
 
-export function bulb(ctx: Ctx, x: number, y: number, r: number, color: string, on: boolean) {
+/** The album button: the card back, the owned count, and the label. `pulse` 0..1 after a new card. */
+export function drawAlbumButton(ctx: Ctx, sp: Sprites, r: Rect, label: string, owned: number, total: number, pulse: number) {
   ctx.save();
-  if (on) {
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+  if (pulse > 0) {
+    ctx.fillStyle = VIOLET;
+    ctx.globalAlpha = pulse * 0.6;
+    ctx.beginPath();
+    ctx.roundRect(r.x - 5 * pulse, r.y - 5 * pulse, r.w + 10 * pulse, r.h + 10 * pulse, 18);
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
-  ctx.fillStyle = on ? color : "#3a3350";
+  tile(ctx, r, pulse > 0 ? "#7A4FA6" : BROWN, 3 + pulse * 2);
+  ctx.save();
+  ctx.translate(r.x + 20, r.y + 21);
+  ctx.rotate(-0.12);
+  const k = 1 + pulse * 0.25;
+  ctx.scale(k, k);
+  drawCardBack(ctx, sp, -9, -cardBackH(18) / 2, 18, cardBackH(18));
+  ctx.restore();
+  text(ctx, `${owned}/${total}`, r.x + 52, r.y + 21, 17, BROWN, "center", null);
+  text(ctx, label, r.x + r.w / 2, r.y + 43, fitSize(ctx, label, 14, r.w - 10), BROWN, "center", null);
+  ctx.restore();
+}
+
+/** The small version label in the cabinet's corner ("v1.0.0"). */
+export function versionTag(ctx: Ctx, x: number, y: number, label: string) {
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  text(ctx, label, x, y, 13, MUTED, "center", BROWN, LED_FONT, 700);
+  ctx.restore();
+}
+
+/** A lamp: a brown-rimmed bulb with a soft halo when lit. */
+export function bulb(ctx: Ctx, x: number, y: number, r: number, color: string, on: boolean) {
+  if (on) {
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.arc(x, y, r + 1.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = on ? color : "#8C7458";
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.shadowBlur = 0;
   if (on) {
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillStyle = "rgba(255,252,240,0.85)";
     ctx.beginPath();
-    ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.4, 0, Math.PI * 2);
+    ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.38, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.restore();
 }
 
-/** The top marquee: "SUPER BONUS 250" in neon, flashing when it pays. */
+/** A warm-white lamp colour for chase lights on honey and cream. */
+const LAMP_ON = "#FFF3CF";
+
+// ---------------------------------------------------------------- background and cabinet
+
+/**
+ * Where the cabinet art's rows land (source y0, y1 → screen y0, y1). Only the
+ * plain stretch of the interior grows, so the orange lip lands on the shelf's
+ * front edge and the deck under it; the rest is drawn 1:1 (the art is 2×).
+ */
+const CAB_SLICES = [
+  [0, 1130, 0, 565],
+  [1130, 1410, 565, 787],
+  [1410, 1920, 787, 1042],
+] as const;
+const CAB_BOTTOM = 1042;
+/** Below this source row the cabinet reaches the image's side edges; the side bleed carries the backdrop row above it down. */
+const CAB_EDGE_Y = 860;
+
+/** The cabinet, with its backdrop carried out to the view's edges on tall or wide screens. */
+export function drawCabinet(ctx: Ctx, sp: Sprites, view: Rect) {
+  const img = sp.img["cabinet-bg"];
+  if (!img) {
+    plainCabinet(ctx, view);
+    return;
+  }
+  const sw = img.naturalWidth;
+  const sh = img.naturalHeight;
+  const right = view.x + view.w;
+  const bottom = view.y + view.h;
+  for (const [s0, s1, d0, d1] of CAB_SLICES) ctx.drawImage(img, 0, s0, sw, s1 - s0, 0, d0, W, d1 - d0);
+  if (view.x < 0) {
+    // The backdrop's outer columns, out to the view's sides
+    for (const [s0, s1, d0, d1] of CAB_SLICES) {
+      const e1 = Math.min(s1, CAB_EDGE_Y);
+      if (e1 <= s0) continue;
+      const h = ((e1 - s0) / (s1 - s0)) * (d1 - d0);
+      ctx.drawImage(img, 0, s0, 2, e1 - s0, view.x, d0, 0.5 - view.x, h);
+      ctx.drawImage(img, sw - 2, s0, 2, e1 - s0, W - 0.5, d0, right - W + 0.5, h);
+    }
+    const [s0, s1, d0, d1] = CAB_SLICES[1];
+    const y = d0 + ((CAB_EDGE_Y - 4 - s0) / (s1 - s0)) * (d1 - d0);
+    ctx.drawImage(img, 0, CAB_EDGE_Y - 4, 2, 4, view.x, y, 0.5 - view.x, bottom - y);
+    ctx.drawImage(img, sw - 2, CAB_EDGE_Y - 4, 2, 4, W - 0.5, y, right - W + 0.5, bottom - y);
+  }
+  if (view.y < 0) {
+    // The top row either side of the knob (it touches the art's top edge), carried up
+    const knob = sw * 0.06;
+    const half = sw / 2 - knob;
+    ctx.drawImage(img, 0, 0, half, 2, view.x, view.y, W / 2 - view.x, 0.5 - view.y);
+    ctx.drawImage(img, sw - half, 0, half, 2, W / 2, view.y, right - W / 2, 0.5 - view.y);
+  }
+  if (bottom > CAB_BOTTOM) ctx.drawImage(img, 0, sh - 2, sw, 2, view.x, CAB_BOTTOM - 0.5, view.w, bottom - CAB_BOTTOM + 0.5);
+}
+
+/** The stand-in cabinet while its art decodes: a cream frame, a night interior, the lip and deck. */
+function plainCabinet(ctx: Ctx, view: Rect) {
+  ctx.fillStyle = "#56607A";
+  ctx.fillRect(view.x, view.y, view.w, view.h);
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 4;
+  ctx.fillStyle = CREAM;
+  ctx.beginPath();
+  ctx.roundRect(6, 22, W - 12, CAB_BOTTOM, 34);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#526477";
+  ctx.beginPath();
+  ctx.roundRect(36, 94, W - 72, SHELF_BOTTOM - 94, 18);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = HONEY;
+  ctx.fillRect(26, SHELF_BOTTOM, W - 52, 30);
+  ctx.strokeRect(26, SHELF_BOTTOM, W - 52, 30);
+}
+
+/** The top marquee: a cream sign with chase lights round its prize line, flashing when it pays. */
 export function drawMarquee(ctx: Ctx, label: string, t: number, hot: boolean) {
   const r = MARQUEE;
   ctx.save();
-  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
-  g.addColorStop(0, "#2a0d4a");
-  g.addColorStop(1, "#120626");
-  ctx.fillStyle = g;
-  ctx.shadowColor = PINK;
-  ctx.shadowBlur = hot ? 30 : 14;
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y + 4, r.w, r.h, 16);
+  ctx.fill();
+  ctx.fillStyle = CREAM;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.w, r.h, 16);
   ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = hot && Math.floor(t * 8) % 2 === 0 ? GOLD : PINK;
-  ctx.lineWidth = 3;
   ctx.stroke();
-  // Marquee bulbs along the top and bottom
-  const n = 16;
+  ctx.strokeStyle = hot && Math.floor(t * 8) % 2 === 0 ? TERRA : HONEY;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10, 12);
+  ctx.stroke();
+  const n = 14;
   for (let i = 0; i < n; i++) {
-    const x = r.x + 16 + (i / (n - 1)) * (r.w - 32);
+    const x = r.x + 22 + (i / (n - 1)) * (r.w - 44);
     const on = (i + Math.floor(t * (hot ? 14 : 5))) % 2 === 0;
-    bulb(ctx, x, r.y + 5, 2.6, hot ? CORE_COLORS[i % 6] : GOLD, on);
-    bulb(ctx, x, r.y + r.h - 5, 2.6, hot ? CORE_COLORS[(i + 3) % 6] : GOLD, !on);
+    bulb(ctx, x, r.y + 5, 2.4, hot ? CORE_COLORS[i % 6] : HONEY, on);
+    bulb(ctx, x, r.y + r.h - 5, 2.4, hot ? CORE_COLORS[(i + 3) % 6] : HONEY, !on);
   }
-  const size = fitSize(ctx, label, 34, r.w - 40);
-  neon(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 2, size, hot ? GOLD : PINK, hot ? 1.6 : 1);
+  const size = fitSize(ctx, label, 28, r.w - 44);
+  text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 2, size, hot ? HONEY : TERRA);
   ctx.restore();
 }
 
-/** The core meter under the marquee: `slots` sockets, the first `count` lit. `flash` blinks them all (Super spin). */
+/** The core meter on the cabinet's crown: `slots` sockets, the first `count` lit. `flash` blinks them all (Super spin). */
 export function drawCoreLamps(ctx: Ctx, sp: Sprites, count: number, slots: number, t: number, flash: boolean, pulse: number[]) {
   const gap = 58;
   const x0 = W / 2 - (gap * (slots - 1)) / 2;
@@ -666,130 +627,207 @@ export function drawCoreLamps(ctx: Ctx, sp: Sprites, count: number, slots: numbe
     const y = LAMPS_Y;
     const lit = flash ? Math.floor(t * 10 + i) % 2 === 0 : i < count;
     const p = pulse[i] ?? 0;
+    const r = 19 + p * 5;
     ctx.save();
-    // Socket
-    ctx.fillStyle = "#0b0a20";
-    ctx.strokeStyle = lit ? CORE_COLORS[i] : "rgba(255,255,255,0.25)";
-    ctx.lineWidth = 2;
-    hex(ctx, x, y, 20 + p * 6);
+    if (lit) {
+      ctx.globalAlpha = 0.35 + p * 0.4;
+      ctx.fillStyle = CORE_COLORS[i];
+      ctx.beginPath();
+      ctx.arc(x, y, r + 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = BROWN;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = NIGHT;
+    ctx.strokeStyle = lit ? CORE_COLORS[i] : "rgba(245,228,190,0.4)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r - 3.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    if (lit) {
-      ctx.shadowColor = CORE_COLORS[i];
-      ctx.shadowBlur = 18 + p * 20;
-      ctx.drawImage(sp.cores[i], x - 17 - p * 4, y - 22 - p * 5, 34 + p * 8, 38 + p * 9);
-    } else {
-      ctx.globalAlpha = 0.28;
-      ctx.drawImage(sp.cores[i], x - 15, y - 19, 30, 33);
-    }
+    if (!lit) ctx.globalAlpha = 0.3;
+    const w = lit ? 28 + p * 8 : 24;
+    drawOrb(ctx, sp, i, x, y + w * 0.48, w);
     ctx.restore();
   }
 }
 
-function hex(ctx: Ctx, x: number, y: number, r: number) {
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-  }
-  ctx.closePath();
-}
-
-/** The robots stand in the top corners, bobbing; `cheer` makes them hop. */
-export function drawRobots(ctx: Ctx, img: HTMLImageElement | null, t: number, cheer: number) {
-  if (!img) return;
+/** The robots stand either side of the wheel, bobbing; `cheer` makes them hop. */
+export function drawRobots(ctx: Ctx, sp: Sprites, t: number, cheer: number) {
   const hop = cheer > 0 ? Math.abs(Math.sin(t * 12)) * 12 * Math.min(1, cheer) : 0;
   const bob0 = Math.sin(t * 2.2) * 4 + hop;
   const bob1 = Math.sin(t * 2.2 + 1.7) * 2 + hop * 0.8;
-  ctx.drawImage(img, 0, 0, 240, 260, 10, 136 - bob0, 104, 113);
-  ctx.drawImage(img, 240, 0, 240, 260, 420, 132 - bob1, 100, 108);
+  const left = sp.img["robot-left"];
+  const right = sp.img["robot-right"];
+  if (left) stand(ctx, left, 64, 254 - bob0, (112 * left.width) / left.height);
+  if (right) stand(ctx, right, 476, 250 - bob1, (112 * right.width) / right.height);
 }
 
 // ---------------------------------------------------------------- wheel
 
-/** The target wheel behind glass, its pointer at 3 o'clock where the chute ends. */
-export function drawWheel(ctx: Ctx, sp: Sprites, angle: number, t: number, chase: number, hit: { seg: number; t: number } | null) {
+/** A wheel slot's tile: tile-t<n>, tile-c<n>, tile-core or tile-card. */
+function tileOf(seg: Segment): ArtName {
+  if (seg.kind === "core") return "tile-core";
+  if (seg.kind === "card") return "tile-card";
+  return `tile-${seg.kind === "tickets" ? "t" : "c"}${seg.value}` as ArtName;
+}
+
+/** The ground colour under each kind of tile (and the whole slot until the tiles decode). */
+function slotColor(seg: Segment) {
+  return seg.kind === "tickets" ? "#E7B35A" : seg.kind === "card" ? "#B99BD9" : "#8CBDB0";
+}
+
+const RING_K = 2;
+/**
+ * The prize ring at 2×: every slot is a wedge exactly as wide as its weight (so a
+ * slot's share of the circle is its chance), filled with its tile. A tile is
+ * scaled to the ring's depth and narrowed at most to 62% for a thin slot; past
+ * that the wedge crops it, so no tile is squashed out of shape.
+ */
+function wheelRing(img: Sprites["img"] | null) {
+  const K = RING_K;
+  const R = WHEEL_R * K;
+  const r0 = WHEEL_IN * K;
+  const rm = (R + r0) / 2;
+  const c = document.createElement("canvas");
+  c.width = Math.ceil(R * 2 + 8);
+  c.height = c.width;
+  const g = c.getContext("2d") as Ctx;
+  const cx = c.width / 2;
+  const cy = c.height / 2;
+  for (let i = 0; i < WHEEL.length; i++) {
+    const a0 = SEG_START[i];
+    const a1 = a0 + SEG_SIZE[i];
+    const seg = WHEEL[i];
+    g.save();
+    g.beginPath();
+    g.arc(cx, cy, R, a0, a1);
+    g.arc(cx, cy, r0, a1, a0, true);
+    g.closePath();
+    g.fillStyle = slotColor(seg);
+    g.fill();
+    const tile = img?.[tileOf(seg)];
+    if (tile) {
+      g.clip();
+      const th = (R - r0) * 1.02;
+      const tw0 = (th * tile.naturalWidth) / tile.naturalHeight;
+      const tw = tw0 * clamp((SEG_SIZE[i] * rm) / tw0, 0.62, 1);
+      g.translate(cx, cy);
+      g.rotate((a0 + a1) / 2 + Math.PI / 2);
+      g.drawImage(tile, -tw / 2, -rm - th / 2, tw, th);
+    }
+    g.restore();
+  }
+  // Slot borders
+  g.strokeStyle = BROWN;
+  g.lineWidth = 2.5 * K;
+  g.lineCap = "round";
+  g.beginPath();
+  for (const a of SEG_START) {
+    g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+  }
+  g.stroke();
+  g.lineWidth = 3 * K;
+  for (const r of [R - 1.5 * K, r0]) {
+    g.beginPath();
+    g.arc(cx, cy, r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  return c;
+}
+
+/** What the prize light shows: `segs[0]` is lit, the rest fade behind it; `won` blinks the stopped slot. */
+export interface WheelLight {
+  segs: number[];
+  won: boolean;
+}
+
+/** One slot of the wheel as a wedge path (screen coords), from radius r0 to r1. */
+function wedge(ctx: Ctx, angle: number, seg: number, r0: number, r1: number) {
+  const { x, y } = WHEEL_C;
+  const a0 = angle + SEG_START[seg];
+  const a1 = a0 + SEG_SIZE[seg];
+  ctx.beginPath();
+  ctx.arc(x, y, r1, a0, a1);
+  ctx.arc(x, y, r0, a1, a0, true);
+  ctx.closePath();
+}
+
+/** The prize wheel behind glass, turning; a prize spin is a light chasing round its slots. */
+export function drawWheel(ctx: Ctx, sp: Sprites, angle: number, t: number, chase: number, light: WheelLight | null) {
   const { x, y } = WHEEL_C;
   const R = WHEEL_R;
   ctx.save();
-  // Rim with bulbs
-  ctx.shadowColor = NEON;
-  ctx.shadowBlur = 20;
-  const rim = ctx.createLinearGradient(x - R, y - R, x + R, y + R);
-  rim.addColorStop(0, "#d8e8ff");
-  rim.addColorStop(0.5, "#5f6f8f");
-  rim.addColorStop(1, "#c8d8f0");
-  ctx.fillStyle = rim;
+  // Rim: a honey band with a chase of bulbs
+  ctx.fillStyle = BROWN;
   ctx.beginPath();
-  ctx.arc(x, y, R + 14, 0, Math.PI * 2);
+  ctx.arc(x, y + 4, R + RIM + 2, 0, Math.PI * 2);
   ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "#151236";
+  ctx.fillStyle = HONEY;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(x, y, R + 3, 0, Math.PI * 2);
+  ctx.arc(x, y, R + RIM, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
   const n = 24;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
     const on = (i + Math.floor(chase)) % 4 === 0 || (i + Math.floor(chase)) % 4 === 2;
-    bulb(ctx, x + Math.cos(a) * (R + 8.5), y + Math.sin(a) * (R + 8.5), 3, on ? "#fff3b0" : "#8a7a40", on);
+    bulb(ctx, x + Math.cos(a) * (R + RIM / 2 + 0.5), y + Math.sin(a) * (R + RIM / 2 + 0.5), 3, LAMP_ON, on);
   }
-  // The face
+  // The ring
   ctx.translate(x, y);
   ctx.rotate(angle);
-  ctx.drawImage(sp.wheel, -R - 2, -R - 2, R * 2 + 4, R * 2 + 4);
+  const d = sp.wheel.width / RING_K;
+  ctx.drawImage(sp.wheel, -d / 2, -d / 2, d, d);
   ctx.restore();
-  // Flash the segment that was just hit
-  if (hit && hit.t < 0.6) {
-    const a0 = angle + SEG_START[hit.seg];
+  // The prize light: the lit slot glows cream with a fading trail; the stopped one blinks
+  if (light) {
     ctx.save();
-    ctx.globalAlpha = (1 - hit.t / 0.6) * (Math.floor(hit.t * 16) % 2 === 0 ? 0.7 : 0.35);
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.arc(x, y, R, a0, a0 + SEG_SIZE[hit.seg]);
-    ctx.closePath();
-    ctx.fill();
+    light.segs.forEach((seg, i) => {
+      ctx.globalAlpha = light.won && i === 0 ? (Math.floor(t * 8) % 2 === 0 ? 0.75 : 0.35) : 0.7 / (i + 1);
+      ctx.fillStyle = "#FFF8E6";
+      wedge(ctx, angle, seg, WHEEL_IN, R);
+      ctx.fill();
+    });
+    const head = light.segs[0];
+    if (head !== undefined) {
+      ctx.globalAlpha = 1;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = BROWN;
+      ctx.lineWidth = 10;
+      wedge(ctx, angle, head, WHEEL_IN + 3, R - 3);
+      ctx.stroke();
+      ctx.strokeStyle = light.won && Math.floor(t * 8) % 2 === 1 ? TERRA : "#FFD36B";
+      ctx.lineWidth = 5.5;
+      ctx.stroke();
+    }
     ctx.restore();
   }
-  // Hub: a glowing robot eye
-  ctx.save();
-  const hub = ctx.createRadialGradient(x - 8, y - 8, 4, x, y, 40);
-  hub.addColorStop(0, "#f4f8ff");
-  hub.addColorStop(0.6, "#8d9ab8");
-  hub.addColorStop(1, "#3a4460");
-  ctx.fillStyle = hub;
-  ctx.beginPath();
-  ctx.arc(x, y, 38, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#0b0d22";
-  ctx.beginPath();
-  ctx.roundRect(x - 26, y - 13, 52, 26, 13);
-  ctx.fill();
-  ctx.shadowColor = NEON;
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = NEON;
-  const blink = Math.sin(t * 1.3) > 0.97 ? 0.15 : 1;
-  ctx.beginPath();
-  ctx.ellipse(x - 11, y, 6, 7 * blink, 0, 0, Math.PI * 2);
-  ctx.ellipse(x + 11, y, 6, 7 * blink, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  // Pointer at the chute's mouth
-  ctx.save();
-  ctx.fillStyle = GOLD;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
-  ctx.shadowColor = GOLD;
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.moveTo(x + R - 14, y);
-  ctx.lineTo(x + R + 16, y - 15);
-  ctx.lineTo(x + R + 16, y + 15);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
+  // Hub: the robot face, upright while the ring turns
+  const hub = sp.img["wheel-hub"];
+  if (hub) {
+    const w = WHEEL_IN * 2 + 16;
+    const h = (w * hub.height) / hub.width;
+    ctx.drawImage(hub, x - w / 2, y - h * 0.557, w, h);
+  } else {
+    ctx.fillStyle = CREAM;
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, WHEEL_IN - 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#2F4A44";
+    ctx.beginPath();
+    ctx.roundRect(x - 34, y - 20, 68, 40, 18);
+    ctx.fill();
+  }
 }
 
 /** Glass over the wheel and the shelf: two soft diagonal reflections. */
@@ -803,8 +841,8 @@ export function drawGlass(ctx: Ctx, r: Rect, t: number) {
     [0, 60, 0.07],
     [90, 22, 0.05],
   ] as const) {
-    const x = r.x + (sweep * r.w) + off;
-    ctx.fillStyle = `rgba(255,255,255,${a})`;
+    const x = r.x + sweep * r.w + off;
+    ctx.fillStyle = `rgba(255,250,235,${a})`;
     ctx.beginPath();
     ctx.moveTo(x, r.y);
     ctx.lineTo(x + wd, r.y);
@@ -821,60 +859,171 @@ export function drawChute(ctx: Ctx, glow: number) {
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const path = () => {
-    ctx.beginPath();
-    for (const p of CHUTE) ctx.lineTo(p.x, p.y);
-  };
-  path();
-  ctx.strokeStyle = "rgba(10,12,40,0.85)";
+  ctx.beginPath();
+  for (const p of CHUTE) ctx.lineTo(p.x, p.y);
+  ctx.strokeStyle = BROWN;
   ctx.lineWidth = 22;
   ctx.stroke();
-  path();
-  ctx.strokeStyle = `rgba(79,243,255,${0.22 + glow * 0.5})`;
-  ctx.lineWidth = 18;
+  ctx.strokeStyle = "rgba(82,100,119,0.92)";
+  ctx.lineWidth = 16;
   ctx.stroke();
-  path();
-  ctx.strokeStyle = "rgba(255,255,255,0.35)";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(120,226,213,${0.18 + glow * 0.55})`;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,248,230,0.45)";
+  ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.restore();
 }
 
+/**
+ * The swinging gate under the hub: the rod it rides on, the honey marks of the
+ * band where shot coins land, the gate itself with its U hole at `hole` px from
+ * the centre, and the prize stock lamps under it. `flash` (0..1) rings the hole
+ * after a hit; `full` blinks the lamps while the stock is full.
+ */
+export function drawGate(ctx: Ctx, sp: Sprites, hole: number, stock: number, flash: number, full: boolean, t: number) {
+  const { x, y } = GATE;
+  const gh = (GATE_W * 186) / 360;
+  /** The sprite's top sits just under the coins' landing line; its side knobs ride the rod. */
+  const top = y - 2;
+  const rodY = top + gh * 0.54;
+  const rod = GATE_AMP + GATE_W / 2 + 4;
+  ctx.save();
+  // Rod
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(x - rod - 4, rodY - 5, rod * 2 + 8, 10, 5);
+  ctx.fill();
+  ctx.fillStyle = HONEY;
+  ctx.beginPath();
+  ctx.roundRect(x - rod - 1, rodY - 2.5, rod * 2 + 2, 5, 2.5);
+  ctx.fill();
+  for (const side of [-1, 1]) {
+    ctx.fillStyle = TEAL;
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(x + side * (rod + 4), rodY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  // The landing band: where shot coins come down
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const [color, lw] of [
+    [BROWN, 6],
+    [HONEY, 3],
+  ] as const) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      ctx.moveTo(x + side * AIM_SPREAD, y - 28);
+      ctx.lineTo(x + side * AIM_SPREAD, y - 19);
+      ctx.lineTo(x + side * (AIM_SPREAD - 6), y - 19);
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = HONEY;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 18);
+  ctx.lineTo(x - 6, y - 27);
+  ctx.lineTo(x + 6, y - 27);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // The gate
+  const hx = x + hole;
+  const img = sp.img.gate;
+  if (img) ctx.drawImage(img, hx - GATE_W / 2, top, GATE_W, gh);
+  else {
+    ctx.fillStyle = TEAL;
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(hx - GATE_W / 2, top + 4);
+    ctx.lineTo(hx - HOLE_HALF - 9, top + 4);
+    ctx.arc(hx, top + 4, HOLE_HALF + 9, Math.PI, 0, true);
+    ctx.lineTo(hx + GATE_W / 2, top + 4);
+    ctx.lineTo(hx + GATE_W / 2, top + gh - 6);
+    ctx.lineTo(hx - GATE_W / 2, top + gh - 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (flash > 0) {
+    ctx.globalAlpha = flash;
+    ctx.strokeStyle = LAMP_ON;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(hx, y + 4, HOLE_HALF + 14 + (1 - flash) * 22, 12 + (1 - flash) * 10, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  // Stock lamps on a little plate: one per waiting prize spin
+  const ly = top + gh + 9;
+  const pw = PRIZE_QUEUE_MAX * 20 + 8;
+  ctx.fillStyle = NIGHT;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(x - pw / 2, ly - 10, pw, 20, 10);
+  ctx.fill();
+  ctx.stroke();
+  for (let i = 0; i < PRIZE_QUEUE_MAX; i++) {
+    const lx = x + (i - (PRIZE_QUEUE_MAX - 1) / 2) * 20;
+    bulb(ctx, lx, ly, 5, full ? (Math.floor(t * 6) % 2 === 0 ? TERRA : "#F2B8A2") : CYAN, i < stock);
+  }
+}
+
 /** A coin seen edge-on-ish, spinning as it flies (k: spin phase). */
 export function drawFlyingCoin(ctx: Ctx, sp: Sprites, x: number, y: number, size: number, k: number) {
-  const w = size * Math.max(0.25, Math.abs(Math.cos(k)));
-  ctx.drawImage(sp.coin, x - w / 2, y - size * 0.4, w, size * 0.85);
+  coinFace(ctx, sp, x, y, size * Math.max(0.25, Math.abs(Math.cos(k))), size);
 }
 
 // ---------------------------------------------------------------- reels and counters
 
-/** An LED counter panel: label on top, ghost 8s behind the lit digits. */
+/** An LED counter: a cream bezel round a dark window, a label tab on top, ghost 8s behind the lit digits. */
 export function drawCounter(ctx: Ctx, r: Rect, label: string, value: number, color: string, digits: number, bump = 0) {
   ctx.save();
-  ctx.fillStyle = "#05040c";
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
-  ctx.lineWidth = 2;
+  ctx.fillStyle = BROWN;
   ctx.beginPath();
-  ctx.roundRect(r.x, r.y, r.w, r.h, 10);
+  ctx.roundRect(r.x, r.y + 4, r.w, r.h, 12);
+  ctx.fill();
+  ctx.fillStyle = CREAM;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.w, r.h, 12);
   ctx.fill();
   ctx.stroke();
-  // Label tab
-  const lw = Math.max(44, label.length * 13 + 18);
-  ctx.fillStyle = color;
+  ctx.fillStyle = WELL;
   ctx.beginPath();
-  ctx.roundRect(r.x + 10, r.y - 13, lw, 22, 8);
+  ctx.roundRect(r.x + 6, r.y + 6, r.w - 12, r.h - 12, 8);
   ctx.fill();
-  text(ctx, label, r.x + 10 + lw / 2, r.y - 2, 17, INK, "center", null);
-  const size = r.h * 0.95 * (1 + bump * 0.12);
+  // Label tab
+  ctx.font = `800 15px ${FONT}`;
+  const lw = Math.max(44, ctx.measureText(label).width + 18);
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(r.x + 10, r.y - 14, lw, 22, 9);
+  ctx.fill();
+  ctx.stroke();
+  text(ctx, label, r.x + 10 + lw / 2, r.y - 2, 15, BROWN, "center", null);
+  const size = (r.h - 8) * (1 + bump * 0.12);
   ctx.font = `700 ${size}px ${LED_FONT}`;
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
-  const right = r.x + r.w - 12;
+  const right = r.x + r.w - 14;
   const cy = r.y + r.h / 2 + 4;
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillStyle = "rgba(245,228,190,0.08)";
   ctx.fillText("8".repeat(digits), right, cy);
   ctx.shadowColor = color;
-  ctx.shadowBlur = 12 + bump * 16;
+  ctx.shadowBlur = 6 + bump * 14;
   ctx.fillStyle = color;
   ctx.fillText(String(Math.max(0, Math.round(value))).slice(-digits), right, cy);
   ctx.restore();
@@ -885,9 +1034,30 @@ export interface ReelCell {
   coin: boolean;
 }
 
+/** A reel cell's prize icon, centred at (x, y): a coin, or a ticket. */
+function reelIcon(ctx: Ctx, sp: Sprites, coin: boolean, x: number, y: number) {
+  if (coin) {
+    coinFace(ctx, sp, x, y, 24, 24);
+    return;
+  }
+  const img = sp.img.ticket;
+  if (img) {
+    ctx.drawImage(img, x - 15, y - 10, 30, 20);
+    return;
+  }
+  ctx.fillStyle = TERRA;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x - 14, y - 9, 28, 18, 4);
+  ctx.fill();
+  ctx.stroke();
+}
+
 /** The reels window for the Mini and Super spins. `offset` scrolls the strip (in cells); `hot` is the Super spin. */
 export function drawReels(
   ctx: Ctx,
+  sp: Sprites,
   label: string,
   cells: readonly ReelCell[],
   offset: number,
@@ -897,31 +1067,39 @@ export function drawReels(
   hot = false,
 ) {
   const r = REEL;
-  const accent = hot ? PINK : GOLD;
+  const accent = hot ? TERRA : HONEY;
   ctx.save();
-  ctx.shadowColor = active ? accent : NEON;
-  ctx.shadowBlur = active ? (hot ? 34 : 24) : 8;
-  ctx.fillStyle = "#07061a";
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y + 4, r.w, r.h, 12);
+  ctx.fill();
+  ctx.fillStyle = NIGHT;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.w, r.h, 12);
   ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = active ? (hot ? CORE_COLORS[Math.floor(t * 10) % 6] : GOLD) : "rgba(79,243,255,0.6)";
-  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.strokeStyle = active ? (hot ? CORE_COLORS[Math.floor(t * 10) % 6] : HONEY) : "rgba(245,228,190,0.5)";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8, 9);
   ctx.stroke();
   const split = r.x + 122;
-  text(ctx, label, r.x + 62, r.y + r.h / 2 + 2, fitSize(ctx, label, 22, 110), active ? accent : "#bfc6ff", "center", null);
+  text(ctx, label, r.x + 63, r.y + r.h / 2 + 2, fitSize(ctx, label, 22, 104), active ? accent : CREAM, "center", active ? BROWN : null);
   // Reel strip
-  const rw = r.x + r.w - 8 - split;
-  ctx.fillStyle = "#e9ecf8";
+  const rw = r.x + r.w - 9 - split;
+  const sy = r.y + 7;
+  const cellH = r.h - 14;
+  ctx.fillStyle = CREAM;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(split, r.y + 6, rw, r.h - 12, 8);
+  ctx.roundRect(split, sy, rw, cellH, 7);
   ctx.fill();
+  ctx.stroke();
   ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(split, r.y + 6, rw, r.h - 12, 8);
   ctx.clip();
-  const cellH = r.h - 12;
   const base = Math.floor(offset);
   const frac = offset - base;
   for (let k = -1; k <= 1; k++) {
@@ -931,376 +1109,335 @@ export function drawReels(
     const str = String(cell.value);
     ctx.font = `700 ${cellH * 1.05}px ${LED_FONT}`;
     const tw = ctx.measureText(str).width;
-    const iconW = 26;
+    const iconW = 30;
     const x0 = split + rw / 2 - (tw + iconW + 8) / 2;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = flash ? "#e0115f" : "#1a1440";
+    ctx.fillStyle = flash ? TERRA : BROWN;
     ctx.fillText(str, x0, yy + 3);
-    ctx.save();
-    ctx.translate(x0 + tw + 8 + iconW / 2, yy);
-    if (cell.coin) coinIcon(ctx, 11);
-    else ticketIcon(ctx, iconW);
-    ctx.restore();
+    reelIcon(ctx, sp, cell.coin, x0 + tw + 8 + iconW / 2, yy);
   }
   // Curved-glass shading
-  const sh = ctx.createLinearGradient(0, r.y + 6, 0, r.y + r.h - 6);
-  sh.addColorStop(0, "rgba(0,0,20,0.55)");
-  sh.addColorStop(0.35, "rgba(0,0,20,0)");
-  sh.addColorStop(0.65, "rgba(0,0,20,0)");
-  sh.addColorStop(1, "rgba(0,0,20,0.55)");
+  const sh = ctx.createLinearGradient(0, sy, 0, sy + cellH);
+  sh.addColorStop(0, "rgba(73,51,44,0.45)");
+  sh.addColorStop(0.35, "rgba(73,51,44,0)");
+  sh.addColorStop(0.65, "rgba(73,51,44,0)");
+  sh.addColorStop(1, "rgba(73,51,44,0.45)");
   ctx.fillStyle = sh;
-  ctx.fillRect(split, r.y + 6, rw, r.h - 12);
+  ctx.fillRect(split, sy, rw, cellH);
   ctx.restore();
   ctx.restore();
 }
 
 // ---------------------------------------------------------------- the shelf
 
-/** Shelf floor, side rails and gutters, all behind the bodies. */
-export function drawShelf(ctx: Ctx, t: number) {
+/** The top row of the cached shelf (the side walls rise above the back edge). */
+const DECK_Y = 470;
+const DECK_K = 2;
+/** World units per floor tile. */
+const FLOOR_TILE = 120;
+
+/**
+ * The shelf's static parts at 2×: the floor (its texture laid in perspective, a
+ * row at a time), a shade toward the back, the back wall and the side walls.
+ */
+function shelfDeck(floor: HTMLImageElement | null) {
+  const K = DECK_K;
+  const c = document.createElement("canvas");
+  c.width = W * K;
+  c.height = (SHELF_BOTTOM + 6 - DECK_Y) * K;
+  const g = c.getContext("2d") as Ctx;
+  g.scale(K, K);
+  g.translate(0, -DECK_Y);
   const bl = proj(0, 0);
   const br = proj(SHELF_W, 0);
   const fl = proj(0, SHELF_D);
   const fr = proj(SHELF_W, SHELF_D);
-  ctx.save();
-  // Back wall panel above the pusher
-  const wall = ctx.createLinearGradient(0, REEL.y + REEL.h, 0, bl.y);
-  wall.addColorStop(0, "#1a1645");
-  wall.addColorStop(1, "#2a2560");
-  ctx.fillStyle = wall;
-  ctx.fillRect(bl.x - 30, REEL.y + REEL.h + 6, br.x - bl.x + 60, bl.y - REEL.y - REEL.h - 6);
-  // Gutters: the dark drop beside the open part of the shelf
-  ctx.fillStyle = "#04030c";
-  const gs = proj(0, SIDE_WALL_D);
-  const ge = proj(SHELF_W, SIDE_WALL_D);
-  ctx.beginPath();
-  ctx.moveTo(gs.x, gs.y);
-  ctx.lineTo(fl.x, fl.y);
-  ctx.lineTo(fl.x - 26, fl.y + 6);
-  ctx.lineTo(gs.x - 22, gs.y);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(ge.x, ge.y);
-  ctx.lineTo(fr.x, fr.y);
-  ctx.lineTo(fr.x + 26, fr.y + 6);
-  ctx.lineTo(ge.x + 22, ge.y);
-  ctx.closePath();
-  ctx.fill();
-  // Floor: brushed metal deck with a faint grid
-  const floor = ctx.createLinearGradient(0, bl.y, 0, fl.y);
-  floor.addColorStop(0, "#2d3a5e");
-  floor.addColorStop(1, "#4a5a86");
-  ctx.fillStyle = floor;
-  ctx.beginPath();
-  ctx.moveTo(bl.x, bl.y);
-  ctx.lineTo(br.x, br.y);
-  ctx.lineTo(fr.x, fr.y);
-  ctx.lineTo(fl.x, fl.y);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "rgba(140,200,255,0.10)";
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 8; i++) {
-    const a = proj((i / 8) * SHELF_W, 0);
-    const b = proj((i / 8) * SHELF_W, SHELF_D);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+  const quad = () => {
+    g.beginPath();
+    g.moveTo(bl.x, bl.y);
+    g.lineTo(br.x, br.y);
+    g.lineTo(fr.x, fr.y);
+    g.lineTo(fl.x, fl.y);
+    g.closePath();
+  };
+  // Back wall above the pusher
+  g.fillStyle = "#3E4B5C";
+  g.fillRect(bl.x - 6, SHELF_TOP - 16, br.x - bl.x + 12, 16);
+  // Floor
+  if (floor) {
+    const px = 2;
+    const world = document.createElement("canvas");
+    world.width = SHELF_W * px;
+    world.height = SHELF_D * px;
+    const wg = world.getContext("2d") as Ctx;
+    const ts = FLOOR_TILE * px;
+    for (let x = 0; x < world.width; x += ts) for (let y = 0; y < world.height; y += ts) wg.drawImage(floor, x, y, ts, ts);
+    const span = SHELF_BOTTOM - SHELF_TOP;
+    for (let y = 0; y < span; y++) {
+      const k0 = y / span;
+      const k1 = (y + 1) / span;
+      const a = proj(0, k0 * SHELF_D);
+      const b = proj(SHELF_W, k0 * SHELF_D);
+      g.drawImage(world, 0, k0 * world.height, world.width, (k1 - k0) * world.height, a.x, a.y, b.x - a.x, 1.5);
+    }
+  } else {
+    g.fillStyle = HONEY;
+    quad();
+    g.fill();
   }
-  for (let i = 1; i < 6; i++) {
-    const a = proj(0, (i / 6) * SHELF_D);
-    const b = proj(SHELF_W, (i / 6) * SHELF_D);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-  }
-  // Side walls along the back part
+  const shade = g.createLinearGradient(0, bl.y, 0, fl.y);
+  shade.addColorStop(0, "rgba(73,51,44,0.32)");
+  shade.addColorStop(1, "rgba(73,51,44,0)");
+  g.fillStyle = shade;
+  quad();
+  g.fill();
+  g.strokeStyle = BROWN;
+  g.lineWidth = 2.5;
+  g.stroke();
+  // Side walls: a honey panel from the cabinet's wall to the shelf edge, cream along the top
   for (const side of [0, 1]) {
     const x = side === 0 ? 0 : SHELF_W;
-    const a = proj(x, -10);
+    const a = proj(x, 0);
     const b = proj(x, SIDE_WALL_D);
-    const dx = side === 0 ? -1 : 1;
-    ctx.fillStyle = "#7f8db0";
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y - 26);
-    ctx.lineTo(b.x, b.y - 22);
-    ctx.lineTo(b.x, b.y);
-    ctx.lineTo(a.x, a.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#c9d6f2";
-    ctx.fillRect(Math.min(a.x, b.x) - (dx < 0 ? 4 : 0), a.y - 28, 4, 3);
-    ctx.strokeStyle = "rgba(255,255,255,0.5)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y - 26);
-    ctx.lineTo(b.x, b.y - 22);
-    ctx.stroke();
+    const out = side === 0 ? 30 : W - 30;
+    g.fillStyle = "#D99A55";
+    g.strokeStyle = BROWN;
+    g.lineWidth = 2.5;
+    g.beginPath();
+    g.moveTo(out, a.y - 16);
+    g.lineTo(a.x, a.y - 16);
+    g.lineTo(b.x, b.y - 20);
+    g.lineTo(b.x, b.y);
+    g.lineTo(out, b.y);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.fillStyle = "#C3814A";
+    g.beginPath();
+    g.moveTo(a.x, a.y - 16);
+    g.lineTo(b.x, b.y - 20);
+    g.lineTo(b.x, b.y);
+    g.lineTo(a.x, a.y);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.strokeStyle = CREAM;
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(out, a.y - 14);
+    g.lineTo(a.x, a.y - 14);
+    g.lineTo(b.x, b.y - 20);
+    g.stroke();
   }
-  ctx.restore();
-  void t;
+  return c;
 }
 
-/** The pusher block: its top from the back wall to its face, and the face with an LED strip. */
-export function drawPusher(ctx: Ctx, py: number, t: number, rainbow: boolean) {
+/** Shelf floor and walls, behind the bodies. */
+export function drawShelf(ctx: Ctx, sp: Sprites) {
+  ctx.drawImage(sp.shelf, 0, DECK_Y, W, sp.shelf.height / DECK_K);
+}
+
+/** The pusher: its top plate from the back wall to the bar, then the bar (pusher.webp) at its face. */
+export function drawPusher(ctx: Ctx, sp: Sprites, py: number) {
   const bl = proj(-4, 0);
   const br = proj(SHELF_W + 4, 0);
   const fl = proj(-4, py);
   const fr = proj(SHELF_W + 4, py);
-  const h = 24 * fl.s;
+  const img = sp.img.pusher;
+  const w = fr.x - fl.x + 14;
+  const h = img ? (w * img.height) / img.width : w * 0.12;
+  const top = fl.y - h;
+  const face = h * 0.55 * (bl.s / fl.s);
   ctx.save();
-  // Top surface
-  const top = ctx.createLinearGradient(0, bl.y - h, 0, fl.y - h);
-  top.addColorStop(0, "#2c3558");
-  top.addColorStop(1, "#8492b8");
-  ctx.fillStyle = top;
+  const plate = ctx.createLinearGradient(0, bl.y - face, 0, top);
+  plate.addColorStop(0, "#C99247");
+  plate.addColorStop(1, "#E4B262");
+  ctx.fillStyle = plate;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(bl.x, bl.y - h);
-  ctx.lineTo(br.x, br.y - h);
-  ctx.lineTo(fr.x, fr.y - h);
-  ctx.lineTo(fl.x, fl.y - h);
+  ctx.moveTo(bl.x, bl.y - face);
+  ctx.lineTo(br.x, br.y - face);
+  ctx.lineTo(fr.x, top + 3);
+  ctx.lineTo(fl.x, top + 3);
   ctx.closePath();
   ctx.fill();
-  // Panel seams and rivets on the top plate
-  ctx.strokeStyle = "rgba(20,24,50,0.35)";
+  ctx.stroke();
+  // Seams on the top plate
+  ctx.strokeStyle = "rgba(73,51,44,0.3)";
   ctx.lineWidth = 1.5;
-  for (const k of [0.33, 0.66]) {
-    const a = proj(-4, py * k);
-    const b = proj(SHELF_W + 4, py * k);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y - h);
-    ctx.lineTo(b.x, b.y - h);
-    ctx.stroke();
-  }
+  ctx.beginPath();
   for (let i = 1; i < 6; i++) {
     const a = proj((i / 6) * SHELF_W, 0);
     const b = proj((i / 6) * SHELF_W, py);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y - h);
-    ctx.lineTo(b.x, b.y - h);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(240,246,255,0.55)";
-    ctx.beginPath();
-    ctx.arc(b.x, b.y - h - 16 * b.s, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(a.x, a.y - face);
+    ctx.lineTo(b.x, top + 3);
   }
-  // Hazard stripes along the front of the top
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(fl.x, fl.y - h - 10);
-  ctx.lineTo(fr.x, fr.y - h - 10);
-  ctx.lineTo(fr.x, fr.y - h);
-  ctx.lineTo(fl.x, fl.y - h);
-  ctx.closePath();
-  ctx.clip();
-  ctx.fillStyle = "#ffcf4a";
-  ctx.fillRect(fl.x, fl.y - h - 10, fr.x - fl.x, 10);
-  ctx.fillStyle = "#1a1440";
-  for (let x = fl.x - 20; x < fr.x; x += 20) {
-    ctx.beginPath();
-    ctx.moveTo(x, fl.y - h);
-    ctx.lineTo(x + 10, fl.y - h);
-    ctx.lineTo(x + 20, fl.y - h - 10);
-    ctx.lineTo(x + 10, fl.y - h - 10);
-    ctx.closePath();
-    ctx.fill();
+  ctx.stroke();
+  if (img) ctx.drawImage(img, W / 2 - w / 2, top, w, h);
+  else {
+    ctx.fillStyle = HONEY;
+    ctx.fillRect(W / 2 - w / 2, top, w, h * 0.45);
+    ctx.fillStyle = TERRA;
+    ctx.fillRect(W / 2 - w / 2, top + h * 0.45, w, h * 0.55);
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(W / 2 - w / 2, top, w, h);
   }
   ctx.restore();
-  // Face
-  const face = ctx.createLinearGradient(0, fl.y - h, 0, fl.y);
-  face.addColorStop(0, "#e8eefc");
-  face.addColorStop(0.5, "#8592b4");
-  face.addColorStop(1, "#4a5578");
-  ctx.fillStyle = face;
-  ctx.fillRect(fl.x, fl.y - h, fr.x - fl.x, h);
-  // LED strip
-  const n = 18;
-  for (let i = 0; i < n; i++) {
-    const x = fl.x + 14 + (i / (n - 1)) * (fr.x - fl.x - 28);
-    const on = Math.floor(t * 6 + i) % 3 === 0;
-    bulb(ctx, x, fl.y - h * 0.45, 2.4, rainbow ? CORE_COLORS[i % 6] : NEON, on || rainbow);
-  }
-  ctx.restore();
-  void PUSH_MAX;
 }
 
 /** Soft shadow under a body (drawn in a pass before the bodies). */
 export function drawShadow(ctx: Ctx, b: Body) {
   const p = proj(b.x, b.y);
   const r = b.r * p.s;
-  ctx.fillStyle = "rgba(0,0,10,0.35)";
+  ctx.fillStyle = "rgba(73,51,44,0.3)";
   ctx.beginPath();
-  ctx.ellipse(p.x + 2, p.y + 5 * p.s, r * 1.02, r * 0.64, 0, 0, Math.PI * 2);
+  ctx.ellipse(p.x + 2, p.y + 5 * p.s, r * 1.02, r * 0.62, 0, 0, Math.PI * 2);
   ctx.fill();
 }
 
 /**
- * One body on the shelf. Coins: a stack of discs; capsules: the orb sprite;
- * cards: a small card lying tilted on the deck. `drop` 0..1 raises it (just landed).
+ * One body on the shelf. Coins: a coin or a stack sprite; capsules: their orb;
+ * cards: the card back lying tilted on the deck. `drop` 0..1 raises it (just landed).
  */
 export function drawBody(ctx: Ctx, sp: Sprites, b: Body, t: number, drop = 0) {
   const p = proj(b.x, b.y);
   const lift = drop * 40 * p.s;
+  const d = b.r * 2 * p.s;
   if (b.kind === "card") {
     // Each card keeps its own slant (from its id), lying flat in the 3/4 view
     const tilt = ((((b.id * 47) % 70) - 35) * Math.PI) / 180;
-    const w = b.r * 2 * p.s * 0.95;
+    const w = d * 0.95;
+    const h = cardBackH(w);
     ctx.save();
     ctx.translate(p.x, p.y - 2 * p.s - lift);
     ctx.scale(1, 0.66);
     ctx.rotate(tilt);
-    ctx.shadowColor = "#ff7eb6";
-    ctx.shadowBlur = 8 + 6 * (0.5 + 0.5 * Math.sin(t * 3 + b.id));
-    drawCardFace(ctx, sp.cards[b.card] ?? null, -w / 2, (-w * 2) / 3, w, (w * 4) / 3, true);
+    ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 3 + b.id);
+    ctx.fillStyle = VIOLET;
+    ctx.beginPath();
+    ctx.roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 8);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    drawCardBack(ctx, sp, -w / 2, -h / 2, w, h);
     ctx.restore();
     return;
   }
   if (b.kind === "coin") {
-    const w = b.r * 2 * p.s * (COIN_PX + 4) / COIN_PX;
-    const h = w * (sp.coin.height / sp.coin.width);
-    const th = 4.6 * p.s;
-    for (let i = 0; i < b.stack; i++) {
-      ctx.drawImage(sp.coin, p.x - w / 2, p.y - h * 0.36 - i * th - lift, w, h);
+    const stackImg = b.stack >= 3 ? sp.img["coin-stack3"] : b.stack === 2 ? sp.img["coin-stack2"] : undefined;
+    if (stackImg) {
+      stand(ctx, stackImg, p.x, p.y + d * 0.3 - lift, d * 1.06);
+      return;
     }
+    const one = sp.coin;
+    if (one) {
+      // The coin's underside centred on the body; a stack (before its sprite decodes) piles up
+      const m = d / COIN_FACE;
+      const th = COIN_TH * m;
+      for (let i = 0; i < b.stack; i++)
+        ctx.drawImage(one, p.x - (one.width * m) / 2, p.y - (3 + COIN_RY + COIN_TH) * m - i * th - lift, one.width * m, one.height * m);
+      return;
+    }
+    for (let i = 0; i < b.stack; i++) coinFace(ctx, sp, p.x, p.y - i * 5 * p.s - lift, d, d * 0.58);
     return;
   }
-  const img = sp.cores[b.core];
-  const w = b.r * 2 * p.s * ((CORE_PX + 8) / CORE_PX);
-  const h = w * (img.height / img.width);
-  ctx.save();
-  const pulse = 0.5 + 0.5 * Math.sin(t * 4 + b.core);
-  ctx.shadowColor = CORE_COLORS[b.core];
-  ctx.shadowBlur = 10 + pulse * 10;
-  ctx.drawImage(img, p.x - w / 2, p.y - h + w * 0.34 - lift, w, h);
-  ctx.restore();
+  drawOrb(ctx, sp, b.core, p.x, p.y + d * 0.12 - lift, d);
 }
 
-/** The chrome front lip with its chase lights. */
+/** The chase lights along the cabinet's lip, where the shelf's front edge meets it. */
 export function drawFrontLip(ctx: Ctx, chase: number, rainbow: boolean) {
   const fl = proj(0, SHELF_D);
   const fr = proj(SHELF_W, SHELF_D);
-  ctx.save();
-  const g = ctx.createLinearGradient(0, fl.y, 0, fl.y + 22);
-  g.addColorStop(0, "#f2f6ff");
-  g.addColorStop(0.5, "#7d8aa8");
-  g.addColorStop(1, "#2b3350");
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.roundRect(fl.x - 8, fl.y + 2, fr.x - fl.x + 16, 20, 6);
-  ctx.fill();
   const n = 20;
   for (let i = 0; i < n; i++) {
-    const x = fl.x + 6 + (i / (n - 1)) * (fr.x - fl.x - 12);
+    const x = fl.x + 10 + (i / (n - 1)) * (fr.x - fl.x - 20);
     const on = (i + Math.floor(chase)) % 4 < 2;
-    bulb(ctx, x, fl.y + 13, 3, rainbow ? CORE_COLORS[i % 6] : on ? PINK : "#6a2a50", on || rainbow);
+    bulb(ctx, x, fl.y + 15, 3.2, rainbow ? CORE_COLORS[i % 6] : LAMP_ON, on || rainbow);
   }
-  // The tray below where returned coins land
-  const tray = ctx.createLinearGradient(0, fl.y + 22, 0, 850);
-  tray.addColorStop(0, "#05040f");
-  tray.addColorStop(1, "#141038");
-  ctx.fillStyle = tray;
-  ctx.fillRect(fl.x - 8, fl.y + 22, fr.x - fl.x + 16, 850 - fl.y - 22);
-  ctx.restore();
 }
 
-/** The big round SHOOT button. */
-export function drawShootButton(ctx: Ctx, label: string, pressed: boolean, t: number, enabled: boolean) {
+/** The launch button (shoot-idle / shoot-pressed), greyed out with no coins; its label sits on the base. */
+export function drawShootButton(ctx: Ctx, sp: Sprites, label: string, pressed: boolean, t: number, enabled: boolean) {
   const { x, y, r } = SHOOT;
+  const idle = sp.img["shoot-idle"];
+  /** The cap is 82% of the sprite's width, and its centre 36% of the way down. */
+  const w = (r * 2) / 0.82;
+  const ih = idle ? (w * idle.height) / idle.width : w * 0.96;
+  const top = y - ih * 0.36;
+  const bottom = top + ih;
   ctx.save();
-  // Bezel
-  const bezel = ctx.createLinearGradient(0, y - r - 10, 0, y + r + 10);
-  bezel.addColorStop(0, "#e8eefc");
-  bezel.addColorStop(1, "#46516e");
-  ctx.fillStyle = bezel;
-  ctx.beginPath();
-  ctx.arc(x, y, r + 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#1a1030";
-  ctx.beginPath();
-  ctx.arc(x, y + 4, r + 2, 0, Math.PI * 2);
-  ctx.fill();
-  const glow = enabled ? 0.6 + 0.4 * Math.sin(t * 5) : 0;
-  ctx.shadowColor = "#ff8a2a";
-  ctx.shadowBlur = 20 + glow * 24;
-  const dy = pressed ? 5 : 0;
-  const face = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4 + dy, r * 0.1, x, y + dy, r);
-  face.addColorStop(0, enabled ? "#fff1b0" : "#9a9aaa");
-  face.addColorStop(0.4, enabled ? "#ffa22a" : "#6a6a7a");
-  face.addColorStop(1, enabled ? "#c73a0a" : "#3a3a4a");
-  ctx.fillStyle = face;
-  ctx.beginPath();
-  ctx.arc(x, y + dy, r - 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "rgba(255,255,255,0.45)";
-  ctx.beginPath();
-  ctx.ellipse(x - r * 0.15, y - r * 0.52 + dy, r * 0.5, r * 0.2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  text(ctx, label, x, y + dy + 6, fitSize(ctx, label, 36, r * 1.6), "#ffffff", "center", "#7a1a00");
+  if (enabled) {
+    ctx.globalAlpha = 0.22 + 0.14 * Math.sin(t * 5);
+    ctx.fillStyle = HONEY;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 6, r + 16, r + 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  const img = !enabled ? sp.shootOff : pressed ? (sp.img["shoot-pressed"] ?? idle) : idle;
+  if (img) stand(ctx, img, x, bottom, w);
+  else {
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 3;
+    ctx.fillStyle = CREAM;
+    ctx.beginPath();
+    ctx.ellipse(x, bottom - ih * 0.3, w / 2 - 2, ih * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = enabled ? TERRA : "#8C7458";
+    ctx.beginPath();
+    ctx.arc(x, y + (pressed ? 6 : 0), r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  text(ctx, label, x, bottom - ih * 0.12, fitSize(ctx, label, 16, w * 0.46), CREAM);
   ctx.restore();
 }
 
-/** The AUTO toggle: a pill that is dark when off and lit mint when on, with its state spelled out. */
+/** The AUTO toggle: a cream pill when off, lit teal when on, with its state spelled out. */
 export function drawAutoButton(ctx: Ctx, r: Rect, label: string, state: string, on: boolean, enabled: boolean) {
   ctx.save();
-  ctx.globalAlpha = enabled || on ? 1 : 0.5;
-  if (on) {
-    ctx.shadowColor = MINT;
-    ctx.shadowBlur = 16;
-  }
-  ctx.fillStyle = on ? MINT : "#05040c";
-  ctx.strokeStyle = on ? "#ffffff" : "rgba(255,255,255,0.35)";
-  ctx.lineWidth = 2;
+  ctx.globalAlpha = enabled || on ? 1 : 0.55;
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y + 3, r.w, r.h, r.h / 2);
+  ctx.fill();
+  ctx.fillStyle = on ? TEAL : CREAM;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.w, r.h, r.h / 2);
   ctx.fill();
   ctx.stroke();
-  ctx.shadowBlur = 0;
   const msg = `${label}: ${state}`;
-  text(ctx, msg, r.x + r.w / 2, r.y + r.h / 2 + 1, fitSize(ctx, msg, 17, r.w - 20), on ? INK : "#cfd6ff", "center", null);
+  text(ctx, msg, r.x + r.w / 2, r.y + r.h / 2 + 1, fitSize(ctx, msg, 17, r.w - 20), on ? CREAM : BROWN, "center", null);
   ctx.restore();
 }
 
-/** Small BETA chip. */
-export function betaTag(ctx: Ctx, x: number, y: number, label: string) {
-  ctx.save();
-  ctx.font = `800 15px ${FONT}`;
-  const w = ctx.measureText(label).width + 16;
-  ctx.fillStyle = MINT;
-  ctx.beginPath();
-  ctx.roundRect(x - w / 2, y - 11, w, 22, 11);
-  ctx.fill();
-  text(ctx, label, x, y + 1, 15, INK, "center", null);
-  ctx.restore();
-}
-
-/** The coin tray under the controls (seen on tall phones): a little heap that grows with your coins. */
+/** The coin tray on the deck under the controls (seen on tall phones): a little heap that grows with your coins. */
 export function drawTray(ctx: Ctx, sp: Sprites, coins: number, view: Rect) {
-  const y = 972;
+  const y = 970;
   if (view.y + view.h < y + 30) return;
-  const r: Rect = { x: 150, y, w: 240, h: 64 };
+  const r: Rect = { x: 206, y, w: 128, h: 50 };
   ctx.save();
-  ctx.fillStyle = "#05040f";
-  ctx.strokeStyle = "rgba(200,220,255,0.35)";
+  ctx.fillStyle = WELL;
+  ctx.strokeStyle = BROWN;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.roundRect(r.x, r.y, r.w, r.h, 18);
+  ctx.roundRect(r.x, r.y, r.w, r.h, 16);
   ctx.fill();
   ctx.stroke();
-  ctx.beginPath();
-  ctx.roundRect(r.x, r.y, r.w, r.h, 18);
   ctx.clip();
-  const n = Math.min(26, Math.ceil(Math.max(0, coins) / 8));
+  const n = Math.min(18, Math.ceil(Math.max(0, coins) / 10));
   const rnd = mulberry32(77);
   for (let i = 0; i < n; i++) {
-    const row = i < 12 ? 0 : i < 21 ? 1 : 2;
-    const x = r.x + 22 + rnd() * (r.w - 44) * (1 - row * 0.25) + row * 30;
-    const yy = r.y + r.h - 14 - row * 9 - rnd() * 6;
-    ctx.drawImage(sp.coin, x - 15, yy - 10, 30, 30 * (sp.coin.height / sp.coin.width));
+    const row = i < 8 ? 0 : i < 14 ? 1 : 2;
+    const x = r.x + 16 + rnd() * (r.w - 32) * (1 - row * 0.25) + row * 14;
+    const yy = r.y + r.h - 10 - row * 8 - rnd() * 5;
+    if (sp.coin) stand(ctx, sp.coin, x, yy + 6, 24);
+    else coinFace(ctx, sp, x, yy, 22, 13);
   }
   ctx.restore();
 }
@@ -1311,8 +1448,8 @@ const ready = (img: HTMLImageElement | null) => (img?.complete && img.naturalWid
 const silhouettes = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
 
 /**
- * The card's art as a dim indigo monochrome (an unowned album slot). The art is
- * opaque, so a flat fill would be a blank rectangle; keeping a trace of the
+ * The card's art as a dim dusty-blue monochrome (an unowned album slot). The art
+ * is opaque, so a flat fill would be a blank rectangle; keeping a trace of the
  * brightness lets the cat's shape show through like a shadow.
  */
 function silhouette(img: HTMLImageElement) {
@@ -1328,16 +1465,16 @@ function silhouette(img: HTMLImageElement) {
     const d = px.data;
     for (let i = 0; i < d.length; i += 4) {
       const lum = (0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]) / 255;
-      const k = 0.16 + lum * 0.6;
-      d[i] = 70 * k;
-      d[i + 1] = 60 * k;
-      d[i + 2] = 150 * k;
+      const k = 0.18 + lum * 0.62;
+      d[i] = 92 * k;
+      d[i + 1] = 108 * k;
+      d[i + 2] = 132 * k;
     }
     g.putImageData(px, 0, 0);
   } catch {
     // A tainted canvas can't be read: fall back to a flat tint
     g.globalCompositeOperation = "source-atop";
-    g.fillStyle = "rgba(20,16,50,0.92)";
+    g.fillStyle = "rgba(40,48,60,0.92)";
     g.fillRect(0, 0, c.width, c.height);
   }
   silhouettes.set(img, c);
@@ -1345,14 +1482,14 @@ function silhouette(img: HTMLImageElement) {
 }
 
 /**
- * A cat card in a white frame. `owned` false shows its silhouette on a dark
- * card; while the image is still loading the paw-print card back stands in.
+ * A cat card in a cream frame. `owned` false shows its silhouette on a dark
+ * card; while the image is still loading a plain card stands in.
  */
 export function drawCardFace(ctx: Ctx, img: HTMLImageElement | null, x: number, y: number, w: number, h: number, owned: boolean) {
   const r = Math.max(3, w * 0.09);
   const pad = Math.max(1.5, w * 0.05);
   ctx.save();
-  ctx.fillStyle = owned ? "#fffaf2" : "#15112f";
+  ctx.fillStyle = owned ? CREAM : NIGHT;
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fill();
@@ -1365,42 +1502,14 @@ export function drawCardFace(ctx: Ctx, img: HTMLImageElement | null, x: number, 
   ctx.clip();
   if (art) ctx.drawImage(owned ? art : silhouette(art), x + pad, y + pad, w - pad * 2, h - pad * 2);
   else {
-    ctx.fillStyle = owned ? "#ffd6ea" : "#211b48";
+    ctx.fillStyle = owned ? VIOLET : NIGHT_HI;
     ctx.fillRect(x, y, w, h);
-    ctx.translate(x + w / 2, y + h / 2);
-    cardIcon(ctx, w * 0.5, owned ? "#fff4fa" : "#3a3270");
   }
   ctx.restore();
-  ctx.strokeStyle = owned ? "rgba(10,8,32,0.6)" : "rgba(255,255,255,0.18)";
-  ctx.lineWidth = Math.max(1, w * 0.025);
+  ctx.strokeStyle = owned ? BROWN : "rgba(245,228,190,0.25)";
+  ctx.lineWidth = Math.max(1, w * 0.03);
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.stroke();
-  ctx.restore();
-}
-
-/** The album button: a little card, the owned count, and the label. `pulse` 0..1 after a new card. */
-export function drawAlbumButton(ctx: Ctx, r: Rect, label: string, owned: number, total: number, pulse: number) {
-  ctx.save();
-  ctx.fillStyle = "rgba(10,8,32,0.85)";
-  ctx.strokeStyle = pulse > 0 ? PINK : "rgba(255,126,182,0.75)";
-  ctx.lineWidth = 2 + pulse * 2;
-  if (pulse > 0) {
-    ctx.shadowColor = PINK;
-    ctx.shadowBlur = 18 * pulse;
-  }
-  ctx.beginPath();
-  ctx.roundRect(r.x, r.y, r.w, r.h, 14);
-  ctx.fill();
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.save();
-  ctx.translate(r.x + 20, r.y + 20);
-  ctx.rotate(-0.12);
-  ctx.scale(1 + pulse * 0.25, 1 + pulse * 0.25);
-  cardIcon(ctx, 18);
-  ctx.restore();
-  text(ctx, `${owned}/${total}`, r.x + 52, r.y + 21, 17, "#ffffff", "center", null);
-  text(ctx, label, r.x + r.w / 2, r.y + 43, fitSize(ctx, label, 14, r.w - 10), "#ffd6ea", "center", null);
   ctx.restore();
 }

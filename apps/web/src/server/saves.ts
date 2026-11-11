@@ -17,15 +17,20 @@ import {
 
 export type { StoredSave, WriteResult } from "#/server/db/saves";
 
-/** Only games that keep progress on the account, and ship save rules. */
+/**
+ * Only games that keep progress on the account (`requiresAccount`, or
+ * `accountSave` for signed-in players), and ship save rules.
+ */
 const slug = z
   .string()
   .regex(/^[a-z0-9-]{1,40}$/)
-  .refine(
-    (s) =>
-      findGame(s)?.requiresAccount === true && findSaveRules(s) !== undefined,
-    "Not an account game",
-  );
+  .refine((s) => {
+    const game = findGame(s);
+    return (
+      (game?.requiresAccount === true || game?.accountSave === true) &&
+      findSaveRules(s) !== undefined
+    );
+  }, "Not an account game");
 
 /** A slot number the game actually has (`saveSlots`, default 1). */
 const slotOf = (gameSlug: string, slot: number) => {

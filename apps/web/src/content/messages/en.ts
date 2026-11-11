@@ -150,6 +150,11 @@ export const en: Messages = {
     inspiredBy: "Inspired by {source}",
     signInToPlay: "Sign in to play",
     accountHint: "This game saves your progress to your Google account.",
+    version: "v{version}",
+    versionLabel: "Version {version}",
+  },
+  tickets: {
+    balance: "Your tickets: {n}",
   },
   online: {
     coop: "Play online co-op",

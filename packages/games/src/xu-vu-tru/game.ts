@@ -1,45 +1,64 @@
 import "@fontsource/baloo-2/800.css";
 import "@fontsource/handjet/700.css";
-import { type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, clamp, easeOutCubic, inRect } from "@web-games/core";
+import {
+  type CloudSlot,
+  type GameHooks,
+  type PointerInfo,
+  type Rect,
+  type Runtime,
+  SUMMARY_KEY,
+  type ScoreReport,
+  clamp,
+  easeOutCubic,
+  inRect,
+} from "@web-games/core";
 import {
   ALBUM_BTN,
-  AMBER,
+  type ArtSrc,
+  AUTO_BTN,
   CHUTE,
   COINS_BOX,
   CORE_COLORS,
+  CREAM,
+  CYAN,
   FONT,
-  GOLD,
+  GATE,
+  HONEY,
   LAMPS_Y,
   LED_FONT,
   MENU_BTN,
-  MINT,
-  NEON,
-  PINK,
+  MUTED,
   REEL,
+  type ReelCell,
   SHELF_BOTTOM,
   SHOOT,
   SPINS_BOX,
+  TEAL,
+  TERRA,
   TICKETS_BOX,
+  VIOLET,
   WHEEL_C,
-  INK,
+  WHEEL_R,
+  type WheelLight,
   along,
-  AUTO_BTN,
-  type ReelCell,
-  betaTag,
   button,
+  cardBackH,
   drawAlbumButton,
   drawAutoButton,
-  drawBackground,
   drawBody,
   drawCabinet,
+  drawCardBack,
   drawCardFace,
   drawChute,
   drawCoreLamps,
   drawCounter,
   drawFlyingCoin,
   drawFrontLip,
+  drawGate,
   drawGlass,
   drawMarquee,
+  drawMenuButton,
+  drawOrb,
   drawPusher,
   drawReels,
   drawRobots,
@@ -49,28 +68,38 @@ import {
   drawTray,
   drawWheel,
   fitSize,
+  headline,
   makeSprites,
-  neon,
   panel,
   proj,
   text,
+  versionTag,
 } from "./art";
 import {
   CARD_COUNT,
   CARD_IDS,
   CARD_TICKETS,
   CORE_COUNT,
+  DAILY_COINS,
   FLIGHT_DOWN,
   FLIGHT_UP,
   H,
   MINI_PRIZES,
+  PRIZE_QUEUE_MAX,
+  PRIZE_SPIN_TIME,
+  SEG_SIZE,
+  SEG_START,
   SET_TICKETS,
   SET_TIME,
   SHELF_D,
   SPIN_TIME,
   SUPER_PRIZES,
   SUPER_SPIN_TIME,
+  TRIAL_COINS,
+  VERSION,
   W,
+  WELCOME_COINS,
+  WHEEL,
 } from "./config";
 import bengalImg from "./img/cards/bengal.webp";
 import britishImg from "./img/cards/british.webp";
@@ -82,29 +111,89 @@ import scottishFoldImg from "./img/cards/scottish-fold.webp";
 import siameseImg from "./img/cards/siamese.webp";
 import sphynxImg from "./img/cards/sphynx.webp";
 import tabbyImg from "./img/cards/tabby.webp";
-import robotsImg from "./img/robots.webp";
+import cabinetBgArt from "./img/v2/cabinet-bg.webp";
+import cardBackArt from "./img/v2/card-back.webp";
+import coinArt from "./img/v2/coin.webp";
+import coinStack2Art from "./img/v2/coin-stack2.webp";
+import coinStack3Art from "./img/v2/coin-stack3.webp";
+import gateArt from "./img/v2/gate.webp";
+import orbBlueArt from "./img/v2/orb-blue.webp";
+import orbGreenArt from "./img/v2/orb-green.webp";
+import orbOrangeArt from "./img/v2/orb-orange.webp";
+import orbPurpleArt from "./img/v2/orb-purple.webp";
+import orbRedArt from "./img/v2/orb-red.webp";
+import orbYellowArt from "./img/v2/orb-yellow.webp";
+import pusherArt from "./img/v2/pusher.webp";
+import robotLeftArt from "./img/v2/robot-left.webp";
+import robotRightArt from "./img/v2/robot-right.webp";
+import shelfFloorArt from "./img/v2/shelf-floor.webp";
+import shootIdleArt from "./img/v2/shoot-idle.webp";
+import shootPressedArt from "./img/v2/shoot-pressed.webp";
+import ticketArt from "./img/v2/ticket.webp";
+import tileC1Art from "./img/v2/tile-c1.webp";
+import tileC2Art from "./img/v2/tile-c2.webp";
+import tileC4Art from "./img/v2/tile-c4.webp";
+import tileC6Art from "./img/v2/tile-c6.webp";
+import tileC8Art from "./img/v2/tile-c8.webp";
+import tileCardArt from "./img/v2/tile-card.webp";
+import tileCoreArt from "./img/v2/tile-core.webp";
+import tileT10Art from "./img/v2/tile-t10.webp";
+import tileT100Art from "./img/v2/tile-t100.webp";
+import tileT20Art from "./img/v2/tile-t20.webp";
+import tileT30Art from "./img/v2/tile-t30.webp";
+import tileT5Art from "./img/v2/tile-t5.webp";
+import tileT50Art from "./img/v2/tile-t50.webp";
+import wheelHubArt from "./img/v2/wheel-hub.webp";
 import {
   type GameEvent,
-  RULES_VERSION,
   type SpinKind,
   type State,
-  createRun,
+  createMachine,
+  drainTickets,
   grantCoins,
+  holeAt,
   normalizeAlbum,
   ownedCount,
   pusherAt,
-  segmentAt,
   update,
 } from "./logic";
+import { type MachineSave, fromSave, migrate, toSave } from "./save";
 import { STRINGS } from "./strings";
 
 // The imperative shell: turns the SHOOT button into inputs for logic.ts, plays
 // its events as sound, light and particles, and draws the cabinet. Solo only.
+//
+// One machine that never resets. Signed in (ctx.cloud), it lives in cloud slot 0:
+// loaded on mount, saved a few seconds after it changes (and at once for grants,
+// on suspend and on dispose), with a local backup of anything unsent. Its coins
+// come from the allowance and coupons, and every ticket it pays is deposited in
+// the shared arcade wallet. Signed out, it is a local trial machine with
+// TRIAL_COINS, trial tickets and nothing sent anywhere. A sign-out mid-game
+// (calls failing with sign-in-required) drops back to the trial.
 
-const RUN_KEY = "run";
+/** The guest's trial machine and its trial tickets: { save, tickets }. */
+const TRIAL_KEY = "trial";
+/** Coupon coins that arrived before a machine was loaded. */
 const PENDING_KEY = "pendingCoins";
-/** The card album, kept across runs. */
-const ALBUM_KEY = "album";
+/** manifest.version when the player last closed the What's new card. */
+const SEEN_KEY = "seenVersion";
+/** The beta's keys: its run (discarded), album (seeds a new trial machine) and best. */
+const LEGACY_RUN_KEY = "run";
+const LEGACY_ALBUM_KEY = "album";
+const LEGACY_BEST_KEY = "best";
+/** The signed-in machine not yet confirmed by the server, per account. */
+const backupKey = (playerId: string) => `machine:${playerId}`;
+/** Seconds a changed machine waits before it is saved (changes in between join it). */
+const SAVE_DEBOUNCE = 4;
+/** Seconds between failed save retries, doubling up to the max. */
+const RETRY_MIN = 4;
+const RETRY_MAX = 60;
+/** Seconds before failed ticket deposits are sent again. */
+const DEPOSIT_RETRY = 10;
+/** ms after the daily reset before claiming (the device clock may run a little fast). */
+const CLAIM_SLACK = 2000;
+/** ms between claims at the least, and before a failed claim is retried. */
+const CLAIM_GAP = 60_000;
 /** Card art in CARD_IDS order. */
 const CARD_SRC: Record<(typeof CARD_IDS)[number], string> = {
   persian: persianImg,
@@ -118,6 +207,42 @@ const CARD_SRC: Record<(typeof CARD_IDS)[number], string> = {
   munchkin: munchkinImg,
   tabby: tabbyImg,
 };
+/** The v2 sprites (img/v2/, see its README), decoded once by makeSprites. */
+const ART_SRC: ArtSrc = {
+  "cabinet-bg": cabinetBgArt,
+  "wheel-hub": wheelHubArt,
+  "gate": gateArt,
+  "coin": coinArt,
+  "coin-stack2": coinStack2Art,
+  "coin-stack3": coinStack3Art,
+  "card-back": cardBackArt,
+  "ticket": ticketArt,
+  "orb-red": orbRedArt,
+  "orb-orange": orbOrangeArt,
+  "orb-yellow": orbYellowArt,
+  "orb-green": orbGreenArt,
+  "orb-blue": orbBlueArt,
+  "orb-purple": orbPurpleArt,
+  "tile-t5": tileT5Art,
+  "tile-t10": tileT10Art,
+  "tile-t20": tileT20Art,
+  "tile-t30": tileT30Art,
+  "tile-t50": tileT50Art,
+  "tile-t100": tileT100Art,
+  "tile-c1": tileC1Art,
+  "tile-c2": tileC2Art,
+  "tile-c4": tileC4Art,
+  "tile-c6": tileC6Art,
+  "tile-c8": tileC8Art,
+  "tile-core": tileCoreArt,
+  "tile-card": tileCardArt,
+  "shelf-floor": shelfFloorArt,
+  "pusher": pusherArt,
+  "shoot-idle": shootIdleArt,
+  "shoot-pressed": shootPressedArt,
+  "robot-left": robotLeftArt,
+  "robot-right": robotRightArt,
+};
 /** What the two reels show. */
 const MINI_CELLS: ReelCell[] = MINI_PRIZES.map((p) => ({ value: p.value, coin: p.kind === "coins" }));
 const SUPER_CELLS: ReelCell[] = SUPER_PRIZES.map((value) => ({ value, coin: false }));
@@ -125,18 +250,43 @@ const cellsOf = (kind: SpinKind) => (kind === "mini" ? MINI_CELLS : SUPER_CELLS)
 const spinTimeOf = (kind: SpinKind) => (kind === "mini" ? SPIN_TIME : SUPER_SPIN_TIME);
 /** Seconds of Super spin win celebration. */
 const SUPER_FX = 3.2;
+/** Seconds a coin takes to sink into the gate's hole. */
+const SINK = 0.2;
 /** Seconds a won card takes to fly to the album button. */
 const CARD_FLY = 0.9;
 /** Toasts sit on the pusher's top plate, the one calm strip in the machine. */
 const TOAST_Y = 522;
-const SAVE_EVERY = 8;
+/** Button faces, top→bottom: the main action in terracotta, the rest in teal, the album in violet. */
+const BTN_GO: [string, string] = ["#E39272", TERRA];
+const BTN_ALT: [string, string] = ["#7FB5AB", TEAL];
+const BTN_CARD: [string, string] = ["#CBB0E8", "#9A76C4"];
+/** A pale violet for a duplicate card. */
+const LILAC = "#E2D2F2";
 
-type ButtonId = "go" | "new" | "rules" | "code";
-type Overlay = "start" | "rules" | "pause" | "over" | "album" | null;
+type ButtonId = "go" | "rules" | "code" | "view" | "retry";
+type Overlay = "start" | "rules" | "pause" | "album" | "dry" | "news" | null;
+/** loading/failed: the account machine is on its way (or could not be fetched). */
+type Mode = "loading" | "failed" | "account" | "guest";
 
-interface Best {
-  tickets: number;
-  supers: number;
+interface Backup {
+  /** The cloud version this save was built on. */
+  base: number;
+  save: MachineSave;
+}
+
+interface TrialSave {
+  save: unknown;
+  tickets: unknown;
+}
+
+/** A failure that means the player is no longer signed in. */
+const signedOutError = (e: unknown) => /sign-in-required|đăng nhập/i.test(e instanceof Error ? e.message : String(e));
+
+/** "hh:mm:ss" until `at` (unix ms). */
+function clock(ms: number) {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(sec / 3600))}:${pad(Math.floor((sec % 3600) / 60))}:${pad(sec % 60)}`;
 }
 
 interface Pop {
@@ -188,28 +338,6 @@ function reelEase(k: number) {
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
-/** A saved run, if it still has the shape this version expects. */
-function parseRun(raw: unknown): State | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const r = raw as Partial<State>;
-  if (
-    r.v !== RULES_VERSION ||
-    typeof r.seed !== "number" ||
-    typeof r.coins !== "number" ||
-    typeof r.tickets !== "number" ||
-    typeof r.wheel !== "number" ||
-    typeof r.pusherT !== "number" ||
-    !Array.isArray(r.bodies) ||
-    !Array.isArray(r.flights) ||
-    !Array.isArray(r.queue) ||
-    typeof r.cores !== "number" ||
-    !Array.isArray(r.album) ||
-    r.album.length !== CARD_COUNT
-  )
-    return null;
-  return r as State;
-}
-
 function wrap(ctx: CanvasRenderingContext2D, str: string, maxW: number, size: number) {
   ctx.font = `800 ${size}px ${FONT}`;
   const lines: string[] = [];
@@ -229,32 +357,70 @@ export function setup(rt: Runtime): GameHooks {
   const { stage, ctx } = rt;
   const { storage, audio, reportScore, coupons } = rt.game;
   const tr = () => STRINGS[rt.locale()];
+  const version = rt.game.version ?? VERSION;
+  // Account handles: dropped (null) for good if the player signs out mid-game
+  let cloud = rt.game.cloud ?? null;
+  let tickets = rt.game.tickets ?? null;
+  let allowance = rt.game.allowance ?? null;
   const cardImgs = CARD_IDS.map((id) => {
     const img = new Image();
     img.src = CARD_SRC[id];
     return img;
   });
-  const sp = makeSprites(cardImgs);
-  const robots = new Image();
-  robots.src = robotsImg;
-  const robotsReady = () => (robots.complete && robots.naturalWidth > 0 ? robots : null);
+  const sp = makeSprites(cardImgs, ART_SRC);
 
-  let best: Best = storage.get<Best>("best", { tickets: 0, supers: 0 });
-  /** The album outlives runs: storage is its home, the run carries a copy while it plays. */
-  let album = normalizeAlbum(storage.get<unknown>(ALBUM_KEY, null));
-  const saved = parseRun(storage.get<unknown>(RUN_KEY, null));
-  let s: State = saved && !saved.over ? saved : createRun(newSeed(), undefined, album);
-  s.album = [...album];
-  let resumable = !!saved && !saved.over && saved.shots > 0;
-  /** Coupon coins that arrived while no run was in play; they join the next run. */
+  // The beta's run is not resumed (the machine changed shape): drop it, with a note
+  let legacyDropped = storage.get<unknown>(LEGACY_RUN_KEY, null) !== null;
+  if (legacyDropped) storage.set(LEGACY_RUN_KEY, null);
+  if (storage.get<unknown>(LEGACY_BEST_KEY, null) !== null) storage.set(LEGACY_BEST_KEY, null);
+  /** Coupon coins that arrived before a machine was ready (or in the beta, between runs). */
   let pendingCoins = Math.max(0, Math.floor(Number(storage.get<unknown>(PENDING_KEY, 0)) || 0));
-  let overlay: Overlay = "start";
+
+  let mode: Mode = cloud ? "loading" : "guest";
+  /** Bumped when the machine changes owner (sign-out, dispose): late answers for the old one are ignored. */
+  let gen = 0;
+  let disposed = false;
+  /** The machine. While the account one loads this is a stand-in that is never saved. */
+  let s: State = cloud ? createMachine(1) : loadTrial();
+  /** Guest only: local trial tickets (never deposited). */
+  let trialTickets = 0;
+  if (mode === "guest") trialTickets = readTrialTickets();
+
+  // Saving: game time `t` when the machine first changed since the last save (-1: clean)
+  let dirtyAt = -1;
+  let cloudVersion = 0;
+  let saving = false;
+  let saveAgain = false;
+  let retryAt = 0;
+  let retryGap = RETRY_MIN;
+  /** A leaderboard filing that rides on the next cloud save (the server scores the save itself). */
+  let scoreNext: ScoreReport | undefined;
+  /** The lifetime tickets last sent to the leaderboard, and whether the one extra filing is spent. */
+  let lastFiled = 0;
+  let extraFiled = false;
+
+  // The wallet: its balance, deposits on their way, and failed ones waiting to be sent again
+  let wallet: number | null = null;
+  let pendingDeposit = 0;
+  let owed = 0;
+  let owedAt = 0;
+  let lastCapToast = -999;
+  let offBalance: (() => void) | undefined;
+
+  // The allowance: the next Vietnam midnight, and when to claim next (unix ms)
+  let nextDailyAt = 0;
+  let claimAt = Number.POSITIVE_INFINITY;
+  let claiming = false;
+
+  const seen = storage.get<unknown>(SEEN_KEY, null);
+  let overlay: Overlay = seen !== version ? "news" : "start";
   let rulesFrom: "start" | "pause" = "start";
   /** Where the album was opened from, so closing it goes back there. */
   let albumFrom: Overlay = null;
-  let reported = false;
-  let newBest = false;
-  let overAt = -1;
+  /** Seconds the machine has idled at zero coins; the panel waits a beat before it shows. */
+  let idleFor = 0;
+  /** The player closed the out-of-coins panel to look at the machine. */
+  let dryClosed = false;
 
   // Input
   /** Every pointer currently pressing SHOOT (a Set: a second finger must not overwrite the first). */
@@ -275,14 +441,24 @@ export function setup(rt: Runtime): GameHooks {
   let setFx = 0;
   let albumPulse = 0;
   let chuteGlow = 0;
-  let saveT = 0;
   let shownCoins = s.coins;
-  let shownTickets = s.tickets;
+  let shownTickets = trialTickets;
   let bumpCoins = 0;
   let bumpTickets = 0;
+  /** Toasts take turns: a welcome and a daily can arrive together. */
   let toast: { text: string; t: number; color: string } | null = null;
-  let hit: { seg: number; t: number } | null = null;
-  let lastSeg = segmentAt(s.wheel);
+  const toasts: { text: string; color: string }[] = [];
+  /** The gate's cup lights up after a coin drops in (1 → 0). */
+  let gateFlash = 0;
+  /** Coins sinking into the hole (screen x, seconds in). */
+  let sinks: { x: number; t: number }[] = [];
+  /** The prize light: where it is (in slots, unwrapped), and the run it is making to the picked slot. */
+  let lightPos = 0;
+  let light: { from: number; to: number } | null = null;
+  let lastLightCell = 0;
+  let lastTick = 0;
+  /** Where the last prize slot was on screen when it paid (its ticket pop rises from there). */
+  let winAt = { x: WHEEL_C.x, y: WHEEL_C.y };
   let lastClink = 0;
   let lastDry = -9;
   const lampPulse = Array.from({ length: CORE_COUNT }, () => 0);
@@ -307,7 +483,16 @@ export function setup(rt: Runtime): GameHooks {
       audio.tone({ freq: 1500, to: 2400, dur: 0.05, type: "square", vol: 0.02, delay: 0.03 });
     },
     tick() {
+      if (t - lastTick < 0.035) return;
+      lastTick = t;
       audio.tone({ freq: 2100, dur: 0.012, type: "square", vol: 0.012 });
+    },
+    hole() {
+      audio.tone({ freq: 330, to: 150, dur: 0.1, type: "sine", vol: 0.06 });
+      for (const [i, f] of [988, 1319, 1760].entries()) audio.tone({ freq: f, dur: 0.08, type: "square", vol: 0.035, delay: 0.06 + i * 0.05 });
+    },
+    prizeStart() {
+      audio.tone({ freq: 420, to: 1500, dur: 0.28, type: "sawtooth", vol: 0.03 });
     },
     clink(v = 1) {
       if (t - lastClink < 0.045) return;
@@ -317,7 +502,7 @@ export function setup(rt: Runtime): GameHooks {
       audio.tone({ freq: f * 1.5, dur: 0.04, type: "sine", vol: 0.03 * v, delay: 0.018 });
     },
     win(value: number) {
-      const notes = value >= 12 ? [784, 988, 1175, 1568] : value >= 6 ? [784, 988, 1175] : [880, 1175];
+      const notes = value >= 50 ? [784, 988, 1175, 1568] : value >= 20 ? [784, 988, 1175] : [880, 1175];
       for (const [i, f] of notes.entries()) audio.tone({ freq: f, dur: 0.09, type: "square", vol: 0.04, delay: i * 0.055 });
     },
     back(n: number) {
@@ -393,15 +578,42 @@ export function setup(rt: Runtime): GameHooks {
     }
   }
 
-  function pop(str: string, x: number, y: number, color = GOLD, size = 30) {
+  function pop(str: string, x: number, y: number, color = HONEY, size = 30) {
     pops.push({ text: str, x, y, t: 0, color, size });
   }
 
-  function say(str: string, color = GOLD) {
-    toast = { text: str, t: 0, color };
+  /** Show a toast now, or (`wait`) after the ones already showing: grants and notices must not be lost. */
+  function say(str: string, color = HONEY, wait = false) {
+    if (wait && toast) {
+      if (toasts.length < 4) toasts.push({ text: str, color });
+    } else toast = { text: str, t: 0, color };
   }
 
-  const pointerTip = CHUTE[CHUTE.length - 1];
+  /** The chute's mouth, where a shot coin hops out onto the gate. */
+  const mouth = CHUTE[CHUTE.length - 1];
+  let chuteLen = 0;
+  for (let i = 1; i < CHUTE.length; i++) chuteLen += Math.hypot(CHUTE[i].x - CHUTE[i - 1].x, CHUTE[i].y - CHUTE[i - 1].y);
+  const N_SEGS = WHEEL.length;
+  const wrapSeg = (i: number) => ((i % N_SEGS) + N_SEGS) % N_SEGS;
+
+  /** Start the prize light on a run of one to two laps that stops on slot `seg`. */
+  function aimLight(seg: number) {
+    const from = Math.floor(lightPos);
+    light = { from, to: from + N_SEGS + ((seg - wrapSeg(from) + N_SEGS) % N_SEGS) };
+  }
+
+  /** The middle of a wheel slot on screen right now, at `r` from the hub. */
+  function slotPoint(seg: number, r = WHEEL_R * 0.66) {
+    const a = s.wheel + SEG_START[seg] + SEG_SIZE[seg] / 2;
+    return { x: WHEEL_C.x + Math.cos(a) * r, y: WHEEL_C.y + Math.sin(a) * r };
+  }
+
+  function wheelLight(): WheelLight | null {
+    if (!s.prize || !light) return null;
+    const head = Math.floor(lightPos);
+    if (s.prize.paid) return { segs: [wrapSeg(head)], won: true };
+    return { segs: [wrapSeg(head), wrapSeg(head - 1), wrapSeg(head - 2)], won: false };
+  }
 
   /** Start the reel strip on a run that ends on prize `idx`. */
   function aimReel(kind: SpinKind, idx: number) {
@@ -422,27 +634,56 @@ export function setup(rt: Runtime): GameHooks {
         chuteGlow = 1;
         break;
       case "dry":
-        if (t - lastDry > 1.2) {
+        // At rest with no coins: SHOOT brings the out-of-coins panel back
+        if (s.idle) {
+          dryClosed = false;
+          autoOn = false;
+        } else if (t - lastDry > 1.2) {
           lastDry = t;
           sfx.dry();
-          say(l.noCoins, PINK);
+          say(l.noCoins, TERRA);
         }
         break;
-      case "hit": {
-        hit = { seg: e.seg, t: 0 };
+      case "gate": {
+        if (e.hit) {
+          const hx = GATE.x + e.hole;
+          gateFlash = 1;
+          sinks.push({ x: hx, t: 0 });
+          if (e.full) {
+            burst(hx, GATE.y, 12, [TERRA, CREAM], 160);
+            pop(l.stockFull, GATE.x, GATE.y + 56, TERRA, 24);
+            sfx.lost();
+          } else {
+            burst(hx, GATE.y, 18, [HONEY, CREAM, CYAN], 220);
+            pop(l.holeIn, hx, GATE.y - 30, HONEY, 30);
+            sfx.hole();
+          }
+        } else {
+          // Bounced off the rail: a spark where it struck (the coin's fall is drawn as a flight)
+          burst(GATE.x + e.x, GATE.y - 8, 6, [CREAM, HONEY], 130);
+          sfx.clink(0.9);
+        }
+        break;
+      }
+      case "prizeStart":
+        sfx.prizeStart();
+        aimLight(e.seg);
+        break;
+      case "prizeWin": {
+        winAt = slotPoint(e.seg);
         sfx.clink(1.2);
-        burst(pointerTip.x - 10, pointerTip.y, 10, ["#ffffff", GOLD, NEON], 200);
+        burst(winAt.x, winAt.y, 12, [CREAM, HONEY, CYAN], 200);
         const seg = e.segment;
         if (seg.kind === "coins") {
-          pop(l.coinRain(seg.value), pointerTip.x - 50, pointerTip.y - 30, GOLD, seg.value >= 6 ? 34 : 28);
+          pop(l.coinRain(seg.value), winAt.x, winAt.y - 10, HONEY, seg.value >= 6 ? 34 : 28);
           if (seg.value >= 6) cheer = Math.max(cheer, 1);
-          sfx.win(seg.value * 2);
+          sfx.win(seg.value * 8);
         } else if (seg.kind === "core") {
-          burst(pointerTip.x - 20, pointerTip.y, 24, CORE_COLORS, 260);
+          burst(winAt.x, winAt.y, 24, CORE_COLORS, 260);
           sfx.core();
           cheer = Math.max(cheer, 1.2);
         } else if (seg.kind === "card") {
-          burst(pointerTip.x - 20, pointerTip.y, 24, [PINK, "#ffffff", "#ffd6ea"], 260);
+          burst(winAt.x, winAt.y, 24, [VIOLET, CREAM, LILAC], 260);
           sfx.card(true);
           cheer = Math.max(cheer, 1.2);
         }
@@ -451,21 +692,16 @@ export function setup(rt: Runtime): GameHooks {
       case "tickets":
         bumpTickets = 1;
         if (e.source === "wheel") {
-          pop(
-            `+${e.amount}`,
-            pointerTip.x - 34 + (Math.random() - 0.5) * 36,
-            pointerTip.y - 26 - Math.random() * 20,
-            e.amount >= 10 ? GOLD : "#ffffff",
-            e.amount >= 10 ? 40 : 30,
-          );
+          const big = e.amount >= 50;
+          pop(`+${e.amount}`, winAt.x, winAt.y - 10, big ? HONEY : CREAM, big ? 42 : 32);
           sfx.win(e.amount);
-          if (e.amount >= 10) cheer = Math.max(cheer, 1);
+          if (big) cheer = Math.max(cheer, 1);
         }
         break;
       case "coinsWon":
         bumpCoins = 1;
         sfx.back(3);
-        pop(l.coinsWon(e.amount), REEL.x + REEL.w - 80, REEL.y - 16, MINT, 34);
+        pop(l.coinsWon(e.amount), REEL.x + REEL.w - 80, REEL.y - 16, CYAN, 34);
         break;
       case "land":
         landed.set(e.id, 0);
@@ -475,20 +711,20 @@ export function setup(rt: Runtime): GameHooks {
         if (e.edge === "front" && e.kind === "card") {
           const p = proj(e.x, SHELF_D);
           cardFlies.push({ card: e.card, x: p.x, y: p.y, t: 0 });
-          burst(p.x, p.y, 26, [PINK, "#ffffff", GOLD], 300);
-          pop(`+${CARD_TICKETS}`, p.x, p.y - 30, GOLD, 34);
+          burst(p.x, p.y, 26, [VIOLET, CREAM, HONEY], 300);
+          pop(`+${CARD_TICKETS}`, p.x, p.y - 30, HONEY, 34);
           break;
         }
         fallers.push({ x: e.x, y: e.y, edge: e.edge, stack: e.stack, kind: e.kind, core: e.core, card: e.card, t: 0 });
         if (e.edge === "front") {
           const p = proj(e.x, SHELF_D);
           if (e.kind === "core") {
-            burst(p.x, p.y, 30, [CORE_COLORS[e.core], "#ffffff", GOLD], 320);
+            burst(p.x, p.y, 30, [CORE_COLORS[e.core], CREAM, HONEY], 320);
             cheer = Math.max(cheer, 2);
           } else {
             sfx.back(e.stack);
             bumpCoins = 1;
-            pop(`+${e.stack}`, p.x, p.y - 14, MINT, e.stack > 1 ? 30 : 24);
+            pop(`+${e.stack}`, p.x, p.y - 14, CYAN, e.stack > 1 ? 30 : 24);
           }
         } else sfx.lost();
         break;
@@ -497,14 +733,14 @@ export function setup(rt: Runtime): GameHooks {
         lampPulse[i] = 1;
         sfx.core();
         say(l.coreIn(Math.min(e.count, CORE_COUNT), CORE_COUNT), CORE_COLORS[i]);
-        burst(lampX(i), LAMPS_Y, 22, [CORE_COLORS[i], "#ffffff"], 240);
+        burst(lampX(i), LAMPS_Y, 22, [CORE_COLORS[i], CREAM], 240);
         break;
       }
       case "card": {
         albumPulse = 1;
         sfx.card(e.fresh);
         const name = l.cards[CARD_IDS[e.card]];
-        say(`${name} · ${e.fresh ? l.cardNew : l.cardDupe}`, e.fresh ? PINK : "#ffd6ea");
+        say(`${name} · ${e.fresh ? l.cardNew : l.cardDupe}`, e.fresh ? VIOLET : LILAC);
         cheer = Math.max(cheer, 1.2);
         break;
       }
@@ -513,22 +749,22 @@ export function setup(rt: Runtime): GameHooks {
         shake = Math.max(shake, 0.6);
         cheer = SET_TIME;
         sfx.setDone();
-        for (let i = 0; i < 6; i++) burst(60 + i * 84, 300 + (i % 2) * 200, 26, [PINK, GOLD, NEON, MINT], 380);
+        for (let i = 0; i < 6; i++) burst(60 + i * 84, 300 + (i % 2) * 200, 26, [VIOLET, HONEY, CYAN, TERRA], 380);
         break;
       case "spinStart":
         sfx.spinStart();
         aimReel(e.kind, e.idx);
         if (e.kind === "super") {
-          say(l.superSpin, PINK);
+          say(l.superSpin, TERRA);
           shake = Math.max(shake, 0.4);
           cheer = Math.max(cheer, 2);
-        } else say(l.miniSpin, GOLD);
+        } else say(l.miniSpin, HONEY);
         break;
       case "spinWin": {
         const big = e.kind === "super" || e.prize.value >= 40;
         sfx.spinWin(e.kind === "super" ? 100 : e.prize.value);
-        if (e.prize.kind === "tickets") pop(`+${e.prize.value}`, REEL.x + REEL.w - 70, REEL.y - 16, GOLD, big ? 46 : 38);
-        burst(REEL.x + REEL.w - 70, REEL.y + REEL.h / 2, big ? 40 : 22, [GOLD, "#ffffff", PINK], 300);
+        if (e.prize.kind === "tickets") pop(`+${e.prize.value}`, REEL.x + REEL.w - 70, REEL.y - 16, HONEY, big ? 46 : 38);
+        burst(REEL.x + REEL.w - 70, REEL.y + REEL.h / 2, big ? 40 : 22, [HONEY, CREAM, TERRA], 300);
         cheer = Math.max(cheer, 1.5);
         if (big) shake = Math.max(shake, 0.3);
         if (e.kind === "super") {
@@ -544,85 +780,340 @@ export function setup(rt: Runtime): GameHooks {
       case "superReset":
         sfx.reset();
         break;
-      case "over":
-        overAt = t;
+      case "idle":
         sfx.over();
-        finish();
+        onIdle();
         break;
     }
   }
 
-  function finish() {
-    if (reported) return;
-    reported = true;
-    storage.set(RUN_KEY, null);
-    resumable = false;
-    newBest = s.tickets > best.tickets;
-    if (newBest) {
-      best = { tickets: s.tickets, supers: Math.max(best.supers, s.supers) };
-      storage.set("best", best);
-      storage.set(SUMMARY_KEY, { vi: STRINGS.vi.summary(best.tickets), en: STRINGS.en.summary(best.tickets) });
-    }
-    if (s.tickets > 0) reportScore?.({ score: s.tickets, detail: tr().detail(s.tickets, s.supers) });
-  }
+  // ---------------------------------------------------------------- the machine and its saves
 
-  function save() {
-    if (s.over || s.shots === 0) return;
-    storage.set(RUN_KEY, s);
-  }
-
-  /** Keep the album's home copy in step with the run (and the run saved with it). */
-  function storeAlbum() {
-    album = [...s.album];
-    storage.set(ALBUM_KEY, album);
-    save();
-  }
-
-  /** Move stored coupon coins into a run that has not started shooting yet. */
-  function claimPending() {
-    if (pendingCoins <= 0 || s.over || s.shots > 0) return;
-    const added = grantCoins(s, pendingCoins);
-    pendingCoins = 0;
-    storage.set(PENDING_KEY, null);
-    shownCoins = s.coins - added;
-    if (added > 0) bumpCoins = 1;
-  }
-
-  function newRun() {
+  /** Put a machine on the cabinet (loaded, adopted from the server or the trial) and reset the display. */
+  function adopt(next: State) {
+    s = next;
     autoOn = false;
     pointersHeld.clear();
-    s = createRun(newSeed(), undefined, album);
-    claimPending();
-    reported = false;
-    newBest = false;
-    overAt = -1;
+    tap = false;
     shownCoins = s.coins;
-    shownTickets = s.tickets;
     fallers = [];
     cardFlies = [];
     pops = [];
     landed.clear();
+    sinks = [];
+    light = null;
+    gateFlash = 0;
     reel = null;
     superFx = 0;
     setFx = 0;
-    storage.set(RUN_KEY, null);
-    resumable = false;
-    overlay = null;
+    idleFor = 0;
+    dryClosed = false;
+  }
+
+  function readTrialTickets() {
+    const raw = storage.get<TrialSave | null>(TRIAL_KEY, null);
+    return Math.max(0, Math.floor(Number(raw?.tickets) || 0));
+  }
+
+  /** The guest's trial machine, or a new one with TRIAL_COINS (and the beta's album, if any). */
+  function loadTrial(): State {
+    const m = migrate(storage.get<TrialSave | null>(TRIAL_KEY, null)?.save ?? null);
+    if (m.ok) return fromSave(m.save);
+    if (m.reason === "legacy") legacyDropped = true;
+    const album = normalizeAlbum(storage.get<unknown>(LEGACY_ALBUM_KEY, null));
+    storage.set(LEGACY_ALBUM_KEY, null);
+    const fresh = createMachine(newSeed(), TRIAL_COINS, album);
+    storage.set(TRIAL_KEY, { save: toSave(fresh), tickets: 0 });
+    return fresh;
+  }
+
+  function markDirty() {
+    if (dirtyAt < 0) dirtyAt = t;
+  }
+
+  /** Write the machine to the account's local backup (sent or not, it is safe on this device). */
+  function writeBackup(save: MachineSave) {
+    if (cloud) storage.set<Backup>(backupKey(cloud.playerId), { base: cloudVersion, save });
+  }
+
+  /** Save now: grants, suspend and dispose can't wait for the debounce. */
+  function saveNow() {
+    if (mode === "guest") {
+      dirtyAt = -1;
+      storage.set(TRIAL_KEY, { save: toSave(s), tickets: trialTickets });
+    } else if (mode === "account") void flush();
+  }
+
+  /** Send the machine to cloud slot 0. One save in flight at a time; a newer one follows it. */
+  async function flush() {
+    if (mode !== "account" || !cloud) return;
+    if (saving) {
+      saveAgain = true;
+      return;
+    }
+    saving = true;
+    dirtyAt = -1;
+    const c = cloud;
+    const mine = gen;
+    const save = toSave(s);
+    writeBackup(save);
+    const score = scoreNext;
+    scoreNext = undefined;
+    try {
+      const r = await c.save(0, save, cloudVersion, score);
+      if (mine !== gen) return;
+      retryGap = RETRY_MIN;
+      if (r.ok) {
+        cloudVersion = r.version;
+        // Nothing newer waiting: the server has it all, the backup can go
+        if (dirtyAt < 0 && !saveAgain) storage.set(backupKey(c.playerId), null);
+        else writeBackup(save);
+      } else adoptConflict(r.conflict);
+    } catch (e) {
+      if (mine !== gen) return;
+      if (signedOutError(e)) return becomeGuest();
+      scoreNext ??= score;
+      markDirty();
+      retryAt = t + retryGap;
+      retryGap = Math.min(RETRY_MAX, retryGap * 2);
+    } finally {
+      saving = false;
+      if (saveAgain && mine === gen && !disposed) {
+        saveAgain = false;
+        void flush();
+      }
+    }
+  }
+
+  /** Another device saved later: its machine wins (as in tiem-banh-may), ours is dropped. */
+  function adoptConflict(slot: CloudSlot) {
+    cloudVersion = slot.version;
+    const m = migrate(slot.data);
+    if (!m.ok) {
+      // Nothing usable there: ours goes up on top of it
+      markDirty();
+      return;
+    }
+    saveAgain = false;
+    dirtyAt = -1;
+    if (cloud) storage.set(backupKey(cloud.playerId), null);
+    adopt(fromSave(m.save));
+    lastFiled = Math.max(lastFiled, s.lifetimeTickets);
+    say(tr().conflictAdopted, CYAN, true);
+  }
+
+  /** The signed-in machine: the server's slot 0, a newer unsent backup, or a new one at 0 coins. */
+  async function loadAccount() {
+    if (!cloud) return;
+    const c = cloud;
+    const mine = gen;
+    mode = "loading";
+    try {
+      const slot = await c.load(0);
+      if (mine !== gen) return;
+      cloudVersion = slot?.version ?? 0;
+      const backup = storage.get<Backup | null>(backupKey(c.playerId), null);
+      const local = backup && backup.base === cloudVersion ? migrate(backup.save) : null;
+      const remote = migrate(slot?.data ?? null);
+      // A newer build wrote it: never overwrite what this one can't read
+      if (!local?.ok && !remote.ok && remote.reason === "future") {
+        mode = "failed";
+        return;
+      }
+      let push = true;
+      let next: State;
+      if (local?.ok) next = fromSave(local.save);
+      else if (remote.ok) {
+        next = fromSave(remote.save);
+        push = false;
+      } else {
+        if (remote.reason === "legacy") legacyDropped = true;
+        next = createMachine(newSeed(), 0);
+      }
+      mode = "account";
+      adopt(next);
+      lastFiled = s.lifetimeTickets;
+      if (push) saveNow();
+      applyPending();
+      watchWallet();
+      claimAt = 0;
+    } catch (e) {
+      if (mine !== gen) return;
+      if (signedOutError(e)) becomeGuest();
+      else mode = "failed";
+    }
+  }
+
+  /** Signed out mid-game: the account machine stays on the account, play goes on with the trial. */
+  function becomeGuest() {
+    if (mode === "guest") return;
+    if (mode === "account") writeBackup(toSave(s));
+    gen++;
+    cloud = null;
+    tickets = null;
+    allowance = null;
+    offBalance?.();
+    offBalance = undefined;
+    saving = false;
+    saveAgain = false;
+    dirtyAt = -1;
+    scoreNext = undefined;
+    pendingDeposit = 0;
+    owed = 0;
+    wallet = null;
+    claimAt = Number.POSITIVE_INFINITY;
+    mode = "guest";
+    adopt(loadTrial());
+    trialTickets = readTrialTickets();
+    shownTickets = trialTickets;
+    if (overlay === null) overlay = "start";
+    say(tr().signedOut, CYAN, true);
+  }
+
+  /** Coupon coins that came before a machine was ready. */
+  function applyPending() {
+    if (pendingCoins <= 0) return;
+    const added = grantCoins(s, pendingCoins);
+    pendingCoins = 0;
+    storage.set(PENDING_KEY, null);
+    if (added > 0) {
+      bumpCoins = 1;
+      say(tr().couponCoins(added), CYAN, true);
+      saveNow();
+    }
+  }
+
+  // ---------------------------------------------------------------- tickets
+
+  function watchWallet() {
+    const tk = tickets;
+    if (!tk) return;
+    const mine = gen;
+    offBalance?.();
+    offBalance = tk.onBalance((b) => {
+      if (mine === gen) wallet = b;
+    });
+    tk.balance().then(
+      (b) => {
+        if (mine !== gen) return;
+        if (wallet === null) shownTickets = b + pendingDeposit + owed;
+        wallet = b;
+      },
+      (e) => {
+        if (mine === gen && signedOutError(e)) becomeGuest();
+      },
+    );
+  }
+
+  /** Pay out what the machine earned: into the wallet (signed in) or the trial counter. */
+  function payOut() {
+    const n = drainTickets(s);
+    if (n <= 0) return;
+    if (mode === "guest") trialTickets += n;
+    else if (mode === "account") deposit(n);
+  }
+
+  function deposit(n: number) {
+    const tk = tickets;
+    if (!tk) return;
+    const mine = gen;
+    pendingDeposit += n;
+    tk.deposit(n).then(
+      ({ balance, accepted }) => {
+        if (mine !== gen) return;
+        pendingDeposit -= n;
+        // The server's word goes: a cap may have taken some
+        wallet = balance;
+        if (accepted < n && t - lastCapToast > 60) {
+          lastCapToast = t;
+          say(tr().ticketCap, HONEY, true);
+        }
+      },
+      (e) => {
+        if (mine !== gen) return;
+        pendingDeposit -= n;
+        if (signedOutError(e)) return becomeGuest();
+        owed += n;
+        if (owedAt <= t) owedAt = t + DEPOSIT_RETRY;
+      },
+    );
+  }
+
+  /** What the ticket counter shows: the wallet plus what is on its way to it. */
+  const ticketTarget = () => (mode === "guest" ? trialTickets : (wallet ?? 0) + pendingDeposit + owed);
+
+  // ---------------------------------------------------------------- allowance and the leaderboard
+
+  async function claimAllowance() {
+    const al = allowance;
+    if (!al || claiming || mode !== "account") return;
+    claiming = true;
+    claimAt = Date.now() + CLAIM_GAP;
+    const mine = gen;
+    try {
+      const { grants, nextDailyAt: next } = await al.claim();
+      if (mine !== gen) return;
+      nextDailyAt = next;
+      claimAt = Math.max(next + CLAIM_SLACK, Date.now() + CLAIM_GAP);
+      let got = false;
+      for (const g of grants) {
+        if (g.kind !== "coins") continue;
+        const added = grantCoins(s, g.amount);
+        if (added <= 0) continue;
+        got = true;
+        say(g.type === "welcome" ? tr().welcomeGrant(added) : tr().dailyGrant(added), CYAN, true);
+      }
+      if (got) {
+        bumpCoins = 1;
+        audio.tone({ freq: 880, dur: 0.1, type: "triangle", vol: 0.05 });
+        // The server never sends these again: on the account (and the backup) now
+        saveNow();
+      }
+    } catch (e) {
+      if (mine === gen && signedOutError(e)) becomeGuest();
+    } finally {
+      claiming = false;
+    }
+  }
+
+  const detailOf = () => tr().detail(s.lifetimeTickets, s.supers);
+
+  function writeSummary() {
+    const n = s.lifetimeTickets;
+    if (n > 0) storage.set(SUMMARY_KEY, { vi: STRINGS.vi.summary(n), en: STRINGS.en.summary(n) });
+  }
+
+  /** Out of coins and settled: file the leaderboard (signed in), save, and show the panel soon. */
+  function onIdle() {
+    writeSummary();
+    if (mode === "account" && s.lifetimeTickets > lastFiled) {
+      lastFiled = s.lifetimeTickets;
+      reportScore?.({ score: s.lifetimeTickets, detail: detailOf() });
+    }
+    saveNow();
+  }
+
+  /** On suspend, at most once a session: file a grown total with the save (the server scores it). */
+  function fileOnSuspend() {
+    if (mode !== "account" || extraFiled || s.lifetimeTickets <= lastFiled) return;
+    extraFiled = true;
+    lastFiled = s.lifetimeTickets;
+    scoreNext = { score: s.lifetimeTickets, detail: detailOf() };
   }
 
   // ---------------------------------------------------------------- overlay buttons
 
+  type Btn = { rect: Rect; id: ButtonId };
+  /** A line of card text; `dot` marks the first line of a bullet (its colour index). */
+  type Line = { str: string; y: number; size: number; color: string; dot?: number; center?: boolean };
   const PANEL: Rect = { x: 40, y: 236, w: 460, h: 428 };
-  const startButtons = (): { rect: Rect; id: ButtonId }[] => {
-    const list: { rect: Rect; id: ButtonId }[] = [{ rect: { x: 100, y: 500, w: 340, h: 66 }, id: "go" }];
-    if (resumable) list.push({ rect: { x: 100, y: 578, w: 164, h: 56 }, id: "new" }, { rect: { x: 276, y: 578, w: 164, h: 56 }, id: "rules" });
-    else list.push({ rect: { x: 140, y: 578, w: 260, h: 56 }, id: "rules" });
-    return list;
-  };
-  const pauseButtons = (): { rect: Rect; id: ButtonId }[] => [
+  const startButtons = (): Btn[] => [
+    { rect: { x: 100, y: 500, w: 340, h: 66 }, id: "go" },
+    { rect: { x: 140, y: 578, w: 260, h: 56 }, id: "rules" },
+  ];
+  const pauseButtons = (): Btn[] => [
     { rect: { x: 100, y: 390, w: 340, h: 66 }, id: "go" },
-    { rect: { x: 100, y: 470, w: 164, h: 56 }, id: "rules" },
-    { rect: { x: 276, y: 470, w: 164, h: 56 }, id: "new" },
+    { rect: { x: 100, y: 470, w: 340, h: 56 }, id: "rules" },
     ...(coupons ? [{ rect: { x: 100, y: 538, w: 340, h: 56 }, id: "code" as const }] : []),
   ];
   const RULE_LINE = 28;
@@ -638,19 +1129,95 @@ export function setup(rt: Runtime): GameHooks {
     const r = rulesRect();
     return { x: 150, y: r.y + r.h - 84, w: 240, h: 60 };
   };
-  const AGAIN: Rect = { x: 110, y: 600, w: 320, h: 66 };
 
-  function press(id: ButtonId, from: "start" | "pause") {
+  /** The What's new card: the version's lines, and the note about a dropped beta run. */
+  function newsCard() {
+    const l = tr();
+    const lines: Line[] = [];
+    let y = 104;
+    for (const [n, line] of l.newsLines.entries()) {
+      for (const [i, ln] of wrap(ctx, line, 400, 19).entries()) {
+        lines.push({ str: ln, y, size: 19, color: CREAM, dot: i === 0 ? n : undefined });
+        y += RULE_LINE;
+      }
+      y += RULE_GAP;
+    }
+    if (legacyDropped) {
+      for (const ln of wrap(ctx, l.legacyNote, 420, 17)) {
+        lines.push({ str: ln, y, size: 17, color: HONEY, center: true });
+        y += 24;
+      }
+      y += 10;
+    }
+    const h = y + 92;
+    const r: Rect = { x: 24, y: H / 2 - h / 2, w: 492, h };
+    for (const ln of lines) ln.y += r.y;
+    const close: Rect = { x: 150, y: r.y + h - 84, w: 240, h: 60 };
+    return { r, lines, close };
+  }
+
+  /** The out-of-coins card: what happened, when coins come back, and what to do meanwhile. */
+  function dryCard() {
+    const l = tr();
+    const lines: Line[] = [];
+    let y = 100;
+    for (const ln of wrap(ctx, l.dryKept, 400, 19)) {
+      lines.push({ str: ln, y, size: 19, color: CREAM });
+      y += 26;
+    }
+    y += 6;
+    if (s.lifetimeTickets > 0) {
+      lines.push({ str: l.lifetimeLine(s.lifetimeTickets), y, size: 20, color: HONEY });
+      y += 32;
+    }
+    /** Where the countdown goes (it changes every second, so it is drawn on its own). */
+    let countdownY = -1;
+    if (mode === "account") {
+      countdownY = y + 4;
+      y += 44;
+    } else {
+      y += 4;
+      for (const ln of wrap(ctx, l.guestNudge(WELCOME_COINS, DAILY_COINS), 400, 18)) {
+        lines.push({ str: ln, y, size: 18, color: CYAN });
+        y += 25;
+      }
+      y += 12;
+    }
+    const buttons: Btn[] = [];
+    if (coupons) {
+      buttons.push({ rect: { x: 100, y, w: 340, h: 62 }, id: "code" });
+      y += 74;
+    }
+    buttons.push({ rect: { x: 140, y, w: 260, h: 54 }, id: "view" });
+    y += 54 + 30;
+    const r: Rect = { x: 40, y: H / 2 - y / 2, w: 460, h: y };
+    for (const ln of lines) ln.y += r.y;
+    for (const b of buttons) b.rect = { ...b.rect, y: b.rect.y + r.y };
+    return { r, lines, buttons, countdownY: countdownY < 0 ? -1 : countdownY + r.y };
+  }
+
+  /** The account machine on its way (or not). */
+  const LOADING: Rect = { x: 60, y: 350, w: 420, h: 250 };
+  const RETRY: Rect = { x: 140, y: 510, w: 260, h: 58 };
+
+  function press(id: ButtonId, from: "start" | "pause" | "dry") {
     audio.tone({ freq: 660, dur: 0.06, type: "square", vol: 0.04 });
-    if (id === "go") {
-      claimPending();
+    if (id === "go") overlay = null;
+    else if (id === "code") coupons?.open();
+    else if (id === "view") {
+      dryClosed = true;
       overlay = null;
-    } else if (id === "code") coupons?.open();
-    else if (id === "new") newRun();
-    else {
+    } else if (id === "retry") void loadAccount();
+    else if (from !== "dry") {
       rulesFrom = from;
       overlay = "rules";
     }
+  }
+
+  function closeNews() {
+    storage.set(SEEN_KEY, version);
+    legacyDropped = false;
+    overlay = "start";
   }
 
   function onSpace(down: boolean) {
@@ -662,12 +1229,9 @@ export function setup(rt: Runtime): GameHooks {
 
   function step(dt: number) {
     t += dt;
-    // A resumed run waits behind the menu; a fresh one idles there (wheel and pusher moving)
-    const frozen =
-      overlay === "pause" ||
-      overlay === "album" ||
-      (overlay === "rules" && rulesFrom === "pause") ||
-      (overlay !== null && overlay !== "over" && resumable);
+    const ready = mode === "account" || mode === "guest";
+    // The machine waits behind the menus; out of coins it keeps running behind its panel
+    const frozen = !ready || (overlay !== null && overlay !== "dry");
     if (!frozen) {
       const live = overlay === null;
       const shoot = live && (pointersHeld.size > 0 || spaceHeld || tap || (autoOn && s.coins > 0));
@@ -675,25 +1239,31 @@ export function setup(rt: Runtime): GameHooks {
       // A tap is spent once the machine has answered it (a shot, or the dry click)
       if (evs.some((e) => e.type === "shoot" || e.type === "dry")) tap = false;
       for (const e of evs) onEvent(e);
-      if (evs.some((e) => e.type === "card" || e.type === "setComplete")) storeAlbum();
-      if (autoOn && (s.coins <= 0 || s.over || !live)) autoOn = false;
-      const seg = segmentAt(s.wheel);
-      if (seg !== lastSeg) {
-        lastSeg = seg;
-        if (live) sfx.tick();
-      }
-      if (live) {
-        saveT += dt;
-        if (saveT > SAVE_EVERY) {
-          saveT = 0;
-          save();
-        }
-      }
+      if (evs.length > 0) markDirty();
+      payOut();
+      if (autoOn && (s.coins <= 0 || !live)) autoOn = false;
     }
-    if (s.over && overlay === null && overAt >= 0 && t - overAt > 1.1) overlay = "over";
+    if (ready) {
+      // Out of coins and at rest: the panel, a beat after the last coin settles
+      idleFor = s.idle ? idleFor + dt : 0;
+      if (!s.idle) dryClosed = false;
+      if (overlay === null && s.idle && idleFor > 1.1 && !dryClosed) overlay = "dry";
+      if (overlay === "dry" && s.coins > 0) overlay = null;
+      if (dirtyAt >= 0 && t - dirtyAt >= SAVE_DEBOUNCE) {
+        if (mode === "guest") saveNow();
+        else if (!saving && t >= retryAt) void flush();
+      }
+      if (mode === "account" && owed > 0 && t >= owedAt) {
+        const n = owed;
+        owed = 0;
+        deposit(n);
+      }
+      // The daily coins: at start, then each Vietnam midnight while the game stays open
+      if (mode === "account" && !claiming && Date.now() >= claimAt) void claimAllowance();
+    }
 
     // Lights and counters
-    const busyReels = s.spin !== null;
+    const busyReels = s.spin !== null || s.prize !== null;
     chase += dt * (superFx > 0 || setFx > 0 ? 24 : busyReels ? 14 : 5);
     shake = Math.max(0, shake - dt);
     cheer = Math.max(0, cheer - dt);
@@ -704,13 +1274,16 @@ export function setup(rt: Runtime): GameHooks {
     bumpCoins = Math.max(0, bumpCoins - dt * 4);
     bumpTickets = Math.max(0, bumpTickets - dt * 4);
     for (let i = 0; i < lampPulse.length; i++) lampPulse[i] = Math.max(0, lampPulse[i] - dt * 1.5);
-    if (hit) {
-      hit.t += dt;
-      if (hit.t > 0.6) hit = null;
-    }
-    if (toast) {
+    gateFlash = Math.max(0, gateFlash - dt * 2.5);
+    for (const k of sinks) k.t += dt;
+    sinks = sinks.filter((k) => k.t < SINK);
+    // A toast waits behind a panel (a welcome grant lands while the start card shows)
+    if (toast && overlay === null && (mode === "account" || mode === "guest")) {
       toast.t += dt;
-      if (toast.t > 1.6) toast = null;
+      if (toast.t > 1.6) {
+        const next = toasts.shift();
+        toast = next ? { ...next, t: 0 } : null;
+      }
     }
     const roll = (shown: number, real: number) => {
       const d = real - shown;
@@ -718,11 +1291,23 @@ export function setup(rt: Runtime): GameHooks {
       return shown + Math.sign(d) * Math.max(dt * 30, Math.abs(d) * dt * 6);
     };
     shownCoins = roll(shownCoins, s.coins);
-    shownTickets = roll(shownTickets, s.tickets);
+    shownTickets = roll(shownTickets, ticketTarget());
     for (const [id, k] of landed) {
       if (k > 0.2) landed.delete(id);
       else landed.set(id, k + dt);
     }
+
+    // The prize light: fast at first, braking onto the picked slot (a resumed run may come back mid-spin)
+    if (s.prize && !light) aimLight(s.prize.seg);
+    if (s.prize && light) {
+      const k = clamp(s.prize.t / PRIZE_SPIN_TIME, 0, 1);
+      lightPos = light.from + (light.to - light.from) * (1 - (1 - k) ** 3);
+      const cell = Math.floor(lightPos);
+      if (cell !== lastLightCell) {
+        lastLightCell = cell;
+        if (k < 1) sfx.tick();
+      }
+    } else light = null;
 
     // The spin reel (a resumed run may come back mid-spin)
     if (s.spin && !reel) aimReel(s.spin.kind, s.spin.idx);
@@ -760,54 +1345,64 @@ export function setup(rt: Runtime): GameHooks {
     for (const f of s.flights) {
       if (f.t < 0) continue;
       if (f.phase === "up") {
+        // Up the chute, then a short hop out of its mouth onto the gate where it will land
+        const land = { x: GATE.x + f.aim, y: GATE.y - 10 };
+        const hop = Math.hypot(land.x - mouth.x, land.y - mouth.y);
         const k = f.t / FLIGHT_UP;
-        const p = along(CHUTE, k);
-        const q = along(CHUTE, k - 0.05);
-        ctx.save();
-        ctx.strokeStyle = "rgba(255,220,120,0.6)";
-        ctx.lineWidth = 6;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(q.x, q.y);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-        ctx.restore();
-        drawFlyingCoin(ctx, sp, p.x, p.y, 22, f.t * 30);
+        const k1 = chuteLen / (chuteLen + hop);
+        if (k < k1) {
+          const p = along(CHUTE, k / k1);
+          const q = along(CHUTE, (k - 0.05) / k1);
+          ctx.save();
+          ctx.strokeStyle = "rgba(234,184,93,0.7)";
+          ctx.lineWidth = 6;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(q.x, q.y);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+          ctx.restore();
+          drawFlyingCoin(ctx, sp, p.x, p.y, 22, f.t * 30);
+        } else {
+          const u = clamp((k - k1) / (1 - k1), 0, 1);
+          const x = lerpN(mouth.x, land.x, u);
+          const y = lerpN(mouth.y, land.y, u) - Math.sin(u * Math.PI) * 24;
+          drawFlyingCoin(ctx, sp, x, y, 22 - 4 * u, f.t * 30);
+        }
         continue;
       }
       const k = clamp(f.t / FLIGHT_DOWN, 0, 1);
       const end = proj(f.x, py + 16);
       if (f.kind === "core") {
-        const y = lerpN(330, end.y, k * k);
-        const img = sp.cores[f.core];
-        const w = 48 * end.s;
-        ctx.save();
-        ctx.shadowColor = CORE_COLORS[f.core];
-        ctx.shadowBlur = 20;
-        ctx.drawImage(img, end.x - w / 2, y - w * 1.1, w, w * (img.height / img.width));
-        ctx.restore();
+        const y = lerpN(GATE.y, end.y, k * k);
+        drawOrb(ctx, sp, f.core, end.x, y, 44 * end.s);
         continue;
       }
       if (f.kind === "card") {
-        // Flutters down, flipping, to where it will land
-        const y = lerpN(330, end.y, k * k);
+        // Flutters down face down, flipping, to where it will land (its cat shows when it is pushed off)
+        const y = lerpN(GATE.y, end.y, k * k);
         const w = 40 * end.s;
+        const h = cardBackH(w);
         ctx.save();
         ctx.translate(end.x, y - w * 0.6);
         ctx.rotate(Math.sin(f.t * 9) * 0.25);
         ctx.scale(Math.max(0.2, Math.abs(Math.cos(f.t * 7))), 1);
-        ctx.shadowColor = PINK;
-        ctx.shadowBlur = 18;
-        drawCardFace(ctx, sp.cards[f.card] ?? null, -w / 2, (-w * 2) / 3, w, (w * 4) / 3, true);
+        drawCardBack(ctx, sp, -w / 2, -h / 2, w, h);
         ctx.restore();
         continue;
       }
-      const from = pointerTip;
+      // A coin bounces off the gate (or pours out of it, for a prize) and falls to the shelf
+      const from = { x: GATE.x + f.aim, y: GATE.y - 8 };
       const cx = (from.x + end.x) / 2;
       const cy = Math.min(from.y, end.y) - 60;
       const x = (1 - k) * (1 - k) * from.x + 2 * (1 - k) * k * cx + k * k * end.x;
       const y = (1 - k) * (1 - k) * from.y + 2 * (1 - k) * k * cy + k * k * end.y;
-      drawFlyingCoin(ctx, sp, x, y, lerpN(20, 30 * end.s, k), f.t * 22);
+      drawFlyingCoin(ctx, sp, x, y, lerpN(18, 30 * end.s, k), f.t * 22);
+    }
+    // Coins dropping into the hole: shrink and sink
+    for (const k of sinks) {
+      const q = k.t / SINK;
+      drawFlyingCoin(ctx, sp, k.x, GATE.y - 8 + q * 8, 18 * (1 - q * 0.8), 0);
     }
   }
 
@@ -822,10 +1417,8 @@ export function setup(rt: Runtime): GameHooks {
         const y = p.y + 200 * k + 900 * k * k;
         if (f.t < 0.35) {
           ctx.globalAlpha = 1 - k / 0.5;
-          if (f.kind === "core") {
-            const img = sp.cores[f.core];
-            ctx.drawImage(img, x - 26, y - 40, 52, 52 * (img.height / img.width));
-          } else for (let i = 0; i < f.stack; i++) drawFlyingCoin(ctx, sp, x + i * 8, y - i * 6, 30, f.t * 20 + i);
+          if (f.kind === "core") drawOrb(ctx, sp, f.core, x, y + 12, 48);
+          else for (let i = 0; i < f.stack; i++) drawFlyingCoin(ctx, sp, x + i * 8, y - i * 6, 30, f.t * 20 + i);
           ctx.globalAlpha = 1;
         } else if (f.kind === "coin") {
           // Back to the coin counter
@@ -842,14 +1435,12 @@ export function setup(rt: Runtime): GameHooks {
         const x = p.x + dir * 90 * f.t;
         const y = p.y + 500 * f.t * f.t;
         ctx.globalAlpha = Math.max(0, 1 - f.t / 0.55);
-        if (f.kind === "core") {
-          const img = sp.cores[f.core];
-          ctx.drawImage(img, x - 22, y - 34, 44, 44 * (img.height / img.width));
-        } else if (f.kind === "card") {
+        if (f.kind === "core") drawOrb(ctx, sp, f.core, x, y + 10, 40);
+        else if (f.kind === "card") {
           ctx.save();
           ctx.translate(x, y);
           ctx.rotate(dir * f.t * 6);
-          drawCardFace(ctx, sp.cards[f.card] ?? null, -16, -21, 32, 43, true);
+          drawCardBack(ctx, sp, -16, -cardBackH(32) / 2, 32, cardBackH(32));
           ctx.restore();
         } else drawFlyingCoin(ctx, sp, x, y, 26 * p.s, 1.2 + f.t * 8);
         ctx.globalAlpha = 1;
@@ -861,41 +1452,28 @@ export function setup(rt: Runtime): GameHooks {
     const l = tr();
     const v = view();
     const rainbow = superFx > 0 || setFx > 0 || s.spin?.kind === "super";
-    drawBackground(ctx, sp, v, t);
-    drawCabinet(ctx, v, t, chase, rainbow);
-    // Title on the cabinet's crown when the phone is tall enough to show it
-    if (v.y < -50) neon(ctx, l.title, W / 2, v.y / 2, fitSize(ctx, l.title, 40, 380), NEON, 1);
+    drawCabinet(ctx, sp, v);
+    // Title above the cabinet when the phone is tall enough to show it
+    if (v.y < -50) headline(ctx, l.title, W / 2, v.y / 2, fitSize(ctx, l.title, 40, 380), CREAM);
     drawMarquee(ctx, l.marquee(Math.max(...SUPER_PRIZES)), t, rainbow);
-    // Menu button
-    ctx.save();
-    ctx.fillStyle = "rgba(10,8,32,0.85)";
-    ctx.strokeStyle = "rgba(79,243,255,0.7)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(MENU_BTN.x, MENU_BTN.y, MENU_BTN.w, MENU_BTN.h, 14);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    for (let i = 0; i < 3; i++) ctx.fillRect(MENU_BTN.x + 27, MENU_BTN.y + 12 + i * 6, 24, 3);
-    text(ctx, l.menu, MENU_BTN.x + MENU_BTN.w / 2, MENU_BTN.y + 41, 14, "#ffffff", "center", null);
-    ctx.restore();
-    drawAlbumButton(ctx, ALBUM_BTN, l.album, ownedCount(s.album), CARD_COUNT, albumPulse);
-    betaTag(ctx, 488, 86, l.beta);
+    drawMenuButton(ctx, MENU_BTN, l.menu);
+    drawAlbumButton(ctx, sp, ALBUM_BTN, l.album, ownedCount(s.album), CARD_COUNT, albumPulse);
+    versionTag(ctx, 493, 76, l.versionLabel(version));
     drawCoreLamps(ctx, sp, s.cores, CORE_COUNT, t, superFx > 0, lampPulse);
-    drawRobots(ctx, robotsReady(), t, cheer);
-    drawWheel(ctx, sp, s.wheel, t, chase, hit);
+    drawRobots(ctx, sp, t, cheer);
+    drawWheel(ctx, sp, s.wheel, t, chase, wheelLight());
+    drawGate(ctx, sp, holeAt(s.gate), s.stock, gateFlash, s.stock >= PRIZE_QUEUE_MAX, t);
     drawGlass(ctx, { x: 120, y: 112, w: 300, h: 300 }, t);
 
     // Reels and the spins counter
     const spinning = s.spin !== null;
     const reelLabel = !s.spin ? l.youWin : s.spin.kind === "super" ? "SUPER" : "MINI";
-    drawReels(ctx, reelLabel, cellsOf(reelKind), reelPos, spinning, !!s.spin?.paid, t, s.spin?.kind === "super");
-    drawCounter(ctx, SPINS_BOX, l.spins, s.queue.length, PINK, 2, 0);
+    drawReels(ctx, sp, reelLabel, cellsOf(reelKind), reelPos, spinning, !!s.spin?.paid, t, s.spin?.kind === "super");
+    drawCounter(ctx, SPINS_BOX, l.spins, s.queue.length, VIOLET, 2, 0);
 
     // The shelf
-    drawShelf(ctx, t);
-    const py = pusherAt(s.pusherT).y;
-    drawPusher(ctx, py, t, rainbow);
+    drawShelf(ctx, sp);
+    drawPusher(ctx, sp, pusherAt(s.pusherT).y);
     const order = [...s.bodies].sort((a, b) => a.y - b.y || a.id - b.id);
     for (const b of order) drawShadow(ctx, b);
     for (const b of order) {
@@ -909,14 +1487,14 @@ export function setup(rt: Runtime): GameHooks {
     drawFlights();
 
     // Controls
-    drawCounter(ctx, COINS_BOX, l.coins, shownCoins, MINT, 4, bumpCoins);
-    drawCounter(ctx, TICKETS_BOX, l.tickets, shownTickets, AMBER, 5, bumpTickets);
+    drawCounter(ctx, COINS_BOX, l.coins, shownCoins, CYAN, 4, bumpCoins);
+    drawCounter(ctx, TICKETS_BOX, mode === "guest" ? l.trialTickets : l.tickets, shownTickets, HONEY, 6, bumpTickets);
     const pressed = pointersHeld.size > 0 || spaceHeld;
-    drawShootButton(ctx, l.shoot, pressed, t, s.coins > 0 && !s.over);
-    drawAutoButton(ctx, AUTO_BTN, l.auto, autoOn ? l.on : l.off, autoOn, s.coins > 0 && !s.over);
+    drawShootButton(ctx, sp, l.shoot, pressed, t, s.coins > 0);
+    drawAutoButton(ctx, AUTO_BTN, l.auto, autoOn ? l.on : l.off, autoOn, s.coins > 0);
     drawTray(ctx, sp, shownCoins, view());
-    if (s.shots < 6 && overlay === null)
-      text(ctx, l.holdHint, W / 2, SHELF_BOTTOM + 38, 15, "#cfd6ff", "center", INK);
+    if (s.shots < 8 && overlay === null)
+      text(ctx, l.aimHint, W / 2, SHELF_BOTTOM + 15, fitSize(ctx, l.aimHint, 16, 420), CREAM);
   }
 
   function drawFx() {
@@ -937,12 +1515,12 @@ export function setup(rt: Runtime): GameHooks {
       const k = toast.t;
       const a = k < 0.15 ? k / 0.15 : k > 1.3 ? 1 - (k - 1.3) / 0.3 : 1;
       ctx.globalAlpha = a;
-      ctx.fillStyle = "rgba(8,6,28,0.82)";
+      ctx.fillStyle = "rgba(51,38,33,0.92)";
       ctx.beginPath();
       ctx.roundRect(W / 2 - 150, TOAST_Y - 22, 300, 44, 22);
       ctx.fill();
       ctx.strokeStyle = toast.color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.stroke();
       text(ctx, toast.text, W / 2, TOAST_Y + 1, fitSize(ctx, toast.text, 26, 280), toast.color);
       ctx.globalAlpha = 1;
@@ -959,7 +1537,7 @@ export function setup(rt: Runtime): GameHooks {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate((1 - q) * 0.2 - 0.12 * q);
-      ctx.shadowColor = PINK;
+      ctx.shadowColor = VIOLET;
       ctx.shadowBlur = 20;
       drawCardFace(ctx, sp.cards[c.card] ?? null, -w / 2, (-w * 2) / 3, w, (w * 4) / 3, true);
       ctx.restore();
@@ -972,16 +1550,16 @@ export function setup(rt: Runtime): GameHooks {
       const fade = superFx < 0.4 ? superFx / 0.4 : 1;
       ctx.save();
       ctx.globalAlpha = fade;
-      ctx.fillStyle = "rgba(10,4,30,0.72)";
+      ctx.fillStyle = "rgba(51,38,33,0.78)";
       ctx.fillRect(0, WHEEL_C.y - 78, W, 156);
       ctx.translate(W / 2, WHEEL_C.y - 18);
       ctx.scale(pop, pop);
       ctx.rotate(Math.sin(t * 6) * 0.03);
-      neon(ctx, l.superSpin, 0, 0, fitSize(ctx, l.superSpin, 62, 480), CORE_COLORS[Math.floor(t * 10) % 6], 1.8);
+      headline(ctx, l.superSpin, 0, 0, fitSize(ctx, l.superSpin, 62, 480), CORE_COLORS[Math.floor(t * 10) % 6]);
       ctx.restore();
       ctx.save();
       ctx.globalAlpha = fade;
-      neon(ctx, `+${superWon} ${l.tickets}`, W / 2, WHEEL_C.y + 44, 40, GOLD, 1.4);
+      headline(ctx, `+${superWon} ${l.tickets}`, W / 2, WHEEL_C.y + 44, 40, HONEY);
       ctx.restore();
       if (Math.random() < 0.5) burst(Math.random() * W, WHEEL_C.y - 70, 3, CORE_COLORS, 160);
     }
@@ -995,7 +1573,7 @@ export function setup(rt: Runtime): GameHooks {
     const fade = setFx < 0.5 ? setFx / 0.5 : 1;
     ctx.save();
     ctx.globalAlpha = fade;
-    ctx.fillStyle = "rgba(10,4,30,0.8)";
+    ctx.fillStyle = "rgba(51,38,33,0.84)";
     ctx.fillRect(0, WHEEL_C.y - 150, W, 330);
     for (let i = 0; i < CARD_COUNT; i++) {
       const a = (i - (CARD_COUNT - 1) / 2) * 0.13 * grow;
@@ -1011,13 +1589,13 @@ export function setup(rt: Runtime): GameHooks {
     ctx.translate(W / 2, WHEEL_C.y + 70);
     ctx.scale(grow, grow);
     ctx.rotate(Math.sin(t * 6) * 0.03);
-    neon(ctx, l.setDone, 0, 0, fitSize(ctx, l.setDone, 52, 480), PINK, 1.8);
+    headline(ctx, l.setDone, 0, 0, fitSize(ctx, l.setDone, 52, 480), VIOLET);
     ctx.restore();
     ctx.save();
     ctx.globalAlpha = fade;
-    neon(ctx, l.setBonus(SET_TICKETS), W / 2, WHEEL_C.y + 128, 40, GOLD, 1.4);
+    headline(ctx, l.setBonus(SET_TICKETS), W / 2, WHEEL_C.y + 128, 40, HONEY);
     ctx.restore();
-    if (Math.random() < 0.5) burst(Math.random() * W, WHEEL_C.y - 120, 3, [PINK, GOLD, NEON, MINT], 160);
+    if (Math.random() < 0.5) burst(Math.random() * W, WHEEL_C.y - 120, 3, [VIOLET, HONEY, CYAN, TERRA], 160);
   }
 
   // The album card: a 5×2 grid of cards with their names
@@ -1029,8 +1607,8 @@ export function setup(rt: Runtime): GameHooks {
     const l = tr();
     const r = ALBUM;
     panel(ctx, r, 24);
-    neon(ctx, l.albumTitle, W / 2, r.y + 46, fitSize(ctx, l.albumTitle, 36, r.w - 60), PINK);
-    text(ctx, l.albumNote(CARD_TICKETS, SET_TICKETS), W / 2, r.y + 86, fitSize(ctx, l.albumNote(CARD_TICKETS, SET_TICKETS), 18, r.w - 40), "#d6dcff", "center", null);
+    headline(ctx, l.albumTitle, W / 2, r.y + 46, fitSize(ctx, l.albumTitle, 36, r.w - 60), VIOLET);
+    text(ctx, l.albumNote(CARD_TICKETS, SET_TICKETS), W / 2, r.y + 86, fitSize(ctx, l.albumNote(CARD_TICKETS, SET_TICKETS), 18, r.w - 40), CREAM, "center", null);
     const x0 = W / 2 - (5 * ALBUM_CARD.w + 4 * ALBUM_CARD.gap) / 2;
     for (let i = 0; i < CARD_COUNT; i++) {
       const col = i % 5;
@@ -1047,75 +1625,99 @@ export function setup(rt: Runtime): GameHooks {
       ctx.restore();
       const lines = wrap(ctx, l.cards[CARD_IDS[i]], ALBUM_CARD.w + 6, 13).slice(0, 2);
       for (const [j, ln] of lines.entries())
-        text(ctx, ln, x + ALBUM_CARD.w / 2, y + ALBUM_CARD.h + 13 + j * 15, 13, owned ? "#ffffff" : "#7d7aa8", "center", null);
+        text(ctx, ln, x + ALBUM_CARD.w / 2, y + ALBUM_CARD.h + 13 + j * 15, 13, owned ? CREAM : MUTED, "center", null);
     }
     const owned = ownedCount(s.album);
-    text(ctx, `${owned}/${CARD_COUNT}`, W / 2, r.y + 112 + 2 * ALBUM_CARD.row + 4, 26, owned > 0 ? GOLD : "#bfc6ff", "center", null, LED_FONT, 700);
-    button(ctx, albumClose(), l.close, ["#ff7eb6", "#c0306e"], 26);
+    text(ctx, `${owned}/${CARD_COUNT}`, W / 2, r.y + 112 + 2 * ALBUM_CARD.row + 4, 26, owned > 0 ? HONEY : MUTED, "center", null, LED_FONT, 700);
+    button(ctx, albumClose(), l.close, BTN_CARD, 26);
   }
 
   function drawOverlay() {
     const l = tr();
-    if (!overlay) return;
+    const loading = mode === "loading" || mode === "failed";
+    if (!overlay && !loading) return;
     const v = view();
-    ctx.fillStyle = "rgba(4,3,14,0.66)";
+    ctx.fillStyle = "rgba(40,29,25,0.62)";
     ctx.fillRect(v.x, v.y, v.w, v.h);
+    if (loading) {
+      panel(ctx, LOADING, 24);
+      headline(ctx, l.title, W / 2, LOADING.y + 52, fitSize(ctx, l.title, 40, LOADING.w - 60), HONEY);
+      if (mode === "loading") {
+        const dots = ".".repeat(1 + (Math.floor(t * 3) % 3));
+        text(ctx, l.loading.replace(/…$/, dots), W / 2, LOADING.y + 130, 22, CREAM, "center", null);
+      } else {
+        for (const [i, ln] of wrap(ctx, l.loadFailed, 360, 19).entries())
+          text(ctx, ln, W / 2, LOADING.y + 112 + i * 26, 19, CREAM, "center", null);
+        button(ctx, RETRY, l.retry, BTN_GO, 26);
+      }
+      return;
+    }
     if (overlay === "album") drawAlbum();
     else if (overlay === "start") {
       panel(ctx, PANEL, 26);
-      neon(ctx, l.title, W / 2, 300, fitSize(ctx, l.title, 58, 400), NEON, 1.3);
-      text(ctx, l.subtitle, W / 2, 352, 22, "#d6dcff", "center", null);
-      betaTag(ctx, W / 2, 392, l.beta);
-      text(ctx, l.betaNote(s.coins), W / 2, 424, 18, MINT, "center", null);
-      if (best.tickets > 0) text(ctx, l.best(best.tickets), W / 2, 460, 20, AMBER, "center", null);
+      headline(ctx, l.title, W / 2, 300, fitSize(ctx, l.title, 58, 400), HONEY);
+      text(ctx, l.subtitle, W / 2, 352, 22, CREAM, "center", null);
+      const note = mode === "guest" ? l.guestNote(TRIAL_COINS) : l.accountNote;
+      const lines = wrap(ctx, note, 400, 18).slice(0, 2);
+      for (const [i, ln] of lines.entries()) text(ctx, ln, W / 2, 396 + i * 24 - (lines.length - 1) * 12, 18, CYAN, "center", null);
+      if (s.lifetimeTickets > 0) text(ctx, l.lifetimeLine(s.lifetimeTickets), W / 2, 456, 20, HONEY, "center", null);
       for (const b of startButtons()) {
-        const label = b.id === "go" ? (resumable ? l.resume : l.start) : b.id === "new" ? l.newRun : l.rules;
-        button(ctx, b.rect, label, b.id === "go" ? ["#ffb03a", "#e0560e"] : ["#3a8bff", "#2340b0"], b.id === "go" ? 30 : 22);
+        const label = b.id === "go" ? (s.shots > 0 ? l.resume : l.start) : l.rules;
+        button(ctx, b.rect, label, b.id === "go" ? BTN_GO : BTN_ALT, b.id === "go" ? 30 : 22);
       }
     } else if (overlay === "pause") {
       panel(ctx, { x: 60, y: 290, w: 420, h: coupons ? 322 : 270 }, 24);
-      neon(ctx, l.paused, W / 2, 344, 40, NEON);
+      headline(ctx, l.paused, W / 2, 344, 40, CREAM);
       for (const b of pauseButtons()) {
-        const label = b.id === "go" ? l.resume : b.id === "new" ? l.newRun : b.id === "code" ? l.enterCode : l.rules;
-        button(ctx, b.rect, label, b.id === "go" ? ["#ffb03a", "#e0560e"] : ["#3a8bff", "#2340b0"], b.id === "go" ? 28 : 20);
+        const label = b.id === "go" ? l.resume : b.id === "code" ? l.enterCode : l.rules;
+        button(ctx, b.rect, label, b.id === "go" ? BTN_GO : BTN_ALT, b.id === "go" ? 28 : 20);
       }
     } else if (overlay === "rules") {
       const r = rulesRect();
       panel(ctx, r, 24);
-      neon(ctx, l.rules, W / 2, r.y + 50, 38, NEON);
+      headline(ctx, l.rules, W / 2, r.y + 50, 38, CREAM);
       let y = r.y + 106;
       l.rulesLines.forEach((line, i) => {
-        ctx.fillStyle = [NEON, GOLD, MINT, CORE_COLORS[i % 6], PINK, AMBER][i % 6];
-        ctx.beginPath();
-        ctx.arc(64, y + 1, 7, 0, Math.PI * 2);
-        ctx.fill();
+        bullet(i, y);
         for (const ln of wrap(ctx, line, 400, 19)) {
-          text(ctx, ln, 84, y, 19, "#eef0ff", "left", null);
+          text(ctx, ln, 84, y, 19, CREAM, "left", null);
           y += RULE_LINE;
         }
         y += RULE_GAP;
       });
-      button(ctx, rulesClose(), l.close, ["#ffb03a", "#e0560e"], 26);
-    } else if (overlay === "over") {
-      const r: Rect = { x: 50, y: 250, w: 440, h: 450 };
-      panel(ctx, r, 26);
-      neon(ctx, l.over, W / 2, 312, fitSize(ctx, l.over, 52, 400), PINK, 1.4);
-      text(ctx, l.totalTickets, W / 2, 374, 22, "#d6dcff", "center", null);
-      ctx.save();
-      ctx.font = `700 96px ${LED_FONT}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.shadowColor = AMBER;
-      ctx.shadowBlur = 24;
-      ctx.fillStyle = AMBER;
-      ctx.fillText(String(Math.round(shownTickets)), W / 2, 448);
-      ctx.restore();
-      text(ctx, l.supersLine(s.supers), W / 2, 510, 22, s.supers > 0 ? GOLD : "#bfc6ff", "center", null);
-      if (s.sets > 0) text(ctx, l.setsLine(s.sets), W / 2, 540, 20, PINK, "center", null);
-      if (newBest) neon(ctx, l.newBest, W / 2, 574, 28, MINT);
-      else text(ctx, l.best(best.tickets), W / 2, 574, 20, AMBER, "center", null);
-      button(ctx, AGAIN, l.again, ["#ffb03a", "#e0560e"], 30);
+      button(ctx, rulesClose(), l.close, BTN_GO, 26);
+    } else if (overlay === "news") {
+      const c = newsCard();
+      panel(ctx, c.r, 24);
+      const title = l.newsTitle(version);
+      headline(ctx, title, W / 2, c.r.y + 50, fitSize(ctx, title, 36, c.r.w - 50), VIOLET);
+      for (const ln of c.lines) {
+        if (ln.dot !== undefined) bullet(ln.dot, ln.y);
+        text(ctx, ln.str, ln.center ? W / 2 : 84, ln.y, ln.size, ln.color, ln.center ? "center" : "left", null);
+      }
+      button(ctx, c.close, l.close, BTN_CARD, 26);
+    } else if (overlay === "dry") {
+      const c = dryCard();
+      panel(ctx, c.r, 26);
+      headline(ctx, l.dryTitle, W / 2, c.r.y + 52, fitSize(ctx, l.dryTitle, 50, c.r.w - 50), TERRA);
+      for (const ln of c.lines) text(ctx, ln.str, W / 2, ln.y, ln.size, ln.color, "center", null);
+      if (c.countdownY >= 0) {
+        const left = nextDailyAt - Date.now();
+        const str = nextDailyAt > 0 && left > 0 ? l.dailyIn(DAILY_COINS, clock(left)) : l.dailyLater(DAILY_COINS);
+        text(ctx, str, W / 2, c.countdownY, fitSize(ctx, str, 24, c.r.w - 40), CYAN, "center", null);
+      }
+      for (const b of c.buttons) {
+        const go = b.id === "code";
+        button(ctx, b.rect, go ? l.enterCode : l.viewMachine, go ? BTN_GO : BTN_ALT, go ? 28 : 22);
+      }
     }
+  }
+
+  function bullet(i: number, y: number) {
+    ctx.fillStyle = [CYAN, HONEY, TEAL, CORE_COLORS[i % 6], TERRA, VIOLET][i % 6];
+    ctx.beginPath();
+    ctx.arc(64, y + 1, 7, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // ---------------------------------------------------------------- input
@@ -1131,7 +1733,21 @@ export function setup(rt: Runtime): GameHooks {
     overlay = "album";
   }
 
+  function pause() {
+    overlay = "pause";
+    saveNow();
+  }
+
   function down(p: PointerInfo) {
+    if (mode === "loading") return;
+    if (mode === "failed") {
+      if (inRect(p, RETRY)) press("retry", "start");
+      return;
+    }
+    if (overlay === "news") {
+      if (inRect(p, newsCard().close) || !inRect(p, newsCard().r)) closeNews();
+      return;
+    }
     if (overlay === "start") {
       for (const b of startButtons()) if (inRect(p, b.rect)) return press(b.id, "start");
       if (inRect(p, ALBUM_BTN)) openAlbum("start");
@@ -1139,6 +1755,10 @@ export function setup(rt: Runtime): GameHooks {
     }
     if (overlay === "pause") {
       for (const b of pauseButtons()) if (inRect(p, b.rect)) return press(b.id, "pause");
+      return;
+    }
+    if (overlay === "dry") {
+      for (const b of dryCard().buttons) if (inRect(p, b.rect)) return press(b.id, "dry");
       return;
     }
     if (overlay === "rules") {
@@ -1149,13 +1769,8 @@ export function setup(rt: Runtime): GameHooks {
       if (inRect(p, albumClose()) || !inRect(p, ALBUM)) overlay = albumFrom;
       return;
     }
-    if (overlay === "over") {
-      if (inRect(p, AGAIN)) newRun();
-      return;
-    }
     if (inRect(p, { x: MENU_BTN.x - 6, y: MENU_BTN.y - 6, w: MENU_BTN.w + 12, h: MENU_BTN.h + 12 })) {
-      overlay = "pause";
-      save();
+      pause();
       return;
     }
     if (inRect(p, { x: ALBUM_BTN.x - 6, y: ALBUM_BTN.y - 6, w: ALBUM_BTN.w + 12, h: ALBUM_BTN.h + 6 })) {
@@ -1169,30 +1784,34 @@ export function setup(rt: Runtime): GameHooks {
     }
     if (inRect(p, { x: AUTO_BTN.x - 8, y: AUTO_BTN.y - 8, w: AUTO_BTN.w + 16, h: AUTO_BTN.h + 16 })) {
       if (autoOn) autoOn = false;
-      else if (s.coins > 0 && !s.over) autoOn = true;
+      else if (s.coins > 0) autoOn = true;
       audio.tone({ freq: autoOn ? 740 : 520, dur: 0.05, type: "square", vol: 0.04 });
     }
   }
 
-  // Coupons: coins only, never tickets, never a score report. A run in play gets
-  // them at once; otherwise they wait in storage for the next run.
+  // Coupons: coins only, never tickets, never a score report. They go into the
+  // machine at once (and are saved at once: the code is already spent); one that
+  // arrives while the account machine is still loading waits in storage.
   const offGrant = coupons?.onGrant((grant) => {
     let coins = 0;
     for (const r of grant.rewards) if (r.kind === "coins" && r.amount > 0) coins += Math.floor(r.amount);
     if (coins <= 0) return;
-    const live = !s.over && s.shots > 0;
-    if (live) {
+    if (mode === "account" || mode === "guest") {
       grantCoins(s, coins);
-      save();
+      saveNow();
     } else {
       pendingCoins += coins;
       storage.set(PENDING_KEY, pendingCoins);
     }
     bumpCoins = 1;
     audio.tone({ freq: 880, dur: 0.1, type: "triangle", vol: 0.05 });
-    pop(tr().couponCoins(coins), COINS_BOX.x + COINS_BOX.w / 2, COINS_BOX.y + COINS_BOX.h + 30, MINT, 34);
-    say(tr().couponCoins(coins), MINT);
+    pop(tr().couponCoins(coins), COINS_BOX.x + COINS_BOX.w / 2, COINS_BOX.y + COINS_BOX.h + 30, CYAN, 34);
+    say(tr().couponCoins(coins), CYAN);
   });
+
+  // Start: the account machine loads (then claims the allowance); a guest's trial is ready now
+  if (mode === "loading") void loadAccount();
+  else applyPending();
 
   return {
     update: step,
@@ -1218,17 +1837,19 @@ export function setup(rt: Runtime): GameHooks {
     keydown(e) {
       if (e.code === "Space" || e.code === "Enter") {
         e.preventDefault();
-        if (e.repeat) return;
-        if (overlay === "start" || overlay === "pause") press("go", overlay);
-        else if (overlay === "over") newRun();
+        if (e.repeat || mode === "loading") return;
+        if (mode === "failed") press("retry", "start");
+        else if (overlay === "news") closeNews();
+        else if (overlay === "start" || overlay === "pause") press("go", overlay);
+        else if (overlay === "dry") press("view", "dry");
         else if (overlay === "rules") overlay = rulesFrom;
         else if (overlay === "album") overlay = albumFrom;
         else onSpace(true);
       } else if (e.code === "Escape") {
-        if (overlay === null) {
-          overlay = "pause";
-          save();
-        } else if (overlay === "pause") overlay = null;
+        if (overlay === null) pause();
+        else if (overlay === "pause") overlay = null;
+        else if (overlay === "dry") press("view", "dry");
+        else if (overlay === "news") closeNews();
         else if (overlay === "rules") overlay = rulesFrom;
         else if (overlay === "album") overlay = albumFrom;
       }
@@ -1242,11 +1863,18 @@ export function setup(rt: Runtime): GameHooks {
       spaceHeld = false;
       tap = false;
       if (overlay === null) overlay = "pause";
-      save();
+      fileOnSuspend();
+      writeSummary();
+      saveNow();
     },
     dispose() {
       offGrant?.();
-      save();
+      offBalance?.();
+      if (mode === "account" || mode === "guest") {
+        payOut();
+        saveNow();
+      }
+      disposed = true;
     },
   };
 }
