@@ -13,6 +13,7 @@ export const en: Messages = {
     label: "Main navigation",
     discover: "Discover",
     library: "Library",
+    arcade: "Arcade",
     coop: "Online co-op",
     online: "Online games",
     search: "Search",

@@ -2,6 +2,7 @@ import {
   CloudSavingDone01Icon,
   Download04Icon,
   FavouriteIcon,
+  Joystick02Icon,
   LibraryIcon,
   Store01Icon,
   UserGroupIcon,
@@ -45,13 +46,15 @@ export function Sidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const coopFilter = useRouterState({ select: (s) => (s.location.search as { coop?: unknown }).coop === 1 });
   const onlineFilter = useRouterState({ select: (s) => (s.location.search as { online?: unknown }).online === 1 });
+  const arcadeFilter = useRouterState({ select: (s) => (s.location.search as { category?: unknown }).category === "arcade" });
   // index.html is prerendered at "/", and hydration keeps its attributes, so the
   // active link is only decided after mount (a normal re-render patches it).
   const [mounted, setMounted] = useState(false);
   const discover = mounted && path === "/";
   const coop = mounted && path.startsWith("/library") && coopFilter && !onlineFilter;
   const online = mounted && path.startsWith("/library") && onlineFilter && !coopFilter;
-  const library = mounted && path.startsWith("/library") && !coopFilter && !onlineFilter;
+  const arcade = mounted && path.startsWith("/library") && arcadeFilter && !coopFilter && !onlineFilter;
+  const library = mounted && path.startsWith("/library") && !coopFilter && !onlineFilter && !arcadeFilter;
   const favorites = mounted && path.startsWith("/favorites");
   // Favourites live on the account: signed-in players only
   const signedIn = Boolean(useSession().data?.user);
@@ -79,6 +82,12 @@ export function Sidebar() {
           {library && <ActiveBar />}
           <HugeiconsIcon icon={LibraryIcon} className="size-5" />
           {m.nav.library}
+        </Link>
+        {/* The library, filtered to the arcade category (Xu Vũ Trụ, Xếp Tầng…) */}
+        <Link to="/library" search={{ category: "arcade" }} className={SIDEBAR_ITEM} data-active={arcade}>
+          {arcade && <ActiveBar />}
+          <HugeiconsIcon icon={Joystick02Icon} className="size-5" />
+          {m.nav.arcade}
         </Link>
         {/* The library, filtered to games you can play with friends */}
         <Link to="/library" search={{ coop: 1 }} className={SIDEBAR_ITEM} data-active={coop}>

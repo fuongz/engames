@@ -12,6 +12,7 @@ export const vi = {
     label: "Điều hướng chính",
     discover: "Khám phá",
     library: "Thư viện",
+    arcade: "Game thùng",
     coop: "Co-op online",
     online: "Chơi online",
     search: "Tìm kiếm",
