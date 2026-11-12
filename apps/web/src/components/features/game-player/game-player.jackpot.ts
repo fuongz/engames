@@ -1,10 +1,10 @@
 import type { GameJackpot } from "@web-games/core";
+import type { Locale } from "@web-games/core/i18n";
 import { catalogs } from "#/content/messages";
 import { MAX_CONTRIBUTION_COINS } from "#/lib/jackpot";
 import { contributeJackpotFn, rollJackpotFn } from "#/server/jackpot";
 import { getTicketBalanceFn } from "#/server/tickets";
 import { useJackpot } from "#/stores/jackpot";
-import { useLocaleStore } from "#/stores/locale";
 import { useTickets } from "#/stores/tickets";
 
 // Satellite of game-player.tsx: the `ctx.jackpot` it hands a Lucky Jar game
@@ -31,9 +31,10 @@ export interface JackpotBridge {
  * `state` and `onState` still work, `contribute` does nothing and `roll`
  * rejects. Contributions are coalesced: they gather for BATCH_MS and go out as
  * one request. The owner flushes on unmount and on `pagehide`; a roll flushes
- * first, so the pool it rolls against includes the coins just fed.
+ * first, so the pool it rolls against includes the coins just fed. `locale`
+ * reads the page's current language.
  */
-export function createJackpotBridge(slug: string, userId: string | null): JackpotBridge {
+export function createJackpotBridge(slug: string, userId: string | null, locale: () => Locale): JackpotBridge {
   let coins = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopWatch: (() => void) | undefined;
@@ -77,7 +78,7 @@ export function createJackpotBridge(slug: string, userId: string | null): Jackpo
       const store = useJackpot.getState();
       const s = store.state && Date.now() - store.loadedAt < FRESH_MS ? store.state : await store.refresh();
       if (!s) throw new Error("offline");
-      const someone = catalogs[useLocaleStore.getState().locale].jackpot.someone;
+      const someone = catalogs[locale()].jackpot.someone;
       return {
         pool: s.pool,
         cap: s.cap,

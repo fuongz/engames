@@ -37,7 +37,6 @@ import { EASE_OUT, FADE, RISE_BLUR, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
 import { claimAllowanceFn } from "#/server/allowance";
 import { deleteGameSave, listGameSaves, loadGameSave, storeGameSave } from "#/server/saves";
-import { useLocaleStore } from "#/stores/locale";
 import { usePlayStats } from "#/stores/play-stats";
 import { OnlineEntry } from "#/components/features/online/online-entry";
 import { OnlineSession } from "#/components/features/online/online-session";
@@ -80,6 +79,11 @@ export function GamePlayer({
   const ticketsRef = useRef<TicketQueue | null>(null);
   // …and its Lucky Jar bridge (contributions batch the same way)
   const jackpotRef = useRef<JackpotBridge | null>(null);
+  // Games and the jackpot bridge read the language live: a switch shows without a remount
+  const localeRef = useRef(locale);
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
   const [module, setModule] = useState<GameModule | null>(null);
   const [failed, setFailed] = useState(false);
   const [started, setStarted] = useState(false);
@@ -196,7 +200,7 @@ export function GamePlayer({
     const solo = userId && !match ? userId : null;
     ticketsRef.current = game.tickets && solo ? createTicketQueue(game.slug, solo) : null;
     // The jar is shared and public (its state works signed out), but never online
-    jackpotRef.current = game.jackpot && !match ? createJackpotBridge(game.slug, userId ?? null) : null;
+    jackpotRef.current = game.jackpot && !match ? createJackpotBridge(game.slug, userId ?? null, () => localeRef.current) : null;
     const cloud: CloudSave | undefined =
       (game.requiresAccount || game.accountSave) && userId
         ? {
@@ -236,7 +240,7 @@ export function GamePlayer({
       storage: createStorage(game.slug),
       audio: audioBus,
       // Read live: games redraw every frame, so a language switch shows at once
-      locale: () => useLocaleStore.getState().locale,
+      locale: () => localeRef.current,
       // Not in online matches: the room owns the state
       coupons:
         game.coupons && !match
