@@ -30,7 +30,9 @@ change. Ticket games also rank **this week's** earnings.
   and `earned_total` read `reason = 'earn'` rows only. The weekly board ranks
   **net** tickets: a game's earnings less what was spent on its own Prize
   Counter items. **Lucky Jar wins** (`reason = 'jackpot'`, see
-  [`jackpot.md`](jackpot.md)) add to the balance and nothing else.
+  [`jackpot.md`](jackpot.md)) and **daily check-ins** (`checkin`,
+  `checkin:milestone:<n>`, see [`checkin.md`](checkin.md)) add to the balance
+  and nothing else.
 - **The weekly board** (§5): a ticket game's leaderboard opens on "This week"
   (tickets earned since Monday 00:00 Vietnam time, minus tickets spent at that
   game's Prize Counter, floored at 0), with "All time" (the score board) one tab
@@ -51,6 +53,8 @@ change. Ticket games also rank **this week's** earnings.
 | `earn` | `depositTickets` (a game paid out) | **yes**: the daily cap, `earned_total`, the weekly board |
 | `shop:<slug>:<itemId>` | `buyItem` (a Prize Counter purchase, negative) | no, but **subtracted** from `<slug>`'s weekly board (§5) |
 | `jackpot` | `roll` (a Lucky Jar win, positive; `created_at` equals `jackpot_win.won_at`, see [`jackpot.md`](jackpot.md)) | no |
+| `checkin` | `claimCheckin` (the portal's daily check-in, positive; `game_id` is the reserved `portal` row, see [`checkin.md`](checkin.md)) | no |
+| `checkin:milestone:<n>` | `claimCheckin` (the one-time bonus at a 7, 30 or 100-day streak; at most one per player per `n`, ever) | no |
 | `adjust`, `refund:<ledger id>` | an admin, by hand (§3) | no |
 
 **The ledger is the record; the wallet is its running total.** For every player
@@ -62,7 +66,8 @@ the `earn` rows.
 `reason = 'earn'`, never on `delta > 0`, so a jackpot win, a refund or a positive
 `adjust` can never use up a player's cap or lift them on the weekly board.
 `weeklyTicketBoard` also reads the game's `shop:<slug>:%` rows, and only to
-subtract them. `tickets.test.ts` and `leaderboard.test.ts` hold that line. A new
+subtract them. `tickets.test.ts`, `leaderboard.test.ts` and `checkin.test.ts` hold
+that line. A new
 kind of credit gets its own reason and changes none of them.
 
 ### How a deposit is written
@@ -404,11 +409,15 @@ signed-in player. The board's caption says so: "Vé kiếm được trong tuần
 - **The floor is on the week.** Spending more than you earned puts the week at 0,
   and a player at 0 is off the board (and has no own rank) until this week's
   earnings pass this week's spends again. Last week's spends never carry over.
-- **Never counted:** Lucky Jar wins, `adjust` rows and `refund:` rows. So a
+- **Never counted:** Lucky Jar wins, check-ins, `adjust` rows and `refund:` rows. So a
   refunded purchase still comes off the board for the week it was bought in: a
   refund fixes the wallet, not the board.
 - The tie-break is the player's last **earning** this week (a spend never
   moves it).
 
-The week is the Vietnam week: `vnWeekStart` in `server/db/allowance.ts`, next to
-`vnDayStart`.
+The week is the Vietnam week: `vnWeekStart` in `apps/web/src/lib/checkin.ts`,
+next to `vnDayStart` (both re-exported by `server/db/allowance.ts`).
+
+Every row of both boards also carries the player's `userId` (null for an
+anonymous run) and `profilePublic`, so the UI can link a name to `/u/<userId>`
+when that profile is public ([`checkin.md`](checkin.md) §6).

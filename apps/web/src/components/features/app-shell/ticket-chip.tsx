@@ -1,8 +1,7 @@
-import { Ticket01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { games } from "@web-games/games";
 import { useEffect, useState } from "react";
 import { PrizeCounter } from "#/components/features/prize-counter/prize-counter";
+import { TicketIcon } from "#/components/shared/tickets/ticket-icon";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
 import { compactCount } from "#/lib/format";
@@ -48,7 +47,7 @@ export function TicketChip({ className }: { className?: string }) {
           className={cn(PILL, "justify-center px-2", className)}
           onClick={() => setOpen(true)}
         >
-          <HugeiconsIcon icon={Ticket01Icon} className="size-4 shrink-0 text-primary" aria-hidden />
+          <TicketIcon px={20} className="size-5" />
         </button>
         {counter}
       </>
@@ -63,10 +62,12 @@ export function TicketChip({ className }: { className?: string }) {
         aria-label={fmt(m.tickets.openShop, { balance: label })}
         title={label}
         aria-haspopup="dialog"
+        // Where check-in tickets fly to (features/profile/checkin-track)
+        data-ticket-chip=""
         className={cn(PILL, "px-3", className)}
         onClick={() => setOpen(true)}
       >
-        <HugeiconsIcon icon={Ticket01Icon} className="size-4 shrink-0 text-primary" aria-hidden />
+        <TicketIcon px={20} className="size-5" />
         {compactCount(balance, locale)}
       </button>
       {counter}

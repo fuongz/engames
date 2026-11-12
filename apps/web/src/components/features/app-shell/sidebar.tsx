@@ -6,6 +6,7 @@ import {
   LibraryIcon,
   NewReleasesIcon,
   Store01Icon,
+  UserCircleIcon,
   UserGroupIcon,
   VolumeHighIcon,
   VolumeOffIcon,
@@ -15,9 +16,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/core";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { AccountButton } from "#/components/shared/auth/account-button";
-import { LanguageMenu } from "#/components/shared/i18n/language-menu";
-import { TicketChip } from "#/components/shared/tickets/ticket-chip";
 import { useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
 import { INDICATOR_SPRING } from "#/lib/motion";
@@ -59,6 +57,7 @@ export function Sidebar() {
   const library = mounted && path.startsWith("/library") && !coopFilter && !onlineFilter && !arcadeFilter;
   const favorites = mounted && path.startsWith("/favorites");
   const changelog = mounted && path.startsWith("/changelog");
+  const profile = mounted && path.startsWith("/profile");
   // Favourites live on the account: signed-in players only
   const signedIn = Boolean(useSession().data?.user);
 
@@ -111,6 +110,13 @@ export function Sidebar() {
             {m.nav.favorites}
           </Link>
         )}
+        {mounted && signedIn && (
+          <Link to="/profile" className={SIDEBAR_ITEM} data-active={profile}>
+            {profile && <ActiveBar />}
+            <HugeiconsIcon icon={UserCircleIcon} className="size-5" />
+            {m.nav.profile}
+          </Link>
+        )}
       </nav>
 
       <div className="mt-auto grid gap-1">
@@ -125,10 +131,6 @@ export function Sidebar() {
           {m.nav.changelog}
         </Link>
         <HelpDialog triggerClassName={SIDEBAR_ITEM} />
-        <LanguageMenu variant="sidebar" triggerClassName={SIDEBAR_ITEM} />
-        {/* The arcade ticket wallet, beside the account it belongs to */}
-        <TicketChip className="mt-1 w-full justify-start px-3" />
-        <AccountButton variant="sidebar" />
       </div>
 
       {installMode !== "hidden" && (

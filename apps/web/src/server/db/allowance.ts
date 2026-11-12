@@ -1,5 +1,6 @@
 import type { AllowanceClaim, AllowanceGrant, GameManifest } from "@web-games/core";
 import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { nextDailyAt, vnDay, vnDayStart } from "#/lib/checkin";
 import { gameIdOf } from "./games";
 import type { Db } from "./leaderboard";
 import { allowanceGrant, pendingGrant } from "./schema";
@@ -8,36 +9,12 @@ import { allowanceGrant, pendingGrant } from "./schema";
 // parameter (D1 in the Worker, bun:sqlite in allowance.test.ts).
 // See docs/standards/allowance.md.
 
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
-/** Asia/Ho_Chi_Minh is UTC+7 all year (no daylight saving). */
-const VN_OFFSET = 7 * HOUR;
+// The Vietnam clock lives in lib/checkin.ts (pure, shared with the check-in and
+// the UI); re-exported here so existing importers keep working.
+export { nextDailyAt, vnDay, vnDayStart, vnWeekStart } from "#/lib/checkin";
 
 /** The `day` of a welcome row: one per player per game, ever. */
 export const WELCOME_DAY = "first";
-
-/** Unix ms of the Vietnam midnight that starts the Vietnam day holding `now`. */
-export function vnDayStart(now: number): number {
-  return Math.floor((now + VN_OFFSET) / DAY) * DAY - VN_OFFSET;
-}
-
-/** The Vietnam date holding `now`, "YYYY-MM-DD". */
-export function vnDay(now: number): string {
-  return new Date(now + VN_OFFSET).toISOString().slice(0, 10);
-}
-
-/** The next Vietnam midnight after `now`, unix ms: when the next daily is due. */
-export function nextDailyAt(now: number): number {
-  return vnDayStart(now) + DAY;
-}
-
-/** Unix ms of the Monday 00:00 (Vietnam) that starts the Vietnam week holding `now`. */
-export function vnWeekStart(now: number): number {
-  const day = vnDayStart(now);
-  // getUTCDay of the shifted clock is the Vietnam weekday: 0 = Sunday … 6 = Saturday
-  const sinceMonday = (new Date(now + VN_OFFSET).getUTCDay() + 6) % 7;
-  return day - sinceMonday * DAY;
-}
 
 /** What the daily pays on login-streak day `n` (1-based). */
 export function dailyAmount(

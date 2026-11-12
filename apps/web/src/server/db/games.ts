@@ -44,3 +44,13 @@ export async function gameIdOf(db: Db, slug: string): Promise<number> {
 export function forgetGameIds() {
   ids.clear();
 }
+
+/**
+ * The reserved `game` row the portal itself writes under (inserted by migration
+ * 0011): the daily check-in's `ticket_ledger` rows, whose `game_id` is NOT NULL
+ * though a check-in comes from no game. Never a folder under packages/games, so
+ * no boundary ever validates it as a game, and every query that hands game rows
+ * to players either starts from a per-game table it never appears in or filters
+ * it out (docs/standards/database.md).
+ */
+export const PORTAL_SLUG = "portal";

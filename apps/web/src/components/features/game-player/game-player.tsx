@@ -537,7 +537,8 @@ function StartScreen({
         {/* A sideways phone has no room for the poster; show the title instead */}
         <motion.img
           src={game.poster[locale]}
-          alt=""
+          // The page's main image: named for image search, and the only title on screen in portrait
+          alt={game.title[locale]}
           variants={piece}
           exit={{ transform: "scale(0.96)" }}
           transition={LEAVE}

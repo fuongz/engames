@@ -1,4 +1,4 @@
-import { FavouriteIcon, LibraryIcon, Search01Icon, Store01Icon } from "@hugeicons/core-free-icons";
+import { FavouriteIcon, LibraryIcon, Search01Icon, Store01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { motion } from "motion/react";
@@ -25,6 +25,7 @@ export function MobileNav({ onSearch }: { onSearch: () => void }) {
   const discover = mounted && path === "/";
   const library = mounted && path.startsWith("/library");
   const favorites = mounted && path.startsWith("/favorites");
+  const profile = mounted && path.startsWith("/profile");
   // Favourites live on the account: the tab is for signed-in players only
   const signedIn = Boolean(useSession().data?.user);
 
@@ -45,6 +46,13 @@ export function MobileNav({ onSearch }: { onSearch: () => void }) {
           {favorites && <ActivePill />}
           <HugeiconsIcon icon={FavouriteIcon} className="size-5" />
           {m.nav.favorites}
+        </Link>
+      )}
+      {mounted && signedIn && (
+        <Link to="/profile" className={ITEM} data-active={profile}>
+          {profile && <ActivePill />}
+          <HugeiconsIcon icon={UserCircleIcon} className="size-5" />
+          {m.nav.profile}
         </Link>
       )}
       <button type="button" onClick={onSearch} className={ITEM}>
