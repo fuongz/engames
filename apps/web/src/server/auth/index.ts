@@ -33,6 +33,12 @@ export function getAuth() {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
         prompt: "select_account",
+        // Players may change their name and avatar (server/profile.ts). Google's
+        // profile seeds them on sign-up only and must not overwrite them on the next
+        // sign-in. false is Better Auth's default; it is spelled out so nobody
+        // "fixes" a stale avatar by turning it on. (account.accountLinking.
+        // updateUserInfoOnLink stays unset/off for the same reason.)
+        overrideUserInfoOnSignIn: false,
       },
     },
     session: {

@@ -8,14 +8,16 @@ import { Button } from "#/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
-import { signInWithGoogle } from "#/lib/auth-client";
+import { authClient, signInWithGoogle } from "#/lib/auth-client";
 import { fmt } from "#/lib/i18n";
 import type { CheckinClaim, CheckinMilestone } from "#/server/checkin";
 import { type Profile, getMyProfileFn } from "#/server/profile";
 import { useCheckin } from "#/stores/checkin";
 import { profilePublicOf, useProfilePublic } from "#/stores/profile-public";
 import { useTickets } from "#/stores/tickets";
+import { AvatarEditButton } from "./avatar-dialog";
 import { CheckinTrack } from "./checkin-track";
+import { DisplayNameEditButton } from "./display-name-dialog";
 import { MilestoneDialog } from "./milestone-dialog";
 
 /**
@@ -47,6 +49,17 @@ export function ProfileView() {
     load();
     void loadCheckin(userId, true);
   }, [userId, load, loadCheckin]);
+
+  /**
+   * After a photo or name change: read the profile again, and the session too
+   * (past its 5-minute cookie cache), so the header's account button follows.
+   */
+  const edited = async () => {
+    await Promise.all([
+      getMyProfileFn().then(setProfile),
+      authClient.getSession({ query: { disableCookieCache: true } }).then(() => authClient.$store.notify("$sessionSignal")),
+    ]);
+  };
 
   const landed = (c: CheckinClaim) => {
     if (userId && useTickets.getState().userId === userId) useTickets.getState().set(c.balance);
@@ -102,6 +115,8 @@ export function ProfileView() {
           streakDay={checkin?.streakDay}
           balance={balance ?? undefined}
           actions={isPublic ? <ShareButton userId={profile.userId} /> : undefined}
+          avatarAction={<AvatarEditButton image={profile.image} name={profile.name} onChanged={edited} />}
+          nameAction={<DisplayNameEditButton name={profile.name} onSaved={edited} />}
         />
         {!isPublic && <p className="px-2 text-sm text-muted-foreground">{m.profile.privateNote}</p>}
       </div>

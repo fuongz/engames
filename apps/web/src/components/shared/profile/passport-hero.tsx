@@ -47,6 +47,8 @@ function mrz(name: string, userId: string, level: number) {
  * The top of the Engames Passport: the avatar inside an XP ring that fills to
  * the next level, the level number on a tab, the title, name, join date, ticket
  * balance and streak flame. `actions` sits in the corner (the owner's Share).
+ * `avatarAction` sits on the avatar's lower right and `nameAction` right after
+ * the name (the owner's edit buttons); both stay empty on a public profile.
  * `streakDay` and `balance` override the profile's when the page has fresher ones.
  */
 export function PassportHero({
@@ -54,12 +56,16 @@ export function PassportHero({
   streakDay = p.checkin.streakDay,
   balance = p.tickets.balance,
   actions,
+  avatarAction,
+  nameAction,
   className,
 }: {
   profile: Profile;
   streakDay?: number;
   balance?: number;
   actions?: ReactNode;
+  avatarAction?: ReactNode;
+  nameAction?: ReactNode;
   className?: string;
 }) {
   const m = useMessages();
@@ -96,40 +102,46 @@ export function PassportHero({
         </div>
 
         <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:gap-7 sm:text-left">
-          {/* XP ring */}
-          <div
-            className="relative size-32 shrink-0 sm:size-36"
-            role="img"
-            aria-label={fmt(m.profile.xpLabel, { level: p.level, into: nf.format(p.xpIntoLevel), need: nf.format(need) })}
-          >
-            <svg viewBox="0 0 100 100" className="absolute inset-0 size-full -rotate-90" aria-hidden>
-              <circle cx="50" cy="50" r={R} className="fill-none stroke-foreground/10" strokeWidth="6" />
-              <motion.circle
-                cx="50"
-                cy="50"
-                r={R}
-                className="fill-none stroke-primary"
-                strokeWidth="6"
-                strokeLinecap="round"
-                initial={{ pathLength: reduce ? progress : 0 }}
-                animate={{ pathLength: progress }}
-                transition={{ duration: 1.2, ease: EASE_OUT, delay: 0.2 }}
-              />
-            </svg>
-            <Avatar className="absolute inset-[11%] size-auto">
-              {p.image && <AvatarImage src={p.image} alt="" referrerPolicy="no-referrer" />}
-              <AvatarFallback className="text-3xl font-bold">{p.name.slice(0, 1).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-primary-foreground tabular-nums shadow-md ring-[3px] ring-card">
-              {fmt(m.profile.level, { n: p.level })}
-            </span>
+          {/* XP ring. The slot is a sibling of the labelled image: a role="img" hides its children from assistive tech */}
+          <div className="relative size-32 shrink-0 sm:size-36">
+            <div
+              className="absolute inset-0"
+              role="img"
+              aria-label={fmt(m.profile.xpLabel, { level: p.level, into: nf.format(p.xpIntoLevel), need: nf.format(need) })}
+            >
+              <svg viewBox="0 0 100 100" className="absolute inset-0 size-full -rotate-90" aria-hidden>
+                <circle cx="50" cy="50" r={R} className="fill-none stroke-foreground/10" strokeWidth="6" />
+                <motion.circle
+                  cx="50"
+                  cy="50"
+                  r={R}
+                  className="fill-none stroke-primary"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  initial={{ pathLength: reduce ? progress : 0 }}
+                  animate={{ pathLength: progress }}
+                  transition={{ duration: 1.2, ease: EASE_OUT, delay: 0.2 }}
+                />
+              </svg>
+              <Avatar className="absolute inset-[11%] size-auto">
+                {p.image && <AvatarImage src={p.image} alt="" referrerPolicy="no-referrer" />}
+                <AvatarFallback className="text-3xl font-bold">{p.name.slice(0, 1).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-primary-foreground tabular-nums shadow-md ring-[3px] ring-card">
+                {fmt(m.profile.level, { n: p.level })}
+              </span>
+            </div>
+            {avatarAction && <div className="absolute right-0 bottom-5 z-10">{avatarAction}</div>}
           </div>
 
           <div className="grid min-w-0 justify-items-center gap-2 sm:justify-items-start">
             <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-primary uppercase">
               {p.title[locale]}
             </span>
-            <h1 className="max-w-full truncate text-2xl font-bold tracking-tight sm:text-3xl">{p.name}</h1>
+            <div className="flex max-w-full items-center gap-1">
+              <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight sm:text-3xl">{p.name}</h1>
+              {nameAction}
+            </div>
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <HugeiconsIcon icon={Calendar03Icon} className="size-4" aria-hidden />
               {fmt(m.profile.joined, { date: joined })}

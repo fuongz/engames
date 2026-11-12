@@ -12,8 +12,10 @@
   // The prerendered shell is dist/client/index.html, and asset matching ignores
   // the query, so `/?lang=en` would get the Vietnamese shell. Sending `/` to the
   // Worker first lets it SSR the home page in the URL's language.
+  // /media/* (player avatars from R2) never exists as a static file, but sending it
+  // to the Worker first skips the asset lookup and can never be shadowed by one.
   "assets": {
-    "run_worker_first": ["/"]
+    "run_worker_first": ["/", "/media/*"]
   },
 
   "observability": {
@@ -32,6 +34,10 @@
       "migrations_dir": "drizzle"
     }
   ],
+
+  // Player avatars, served at /media/avatars/<userId>/<epochMs>.<ext> by
+  // routes/media.avatars.$userId.$file.ts. Layout: docs/standards/avatars.md.
+  "r2_buckets": [{ "binding": "AVATARS", "bucket_name": "prod-engames" }],
 
   // Public config. Secrets (BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID,
   // GOOGLE_CLIENT_SECRET) go in via `wrangler secret put`, and locally in
