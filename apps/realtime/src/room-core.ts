@@ -26,6 +26,7 @@ export interface Player {
   id: string;
   name: string;
   userId: string | null;
+  cosmetics: string[];
   ready: boolean;
   joinedAt: number;
   conn: Conn | null;
@@ -105,6 +106,7 @@ export class RoomCore {
       id: claims.p,
       name: claims.n,
       userId: claims.u,
+      cosmetics: claims.c ?? [],
       ready: restore?.ready ?? false,
       joinedAt: restore?.joinedAt ?? this.now(),
       conn: null,
@@ -115,6 +117,7 @@ export class RoomCore {
     };
     p.conn = conn;
     p.name = claims.n;
+    p.cosmetics = claims.c ?? [];
     this.players.set(p.id, p);
     if (this.sim && p.seat !== null) {
       this.sim.setAutopilot(p.seat, false);
@@ -181,7 +184,7 @@ export class RoomCore {
         return;
       case "in": {
         if (!this.sim || p.seat === null) return;
-        const input = this.game.parseInput({ move: m.move, actions: m.actions });
+        const input = this.game.parseInput({ move: m.move, actions: m.actions }, { cosmetics: p.cosmetics });
         if (!input) return;
         p.inputs.push({ seq: m.seq, input });
         if (p.inputs.length > INPUT_QUEUE) p.inputs.splice(0, p.inputs.length - INPUT_QUEUE);

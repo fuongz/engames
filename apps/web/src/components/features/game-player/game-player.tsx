@@ -35,6 +35,7 @@ import { useSession } from "#/hooks/use-session";
 import { signInWithGoogle } from "#/lib/auth-client";
 import { EASE_OUT, FADE, RISE_BLUR, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
+import { createCosmeticsBridge } from "./game-player.cosmetics";
 import { claimAllowanceFn } from "#/server/allowance";
 import { deleteGameSave, listGameSaves, loadGameSave, storeGameSave } from "#/server/saves";
 import { usePlayStats } from "#/stores/play-stats";
@@ -228,6 +229,7 @@ export function GamePlayer({
         : undefined;
     instanceRef.current = module.mount(stage, {
       online: match,
+      cosmetics: game.cosmetics?.length ? createCosmeticsBridge(game.slug, userId ?? null, Boolean(match)) : undefined,
       cloud,
       version: game.version,
       // The server records each grant before answering: the game persists it at once

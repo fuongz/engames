@@ -15,6 +15,7 @@ export interface Seat {
   playerId: string;
   name: string;
   userId: string | null;
+  cosmetics?: string[];
 }
 
 export function issueTicket(seat: Seat) {
@@ -24,6 +25,7 @@ export function issueTicket(seat: Seat) {
     p: seat.playerId,
     n: seat.name,
     u: seat.userId,
+    ...(seat.cosmetics?.length ? { c: seat.cosmetics } : {}),
     e: Date.now() + TICKET_TTL_MS,
   });
 }

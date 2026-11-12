@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { isRoomCode } from "@web-games/core/online";
+import { findGame } from "@web-games/games";
+import { getDb } from "#/server/db";
+import { ownedCosmetics } from "#/server/db/cosmetics";
 import { findOnlineGame } from "@web-games/games/online";
 import { z } from "zod";
 import { currentUser } from "#/server/auth";
@@ -47,8 +50,9 @@ export const createOnlineTicket = createServerFn({ method: "POST" })
     const user = await currentUser(getRequestHeaders() as unknown as Headers);
     const code = data.code ?? newRoomCode();
     if (user) {
+      const cosmetics = findGame(data.slug)?.cosmetics?.length ? await ownedCosmetics(getDb(), user.id, data.slug) : [];
       const name = (user.name || "Player").slice(0, 20);
-      return { code, name, ticket: await issueTicket({ slug: data.slug, code, playerId: user.id, name, userId: user.id }) };
+      return { code, name, ticket: await issueTicket({ slug: data.slug, code, playerId: user.id, name, userId: user.id, cosmetics }) };
     }
     if (!data.name || !data.guestId) throw new Error("guest-needs-name");
     return {

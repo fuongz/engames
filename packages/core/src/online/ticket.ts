@@ -15,6 +15,8 @@ export interface TicketClaims {
   u: string | null;
   /** Expiry, unix ms. */
   e: number;
+  /** Server-confirmed paid cosmetic ids for this game. Never supplied by the browser. */
+  c?: string[];
 }
 
 /** How long a ticket stays valid: it authorises the join, then the socket is the session. */
@@ -63,6 +65,7 @@ export async function verifyTicket(secret: string, ticket: string, now = Date.no
     const c = JSON.parse(new TextDecoder().decode(unb64url(payload))) as TicketClaims;
     if (typeof c.e !== "number" || c.e < now) return null;
     if (typeof c.r !== "string" || typeof c.s !== "string" || typeof c.p !== "string" || typeof c.n !== "string") return null;
+    if (c.c !== undefined && (!Array.isArray(c.c) || c.c.length > 64 || c.c.some((id) => typeof id !== "string" || id.length > 40))) return null;
     return c;
   } catch {
     return null;

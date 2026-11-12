@@ -64,6 +64,15 @@ describe("manifest platform options", () => {
       }
       expect(g.allowance.welcome + g.allowance.daily + (streak ?? []).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
     }
+    if (g.cosmetics) {
+      expect(g.cosmetics.filter((item) => item.price === 0), "one free default cosmetic").toHaveLength(1);
+      expect(new Set(g.cosmetics.map((item) => item.id)).size).toBe(g.cosmetics.length);
+      for (const item of g.cosmetics) {
+        expect(item.id).toMatch(/^[a-z0-9][a-z0-9-]{0,39}$/);
+        expect(item.name.vi.trim() && item.name.en.trim()).toBeTruthy();
+        expect(Number.isSafeInteger(item.price) && item.price >= 0).toBe(true);
+      }
+    }
     // Prize Counter items reach the game through allowance.claim() (tickets.md §4)
     if (g.shop !== undefined) {
       expect(g.allowance, "a shop needs manifest.allowance to deliver its items").toBeDefined();
