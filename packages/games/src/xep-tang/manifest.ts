@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -31,6 +32,8 @@ const manifest: GameManifest = {
   width: W,
   height: H,
   releasedAt: "2026-11-08T14:30",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Thể loại xếp khối một chạm, nổi tiếng nhờ “Stack” của Ketchapp",
     en: "The one-tap stacking genre made famous by Ketchapp's “Stack”",

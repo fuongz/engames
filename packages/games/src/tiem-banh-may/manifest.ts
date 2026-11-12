@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -52,6 +53,8 @@ const manifest: GameManifest = {
   width: W,
   height: H,
   releasedAt: "2026-10-25T09:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Good Pizza, Great Pizza (quản lý tiệm) và Cooking Mama (làm món theo từng bước)",
     en: "Good Pizza, Great Pizza (running the shop) and Cooking Mama (cooking step by step)",

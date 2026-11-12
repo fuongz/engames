@@ -296,6 +296,9 @@ live-shaped 1.1.0 save (a stash, a spin running, coins in the air), checks the
 machine is otherwise identical, that the server accepts the next save after
 it, and walks a 1.0.0 save all the way up.
 
+The session simulations in logic.test.ts (`continuous play`) are opt-in because they are slow:
+run `XVT_SIMS=1 bunx vitest run src/xu-vu-tru` from packages/games after any economy change.
+
 ## Physics (physics.ts)
 
 Our own, no dependency: discs on a 2D shelf seen from above, fixed 1/60 steps,

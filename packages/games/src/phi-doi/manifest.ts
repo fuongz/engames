@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -43,6 +44,8 @@ const manifest: GameManifest = {
   width: W,
   height: H,
   releasedAt: "2026-10-23T12:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "1945 Air Force: Airplane Shooter (quảng cáo TikTok, bản quay màn hình người dùng gửi)",
     en: "1945 Air Force: Airplane Shooter (a TikTok ad, from a screen recording a player sent in)",

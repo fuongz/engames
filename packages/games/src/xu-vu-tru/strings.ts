@@ -22,6 +22,8 @@ export interface Strings {
   tickets: string;
   /** The ticket counter's label for a guest (local trial tickets, never deposited). */
   trialTickets: string;
+  /** A tiny caption on the ticket counter, signed in: the balance is the shared arcade wallet. */
+  sharedWallet: string;
   spins: string;
   shoot: string;
   auto: string;
@@ -103,7 +105,10 @@ export interface Strings {
   guestHint: (welcome: number) => string;
   /** The card viewer: how to flip, and its close button. */
   flipHint: string;
-  lifetimeLine: (n: number) => string;
+  /** The start card, signed in: the shared wallet balance (the same number as the VÉ counter). */
+  walletLine: (n: number) => string;
+  /** The start card, guest: the local trial tickets. */
+  trialLine: (n: number) => string;
   supersLine: (n: number) => string;
   /** Allowance toasts: the welcome, a daily on login streak day `day`, a Prize Counter purchase. */
   welcomeGrant: (n: number) => string;
@@ -126,9 +131,8 @@ export interface Strings {
   conflictAdopted: string;
   /** A beta run was found in storage and dropped. */
   legacyNote: string;
-  /** The What's new card. */
+  /** The What's new card's heading; its lines come from changelog.ts. */
   newsTitle: (v: string) => string;
-  newsLines: string[];
   /** Leaderboard detail, ≤ 40 chars. */
   detail: (tickets: number, supers: number) => string;
   summary: (tickets: number) => string;
@@ -144,6 +148,7 @@ export const STRINGS: Localized<Strings> = {
     coins: "XU",
     tickets: "VÉ",
     trialTickets: "VÉ THỬ",
+    sharedWallet: "Ví chung",
     spins: "LƯỢT",
     shoot: "BẮN",
     auto: "Tự động",
@@ -233,7 +238,8 @@ export const STRINGS: Localized<Strings> = {
     dailyLater: (n) => `Mai nhận ${n} xu`,
     guestHint: (w) => `Đăng nhập nhận ${w} xu`,
     flipHint: "Chạm thẻ để lật",
-    lifetimeLine: (n) => `Máy đã trả ${n} vé`,
+    walletLine: (n) => `Ví vé: ${vn(n)} vé · dùng chung mọi game thùng`,
+    trialLine: (n) => `Vé thử: ${vn(n)} vé (chỉ trên máy này)`,
     supersLine: (n) => (n > 0 ? `${n} lần Super Spin` : "Chưa có Super Spin"),
     welcomeGrant: (n) => `Quà chào mừng +${n} xu`,
     streakGrant: (day, n) => `Chuỗi ngày ${day}: +${n} xu`,
@@ -246,12 +252,6 @@ export const STRINGS: Localized<Strings> = {
     conflictAdopted: "Đã tải bản lưu mới hơn",
     legacyNote: "Lượt chơi bản beta cũ đã được dọn: máy 1.0 bắt đầu mới.",
     newsTitle: (v) => `Có gì mới · v${v}`,
-    newsLines: [
-      "Hũ may mắn: một hũ vé dùng chung cho mọi game thùng. Xu rơi vào hũ robot giúp hũ đầy thêm, máy góp thay bạn.",
-      "Mỗi lần Super Spin trả thưởng xong là một cơ hội trúng cả hũ (cần đăng nhập). Hũ càng đầy càng dễ nổ; vé trúng vào thẳng ví vé.",
-      "Bảng đèn trên máy hiện số vé đang có trong hũ. Người trúng được báo trên thanh trên cùng của trang.",
-      "Chưa đăng nhập vẫn xem được hũ; đăng nhập để Super Spin của bạn có thể trúng.",
-    ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} vé · ${supers} lần Super` : `${tickets} vé`),
     summary: (n) => `Đã gom ${n} vé`,
   },
@@ -264,6 +264,7 @@ export const STRINGS: Localized<Strings> = {
     coins: "COINS",
     tickets: "TICKETS",
     trialTickets: "TRIAL",
+    sharedWallet: "Shared",
     spins: "SPINS",
     shoot: "SHOOT",
     auto: "Auto",
@@ -353,7 +354,8 @@ export const STRINGS: Localized<Strings> = {
     dailyLater: (n) => `${n} coins tomorrow`,
     guestHint: (w) => `Sign in for ${w} coins`,
     flipHint: "Tap the card to flip it",
-    lifetimeLine: (n) => (n === 1 ? "This machine has paid 1 ticket" : `This machine has paid ${n} tickets`),
+    walletLine: (n) => `Ticket wallet: ${en(n)} ${n === 1 ? "ticket" : "tickets"} · shared by every arcade game`,
+    trialLine: (n) => `Trial tickets: ${en(n)} ${n === 1 ? "ticket" : "tickets"} (this device only)`,
     supersLine: (n) => (n === 0 ? "No Super Spin yet" : n === 1 ? "1 Super Spin" : `${n} Super Spins`),
     welcomeGrant: (n) => `Welcome gift +${n} coins`,
     streakGrant: (day, n) => `Streak day ${day}: +${n} coins`,
@@ -366,12 +368,6 @@ export const STRINGS: Localized<Strings> = {
     conflictAdopted: "Loaded a newer save",
     legacyNote: "Your old beta run was cleared: the 1.0 machine starts fresh.",
     newsTitle: (v) => `What's new · v${v}`,
-    newsLines: [
-      "The Lucky Jar: one ticket jar shared by every arcade game. Coins the robot jar eats help fill it, paid by the machine, not you.",
-      "Every Super spin that pays is a chance to win the whole jar (signed in). The fuller it is, the likelier it tips; the tickets go straight to your wallet.",
-      "The marquee shows how many tickets are in the jar. Winners are announced on the site's top bar.",
-      "Signed out you can watch the jar; sign in so your Super spins can win it.",
-    ],
     detail: (tickets, supers) => (supers > 0 ? `${tickets} tickets · ${supers}× Super` : `${tickets} tickets`),
     summary: (n) => `${n} tickets collected`,
   },

@@ -327,7 +327,7 @@ describe("the jar feed: guests", () => {
 
 describe("saves in 1.3.0", () => {
   it("the Lucky Jar changes nothing saved: schema 4 as in 1.2.0, a 1.2.0 save loads as it was", () => {
-    expect(VERSION).toBe("1.3.0");
+    expect(VERSION).toBe("1.3.1");
     expect(SCHEMA).toBe(4);
     const s = createMachine(4, 120);
     run(s, steps(20), true);
@@ -336,6 +336,6 @@ describe("saves in 1.3.0", () => {
     expect(m.ok).toBe(true);
     if (!m.ok) return;
     expect(toSave(fromSave(m.save)).state).toEqual(toSave(s).state);
-    expect(toSave(s).v).toBe("1.3.0");
+    expect(toSave(s).v).toBe("1.3.1");
   });
 });

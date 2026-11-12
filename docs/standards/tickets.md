@@ -26,13 +26,15 @@ change. Ticket games also rank **this week's** earnings.
   `onBalance` listener in step. Clicking it opens the Prize Counter.
 - **The Prize Counter** (§4) sells `manifest.shop` items for tickets. A purchase
   is a negative ledger row plus a `pending_grant`, delivered by the game's next
-  `ctx.allowance.claim()`. **Spends never count as earnings**: the daily earn cap,
-  `earned_total` and the weekly board read `reason = 'earn'` rows only. Neither
-  do **Lucky Jar wins** (`reason = 'jackpot'`, see [`jackpot.md`](jackpot.md)):
-  they add to the balance and nothing else.
+  `ctx.allowance.claim()`. **Spends never count as earnings**: the daily earn cap
+  and `earned_total` read `reason = 'earn'` rows only. The weekly board ranks
+  **net** tickets: a game's earnings less what was spent on its own Prize
+  Counter items. **Lucky Jar wins** (`reason = 'jackpot'`, see
+  [`jackpot.md`](jackpot.md)) add to the balance and nothing else.
 - **The weekly board** (§5): a ticket game's leaderboard opens on "This week"
-  (tickets earned since Monday 00:00 Vietnam time), with "All time" (the score
-  board) one tab away.
+  (tickets earned since Monday 00:00 Vietnam time, minus tickets spent at that
+  game's Prize Counter, floored at 0), with "All time" (the score board) one tab
+  away.
 
 ---
 
@@ -47,7 +49,7 @@ change. Ticket games also rank **this week's** earnings.
 | `reason` | Written by | Counts as earnings? |
 | --- | --- | --- |
 | `earn` | `depositTickets` (a game paid out) | **yes**: the daily cap, `earned_total`, the weekly board |
-| `shop:<slug>:<itemId>` | `buyItem` (a Prize Counter purchase, negative) | no |
+| `shop:<slug>:<itemId>` | `buyItem` (a Prize Counter purchase, negative) | no, but **subtracted** from `<slug>`'s weekly board (§5) |
 | `jackpot` | `roll` (a Lucky Jar win, positive; `created_at` equals `jackpot_win.won_at`, see [`jackpot.md`](jackpot.md)) | no |
 | `adjust`, `refund:<ledger id>` | an admin, by hand (§3) | no |
 
@@ -59,8 +61,9 @@ the `earn` rows.
 `depositTickets`, `earned_total`, `weeklyTicketBoard`) filters on
 `reason = 'earn'`, never on `delta > 0`, so a jackpot win, a refund or a positive
 `adjust` can never use up a player's cap or lift them on the weekly board.
-`tickets.test.ts` and `leaderboard.test.ts` hold that line. A new kind of credit
-gets its own reason and changes none of them.
+`weeklyTicketBoard` also reads the game's `shop:<slug>:%` rows, and only to
+subtract them. `tickets.test.ts` and `leaderboard.test.ts` hold that line. A new
+kind of credit gets its own reason and changes none of them.
 
 ### How a deposit is written
 
@@ -285,14 +288,16 @@ up wrong anyway, the reconcile query above rebuilds it from the ledger.
 ### This week's board by hand
 
 ```sql
-SELECT u.name, sum(l.delta) AS tickets
+SELECT u.name,
+       max(0, sum(CASE WHEN l.reason = 'earn' THEN l.delta ELSE -abs(l.delta) END)) AS tickets
 FROM ticket_ledger l JOIN user u ON u.id = l.user_id
 WHERE l.game_id = (SELECT id FROM game WHERE slug = 'xu-vu-tru')
-  AND l.reason = 'earn'
+  AND (l.reason = 'earn' OR l.reason LIKE 'shop:xu-vu-tru:%')
   -- Monday 00:00 in Vietnam: Vietnam's today, back 6 days, forward to a Monday
   -- (today, on a Monday), then back to UTC
   AND l.created_at >= unixepoch(date('now', '+7 hours', '-6 days', 'weekday 1'), '-7 hours') * 1000
 GROUP BY l.user_id
+HAVING tickets > 0
 ORDER BY tickets DESC
 LIMIT 10;
 ```
@@ -383,10 +388,27 @@ For games with `tickets: true`, the game page's leaderboard has two tabs:
 
 | Tab | What it ranks |
 | --- | --- |
-| **This week** (default) | `SUM(delta)` of the game's `earn` rows since Monday 00:00 Asia/Ho_Chi_Minh, per player, top 10, the player's own row highlighted (or their rank under the list when below it), and a "resets in" countdown |
+| **This week** (default) | **Net tickets** since Monday 00:00 Asia/Ho_Chi_Minh, per player: `SUM(delta)` of the game's `earn` rows minus `SUM(abs(delta))` of its `shop:<slug>:<itemId>` rows, floored at 0. Top 10, the player's own row highlighted (or their rank under the list when below it), and a "resets in" countdown |
 | **All time** | the usual `score` table (`reportScore`) |
 
 `weeklyTicketBoard` (`apps/web/src/server/db/leaderboard.ts`) is the query;
 `getWeeklyLeaderboard` (`server/leaderboard.ts`) the boundary, which adds the
-signed-in player. Spends, adjustments and Lucky Jar wins never move it. The week is the
-Vietnam week: `vnWeekStart` in `server/db/allowance.ts`, next to `vnDayStart`.
+signed-in player. The board's caption says so: "Vé kiếm được trong tuần, trừ vé
+đã tiêu ở Quầy đổi thưởng".
+
+- **Why net.** Without it, a player could farm a game, cash the tickets at its
+  counter, and still sit on top of its board. Net tickets rank what a player
+  *kept* from that game this week.
+- **Only this game's counter.** A spend is matched by its reason
+  (`shop:<slug>:`), so buying another game's coins never touches this board.
+- **The floor is on the week.** Spending more than you earned puts the week at 0,
+  and a player at 0 is off the board (and has no own rank) until this week's
+  earnings pass this week's spends again. Last week's spends never carry over.
+- **Never counted:** Lucky Jar wins, `adjust` rows and `refund:` rows. So a
+  refunded purchase still comes off the board for the week it was bought in: a
+  refund fixes the wallet, not the board.
+- The tie-break is the player's last **earning** this week (a spend never
+  moves it).
+
+The week is the Vietnam week: `vnWeekStart` in `server/db/allowance.ts`, next to
+`vnDayStart`.

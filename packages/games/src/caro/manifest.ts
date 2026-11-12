@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, ROOM_SETTINGS, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -44,6 +45,8 @@ const manifest: GameManifest = {
   height: H,
   online: { modes: ["versus"], minPlayers: 2, maxPlayers: 2, settings: ROOM_SETTINGS },
   releasedAt: "2026-11-08T12:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Cờ caro (gomoku) trên giấy, luật theo trang learnplaywin.net/caro",
     en: "Pen-and-paper caro (gomoku), rules as on learnplaywin.net/caro",

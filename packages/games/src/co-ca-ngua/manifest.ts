@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, ROOM_SETTINGS, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -42,6 +43,8 @@ const manifest: GameManifest = {
   height: H,
   online: { modes: ["versus"], minPlayers: 2, maxPlayers: 4, bots: true, settings: ROOM_SETTINGS },
   releasedAt: "2026-11-08T13:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Cờ cá ngựa (Ludo) truyền thống",
     en: "Traditional Ludo (cờ cá ngựa)",

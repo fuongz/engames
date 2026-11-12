@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -43,6 +44,8 @@ const manifest: GameManifest = {
   width: W,
   height: H,
   releasedAt: "2026-11-04T20:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "dòng game arcade đào vàng bằng móc câu kinh điển",
     en: "the classic gold-miner claw arcade genre",

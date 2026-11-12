@@ -10,6 +10,7 @@ import {
   SUMMARY_KEY,
   type ScoreReport,
   clamp,
+  currentLocale,
   easeOutCubic,
   inRect,
   smoothstep,
@@ -185,6 +186,7 @@ import {
 } from "./logic";
 import { createJarFeed, supersPaid } from "./jackpot";
 import { type MachineSave, fromSave, migrate, toSave } from "./save";
+import { changelog } from "./changelog";
 import { STRINGS } from "./strings";
 
 // The imperative shell: turns the SHOOT button into inputs for logic.ts, plays
@@ -1579,9 +1581,10 @@ export function setup(rt: Runtime): GameHooks {
   /** The What's new card: the version's lines, and the note about a dropped beta run. */
   function newsCard() {
     const l = tr();
+    const news = changelog.find((e) => e.version === version) ?? changelog[0];
     const lines: Line[] = [];
     let y = 104;
-    for (const [n, line] of l.newsLines.entries()) {
+    for (const [n, line] of (news.changes[currentLocale(rt)] ?? []).entries()) {
       for (const [i, ln] of wrap(ctx, line, 400, 19).entries()) {
         lines.push({ str: ln, y, size: 19, color: CREAM, dot: i === 0 ? n : undefined });
         y += RULE_LINE;
@@ -1940,7 +1943,7 @@ export function setup(rt: Runtime): GameHooks {
 
     // Controls
     drawCounter(ctx, COINS_BOX, l.coins, shownCoins, CYAN, 4, bumpCoins);
-    drawCounter(ctx, TICKETS_BOX, mode === "guest" ? l.trialTickets : l.tickets, shownTickets, HONEY, 6, bumpTickets);
+    drawCounter(ctx, TICKETS_BOX, mode === "guest" ? l.trialTickets : l.tickets, shownTickets, HONEY, 6, bumpTickets, mode === "account" && tickets !== null ? l.sharedWallet : undefined);
     const pressed = pointersHeld.size > 0 || spaceHeld;
     drawShootButton(ctx, sp, l.shoot, pressed, t, s.coins > 0);
     drawAutoButton(ctx, AUTO_BTN, l.auto, autoOn ? l.on : l.off, autoOn, s.coins > 0);
@@ -2064,7 +2067,10 @@ export function setup(rt: Runtime): GameHooks {
 
   function viewerBox() {
     const v = view();
-    const w = Math.round(v.w * 0.7);
+    // Fit the card inside the screen both ways: on a wide desktop view 70% of the
+    // width alone overflows the height, so cap by the game's width and the height
+    // left under the title and above the hint.
+    const w = Math.round(Math.min(Math.min(v.w, W) * 0.7, ((v.h - 240) * 3) / 4));
     const h = Math.round((w * 4) / 3);
     return { cx: v.x + v.w / 2, cy: v.y + v.h / 2 + 10, w, h };
   }
@@ -2601,7 +2607,10 @@ export function setup(rt: Runtime): GameHooks {
       const note = mode === "guest" ? l.guestNote(TRIAL_COINS) : l.accountNote;
       const lines = wrap(ctx, note, 400, 18).slice(0, 2);
       for (const [i, ln] of lines.entries()) text(ctx, ln, W / 2, 396 + i * 24 - (lines.length - 1) * 12, 18, CYAN, "center", null);
-      if (s.lifetimeTickets > 0) text(ctx, l.lifetimeLine(s.lifetimeTickets), W / 2, 456, 20, HONEY, "center", null);
+      // The wallet, never the machine's all-time payout (lifetimeTickets is the leaderboard score, not a balance).
+      // No weekly line: GameContext exposes no weekly-net API, and a different number would only confuse.
+      const walletLine = mode === "guest" ? l.trialLine(trialTickets) : mode === "account" && tickets !== null ? l.walletLine(ticketTarget()) : null;
+      if (walletLine) text(ctx, walletLine, W / 2, 456, fitSize(ctx, walletLine, 20, 400), HONEY, "center", null);
       for (const b of startButtons()) {
         const label = b.id === "go" ? (s.shots > 0 ? l.resume : l.start) : l.rules;
         button(ctx, b.rect, label, b.id === "go" ? BTN_GO : BTN_ALT, b.id === "go" ? 30 : 22);

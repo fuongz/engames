@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { Switch } from "#/components/ui/switch";
 import { useHistoryConsent } from "#/hooks/use-history-consent";
 import { useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
@@ -95,9 +96,20 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
             <HugeiconsIcon icon={WorkHistoryIcon} />
             {m.account.history}
           </DropdownMenuItem>
-          {/* Unasked (null) reads as off; ticking it is the answer */}
-          <DropdownMenuCheckboxItem checked={history.value === true} onCheckedChange={(on) => void history.set(on)}>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        {/* Settings get their own group, as switches */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-xs text-muted-foreground">{m.account.settings}</DropdownMenuLabel>
+          {/* Unasked (null) reads as off; switching it on is the answer. The row keeps the
+              checkbox-item semantics (and stays open on click); the Switch only shows the state */}
+          <DropdownMenuCheckboxItem
+            checked={history.value === true}
+            onCheckedChange={(on) => void history.set(on)}
+            className="justify-between pr-2 [&_[data-slot=dropdown-menu-checkbox-item-indicator]]:hidden"
+          >
             {m.account.saveHistory}
+            <Switch size="sm" checked={history.value === true} aria-hidden tabIndex={-1} className="pointer-events-none" />
           </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

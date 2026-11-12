@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, gt, gte, lt, max, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, like, lt, or, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { vnWeekStart } from "./allowance";
 import { gameIdOf } from "./games";
 import type * as schema from "./schema";
 import { score, ticketLedger, user } from "./schema";
+import { shopReason } from "./shop";
 
 // SERVER-ONLY implementation behind server/leaderboard.ts. Takes the database as
 // a parameter (D1 in the Worker, bun:sqlite in leaderboard.test.ts).
@@ -108,15 +109,16 @@ export async function saveScore(db: Db, input: SaveInput): Promise<SaveResult> {
 /** A week of a ticket game's board (docs/standards/tickets.md §5). */
 export interface WeeklyBoard {
   /**
-   * The top players by tickets earned in this game this week. Same shape as the
-   * all-time board: `id` is the row's place (1, 2, …), `score` the tickets,
-   * `createdAt` (unix seconds) the player's last earning this week.
+   * The top players by net tickets in this game this week (earned, less what
+   * they spent on its Prize Counter items). Same shape as the all-time board:
+   * `id` is the row's place (1, 2, …), `score` the net tickets, `createdAt`
+   * (unix seconds) the player's last earning this week.
    */
   entries: LeaderboardEntry[];
   /**
-   * The signed-in player's place and tickets this week, and `id` of their row in
-   * `entries` (null when they are below the top). Null when signed out or when
-   * they have earned nothing in this game this week.
+   * The signed-in player's place and net tickets this week, and `id` of their
+   * row in `entries` (null when they are below the top). Null when signed out or
+   * when their net this week is 0 (nothing earned, or spent it all).
    */
   me: { rank: number; score: number; id: number | null } | null;
   /** When this week's board resets: next Monday 00:00 Asia/Ho_Chi_Minh, unix ms. */
@@ -126,10 +128,14 @@ export interface WeeklyBoard {
 const WEEK = 7 * 24 * 3_600_000;
 
 /**
- * Tickets EARNED in game `slug` since Monday 00:00 (Vietnam), per player: the sum
- * of `ticket_ledger` rows with `reason = 'earn'`. Spends (`shop:…`), Lucky Jar
- * wins (`jackpot`) and hand adjustments never count. Ties go to whoever got
- * there first (the earlier last earning). `me.rank` is 1 + the players strictly ahead, like `saveScore`.
+ * Net tickets in game `slug` since Monday 00:00 (Vietnam), per player: the sum
+ * of its `earn` rows, minus the tickets spent on ITS Prize Counter items
+ * (`shop:<slug>:<item>` rows), floored at 0. A player whose spends cover their
+ * earnings is off the board until they earn again. Lucky Jar wins (`jackpot`),
+ * hand adjustments and refunds never count, and a spend at another game's
+ * counter never touches this board. Ties go to whoever got there first (the
+ * earlier last earning). `me.rank` is 1 + the players strictly ahead, like
+ * `saveScore`.
  */
 export async function weeklyTicketBoard(
   db: Db,
@@ -138,17 +144,22 @@ export async function weeklyTicketBoard(
   const { slug, limit, userId, now } = input;
   const gameId = await gameIdOf(db, slug);
   const weekStart = vnWeekStart(now);
+  const earned = sql`${ticketLedger.reason} = 'earn'`;
   const week = db
     .select({
       userId: ticketLedger.userId,
-      total: sql<number>`${sum(ticketLedger.delta)}`.as("total"),
-      last: max(ticketLedger.createdAt).as("last"),
+      // Spends are negative rows; abs() keeps the subtraction right whatever the sign
+      total: sql<number>`max(0, sum(case when ${earned} then ${ticketLedger.delta} else -abs(${ticketLedger.delta}) end))`.as(
+        "total",
+      ),
+      last: sql<number | null>`max(case when ${earned} then ${ticketLedger.createdAt} end)`.as("last"),
     })
     .from(ticketLedger)
     .where(
       and(
         eq(ticketLedger.gameId, gameId),
-        eq(ticketLedger.reason, "earn"),
+        // Slugs are [a-z0-9-], so the prefix holds no LIKE wildcard
+        or(eq(ticketLedger.reason, "earn"), like(ticketLedger.reason, `${shopReason(slug, "")}%`)),
         gte(ticketLedger.createdAt, weekStart),
         lt(ticketLedger.createdAt, weekStart + WEEK),
       ),
@@ -160,6 +171,8 @@ export async function weeklyTicketBoard(
     .select({ userId: week.userId, total: week.total, last: week.last, name: user.name, image: user.image })
     .from(week)
     .innerJoin(user, eq(user.id, week.userId))
+    // Net 0 (nothing earned, or all of it spent here) is not a place on the board
+    .where(gt(week.total, 0))
     .orderBy(desc(week.total), asc(week.last), asc(week.userId))
     .limit(limit);
   const entries: LeaderboardEntry[] = rows.map((r, i) => ({

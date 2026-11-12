@@ -39,9 +39,10 @@ export const getLeaderboard = createServerFn({ method: "GET" })
   .handler(({ data }) => topScores(getDb(), boardKey(data.slug, data.mode), data.limit));
 
 /**
- * This week's board of a ticket game (`manifest.tickets`): tickets EARNED in it
- * since Monday 00:00 Asia/Ho_Chi_Minh, per player, with the signed-in player's
- * own rank (docs/standards/tickets.md §5).
+ * This week's board of a ticket game (`manifest.tickets`): net tickets in it
+ * since Monday 00:00 Asia/Ho_Chi_Minh (earned, less what was spent on its Prize
+ * Counter items, floored at 0), per player, with the signed-in player's own
+ * rank (docs/standards/tickets.md §5).
  */
 export const getWeeklyLeaderboard = createServerFn({ method: "GET" })
   .validator(

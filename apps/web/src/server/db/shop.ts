@@ -77,8 +77,9 @@ async function boughtToday(db: Db, userId: string, now: number, reason?: string)
  * ledger cannot show. Ledger-first would leave a spend row whose debit may or
  * may not have happened, and the database could not tell which.
  *
- * Spends never count as earnings: the deposit cap and the weekly board sum
- * `reason = 'earn'` rows only, and `earned_total` is left alone.
+ * Spends never count as earnings: the deposit cap sums `reason = 'earn'` rows
+ * only, and `earned_total` is left alone. The weekly board subtracts this
+ * game's spends from its earnings (`weeklyTicketBoard`, tickets.md §5).
  */
 export async function buyItem(db: Db, input: BuyInput): Promise<BuyResult> {
   const { userId, slug, itemId, now, shop } = input;

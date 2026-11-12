@@ -1,6 +1,7 @@
 import type { GameManifest } from "@web-games/core";
 import banner from "./banner.webp";
-import { DAILY_COINS, H, SHOP, STREAK, VERSION, W, WELCOME_COINS } from "./config";
+import { changelog } from "./changelog";
+import { DAILY_COINS, H, SHOP, STREAK, W, WELCOME_COINS } from "./config";
 import posterEn from "./poster-en.webp";
 import posterVi from "./poster.webp";
 import share from "./share.jpg";
@@ -40,7 +41,8 @@ const manifest: GameManifest = {
   height: H,
   releasedAt: "2026-11-08T15:00",
   coupons: { kinds: ["coins"] },
-  version: VERSION,
+  version: changelog[0].version,
+  changelog,
   // Signed in: the machine lives on the account (save.ts checks it) and the
   // allowance pays its coins; signed out it is a local trial
   accountSave: true,

@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, ROOM_SETTINGS, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -44,6 +45,8 @@ const manifest: GameManifest = {
   height: H,
   online: { modes: ["versus"], minPlayers: 2, maxPlayers: 2, settings: ROOM_SETTINGS },
   releasedAt: "2026-11-08T18:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Trò chơi dân gian Ô ăn quan; luật tham khảo oanquan.online",
     en: "The Vietnamese folk game Ô ăn quan; rules as on oanquan.online",

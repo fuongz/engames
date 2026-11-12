@@ -21,6 +21,7 @@ local repository instruction, then these general rules.
 | How does a game grant a welcome/daily allowance or a login streak? | [`docs/standards/allowance.md`](docs/standards/allowance.md) |
 | How do arcade games share tickets, sell at the Prize Counter, rank the week? | [`docs/standards/tickets.md`](docs/standards/tickets.md) |
 | How do arcade games share the Lucky Jar (Hũ may mắn) jackpot? | [`docs/standards/jackpot.md`](docs/standards/jackpot.md) |
+| How does a game record what changed in a release? | [`docs/standards/changelog.md`](docs/standards/changelog.md) |
 
 Four things you will get wrong without them, so they are worth stating up front:
 
@@ -139,6 +140,8 @@ node scripts/audit-layout.mjs   # 0 = layout is correct
   boundary (server functions + types only), `db/` and `auth/` are server-only
   (enforced by `layout.audit.json`). Query functions take `db` as a parameter so
   `bun test` can run them on bun:sqlite with the real migrations.
+- **Every release bumps `manifest.version` and adds a `manifest.changelog` entry**
+  dated the release day, newest first, in both languages. Follow `changelog.md`.
 - **Games report finished runs** with `ctx.reportScore({ score, detail })` — once
   per run end, never on quit. The portal owns the save/leaderboard UI.
 - **Two languages, everywhere.** Portal copy goes in `content/messages/{vi,en}.ts`

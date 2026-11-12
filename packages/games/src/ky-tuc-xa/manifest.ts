@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -44,6 +45,8 @@ const manifest: GameManifest = {
   height: H,
   online: { modes: ["coop"], minPlayers: 1, maxPlayers: 6 },
   releasedAt: "2026-10-23T15:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Haunted Dorm (Mihuan Games), quảng cáo TikTok người dùng quay màn hình",
     en: "Haunted Dorm (Mihuan Games), a TikTok ad from a screen recording a player sent in",

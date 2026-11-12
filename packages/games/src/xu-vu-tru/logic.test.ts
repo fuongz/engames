@@ -1214,7 +1214,12 @@ function dailySession(seed: number, coins: number, play: "held" | "taps") {
   return { idle: s.idle, minutes: (s.t - t0) / 60, shots: s.shots - shots0 };
 }
 
-describe("continuous play", () => {
+// The economy simulations play dozens of simulated minutes each, so they are opt-in:
+// XVT_SIMS=1 bunx vitest run src/xu-vu-tru (run them whenever the tuning changes).
+// The quick rules above cover idling, resuming and the jar on every run.
+const SIMS = Boolean((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.XVT_SIMS);
+
+describe.skipIf(!SIMS)("continuous play", () => {
   it(
     "a 100-coin start with the button held lasts several minutes, nothing swallowed, tickets at a steady pace",
     () => {

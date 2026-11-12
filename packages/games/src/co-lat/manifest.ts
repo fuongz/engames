@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, ROOM_SETTINGS, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -42,6 +43,8 @@ const manifest: GameManifest = {
   height: H,
   online: { modes: ["versus"], minPlayers: 2, maxPlayers: 2, settings: ROOM_SETTINGS },
   releasedAt: "2026-11-08T14:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Cờ lật (Reversi), theo luật Othello quốc tế tiêu chuẩn",
     en: "Reversi, played by the standard international Othello rules",

@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import { H, W } from "./config";
 import posterVi from "./poster.webp";
 import posterEn from "./poster-en.webp";
@@ -42,6 +43,8 @@ const manifest: GameManifest = {
   width: W,
   height: H,
   releasedAt: "2026-11-06T12:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Alien Shooter và video quảng cáo bắn quái do người chơi cung cấp",
     en: "Alien Shooter and a player-supplied horde-shooter advertisement",

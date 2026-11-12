@@ -26,6 +26,7 @@ export { fitFontSize } from "./text";
 export {
   type AllowanceClaim,
   type AllowanceGrant,
+  type ChangelogEntry,
   type CloudSave,
   type CloudSaveResult,
   type CloudSlot,

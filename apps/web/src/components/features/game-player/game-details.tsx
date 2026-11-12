@@ -8,8 +8,9 @@ import { Button } from "#/components/ui/button";
 import { Kbd, KbdGroup } from "#/components/ui/kbd";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
+import { UpdateHistory } from "./update-history";
 
-/** Description, controls and tags. Rendered in the desktop sidebar and the phone info dialog. */
+/** Description, controls, tags and update history. Rendered on the desktop page and in the phone info dialog. */
 export function GameDetails({ game }: { game: GameManifest }) {
   const locale = useLocale();
   const m = useMessages();
@@ -74,6 +75,7 @@ export function GameDetails({ game }: { game: GameManifest }) {
           ))}
         </ol>
       </div>
+      <UpdateHistory slug={game.slug} changelog={game.changelog} />
       {(game.inspiredBy || game.version) && (
         <div className="flex items-baseline gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
           {game.inspiredBy && <p className="flex-1">{fmt(m.player.inspiredBy, { source: game.inspiredBy[locale] })}</p>}

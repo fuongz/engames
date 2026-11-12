@@ -23,8 +23,9 @@ function useMinuteClock() {
 
 /**
  * A ticket game's two boards (docs/standards/tickets.md §5): "This week" (the
- * default: tickets earned since Monday 00:00 Vietnam time, with a resets-in
- * countdown and the player's own rank) and "All time" (the usual score board).
+ * default: net tickets since Monday 00:00 Vietnam time, earned less spent at
+ * this game's Prize Counter, with a resets-in countdown and the player's own
+ * rank) and "All time" (the usual score board).
  * `week` is null when it could not be loaded.
  */
 export function TicketBoardTabs({ week, allTime }: { week: WeeklyBoard | null; allTime: ReactNode }) {

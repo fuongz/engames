@@ -113,6 +113,25 @@ export interface GameManifest {
    * must also declare `allowance`.
    */
   shop?: ShopItem[];
+  /**
+   * What changed in each release, NEWEST FIRST (docs/standards/changelog.md).
+   * Shown as "Update history" on the game page and on the site-wide /changelog.
+   * When `version` is set it must equal `changelog[0].version`: every release
+   * bumps `version` and adds an entry dated the release day (a test checks it).
+   */
+  changelog?: ChangelogEntry[];
+}
+
+/** One release of a game, as players read it. */
+export interface ChangelogEntry {
+  /** Semver, matching `manifest.version` for the newest entry ("1.3.0"). */
+  version: string;
+  /** The release day, ISO `YYYY-MM-DD` (Vietnam calendar). */
+  date: string;
+  /** An optional headline for the release ("Lucky Jar"). */
+  title?: Localized<string>;
+  /** One line per change a player would notice; at least one in each language. */
+  changes: Localized<string[]>;
 }
 
 /** One Prize Counter item: `amount` of the game's currency `kind`, for `price` tickets. */

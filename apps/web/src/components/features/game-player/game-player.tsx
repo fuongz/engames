@@ -3,6 +3,7 @@ import {
   GoogleIcon,
   InformationCircleIcon,
   FullScreenIcon,
+  MinimizeScreenIcon,
   RankingIcon,
   SmartphoneIcon,
   PlayIcon,
@@ -97,6 +98,14 @@ export function GamePlayer({
     return () => clearTimeout(reportTimer.current);
   }, [game.slug]);
   const [canFullscreen, setCanFullscreen] = useState(false);
+  // Follows the browser, so Esc or the system exit keep the button in sync
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const sync = () => setIsFullscreen(document.fullscreenElement !== null);
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
   const [needsRotate, setNeedsRotate] = useState(false);
   const recordPlay = usePlayStats((s) => s.recordPlay);
   const landscape = game.orientation === "landscape";
@@ -366,11 +375,14 @@ export function GamePlayer({
           {/* Phones already get a full-screen view (and iOS has no fullscreen API) */}
           {canFullscreen && (
             <ToolButton
-              label={m.player.fullscreen}
+              label={isFullscreen ? m.player.exitFullscreen : m.player.fullscreen}
               className="hidden lg:inline-flex"
-              onClick={() => void rootRef.current?.requestFullscreen()}
+              onClick={() => {
+                if (document.fullscreenElement) void document.exitFullscreen();
+                else void rootRef.current?.requestFullscreen();
+              }}
             >
-              <HugeiconsIcon icon={FullScreenIcon} />
+              <HugeiconsIcon icon={isFullscreen ? MinimizeScreenIcon : FullScreenIcon} />
             </ToolButton>
           )}
         </div>

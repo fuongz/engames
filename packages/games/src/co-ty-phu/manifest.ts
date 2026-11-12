@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, MAX_PLAYERS, MIN_PLAYERS, ROOM_SETTINGS, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -47,6 +48,8 @@ const manifest: GameManifest = {
   height: H,
   online: { modes: ["versus"], minPlayers: MIN_PLAYERS, maxPlayers: MAX_PLAYERS, bots: true, settings: ROOM_SETTINGS },
   releasedAt: "2026-11-08T14:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Thể loại cờ tỷ phú (mua bán đất) với luật quốc tế quen thuộc; bàn cờ, thẻ và giá là của riêng Engames",
     en: "The property-trading board game genre and its usual rules; the board, cards and prices are Engames' own",

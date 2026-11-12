@@ -1,11 +1,12 @@
-import { StarIcon } from "@hugeicons/core-free-icons";
+import { FavouriteIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
-import { SUMMARY_KEY, createStorage, type GameManifest, summaryText } from "@web-games/core";
+import type { GameManifest } from "@web-games/core";
 import { categories } from "@web-games/games";
 import { motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
 import { type PointerEvent, useEffect, useState } from "react";
-import { useLocale } from "#/hooks/use-messages";
+import { useFavorites } from "#/hooks/use-favorites";
+import { useLocale, useMessages } from "#/hooks/use-messages";
 import { CoopBadge } from "./coop-badge";
 import { PlayCount } from "./play-count";
 import { cn } from "#/lib/utils";
@@ -55,57 +56,71 @@ function usePosterTilt() {
   };
 }
 
-/** Portrait poster card: art, title, then your record if you have one. */
+/** Portrait poster card: art, then the game's name and category. */
 export function GameCard({ game, className }: { game: GameManifest; className?: string }) {
   const locale = useLocale();
-  const [summary, setSummary] = useState<string | null>(null);
-  useEffect(() => setSummary(summaryText(createStorage(game.slug).get<unknown>(SUMMARY_KEY, null), locale)), [game.slug, locale]);
   const category = categories.find((c) => c.id === game.category);
   const tilt = usePosterTilt();
 
   return (
-    <Link to="/games/$slug" params={{ slug: game.slug }} className={cn(
-        // Press feedback for touch, where the hover lift never shows
-        "group grid content-start gap-2.5 outline-none transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:active:scale-100",
-        className,
-      )}
-    >
-      {/* transition names translate + box-shadow only: the tilt's transform is driven every frame */}
-      <motion.div
-        style={tilt ? { transform: tilt.transform } : undefined}
-        onPointerMove={tilt?.onPointerMove}
-        onPointerLeave={tilt?.onPointerLeave}
-        className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-card ring-1 ring-white/10 transition-[translate,box-shadow] duration-300 ease-out motion-safe:group-hover:-translate-y-1 group-hover:shadow-glow group-focus-visible:ring-2 group-focus-visible:ring-ring"
+    // The heart is a sibling of the link (a button may not sit inside an <a>), laid over the poster's corner
+    <div className={cn("group relative", className)}>
+      <Link
+        to="/games/$slug"
+        params={{ slug: game.slug }}
+        className="grid content-start gap-2.5 outline-none transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:active:scale-100"
       >
-        <img
-          src={game.poster[locale]}
-          alt=""
-          loading="lazy"
-          className="size-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
-        />
-        <CoopBadge game={game} variant="overlay" className="absolute top-2 left-2" />
-        <PlayCount slug={game.slug} variant="overlay" className="absolute bottom-2 left-2" />
-        {tilt && (
-          <motion.div
-            aria-hidden
-            style={{ background: tilt.glare }}
-            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        {/* transition names translate + box-shadow only: the tilt's transform is driven every frame */}
+        <motion.div
+          style={tilt ? { transform: tilt.transform } : undefined}
+          onPointerMove={tilt?.onPointerMove}
+          onPointerLeave={tilt?.onPointerLeave}
+          className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-card ring-1 ring-white/10 transition-[translate,box-shadow] duration-300 ease-out motion-safe:group-hover:-translate-y-1 group-hover:shadow-glow group-has-[a:focus-visible]:ring-2 group-has-[a:focus-visible]:ring-ring"
+        >
+          <img
+            src={game.poster[locale]}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
           />
-        )}
-      </motion.div>
-      <div className="grid gap-1 px-0.5">
-        <h3 className="truncate text-sm font-semibold transition-colors group-hover:text-primary">{game.title[locale]}</h3>
-        <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-          {summary ? (
-            <>
-              <HugeiconsIcon icon={StarIcon} className="size-3.5 shrink-0 fill-highlight text-highlight" />
-              {summary}
-            </>
-          ) : (
-            category?.label[locale]
+          {/* Bottom corners, clear of the title baked into the top of the key art */}
+          <PlayCount slug={game.slug} variant="overlay" className="absolute bottom-2 left-2" />
+          <CoopBadge game={game} variant="overlay" className="absolute right-2 bottom-2" />
+          {tilt && (
+            <motion.div
+              aria-hidden
+              style={{ background: tilt.glare }}
+              className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            />
           )}
-        </p>
-      </div>
-    </Link>
+        </motion.div>
+        <div className="grid gap-1 px-0.5">
+          <h3 className="truncate text-sm font-semibold transition-colors group-hover:text-primary">{game.title[locale]}</h3>
+          <p className="truncate text-xs text-muted-foreground">{category?.label[locale]}</p>
+        </div>
+      </Link>
+      <CardFavorite slug={game.slug} />
+    </div>
+  );
+}
+
+/** The heart in the poster's top-right corner. Signed-in players only: favourites live on the account. */
+function CardFavorite({ slug }: { slug: string }) {
+  const m = useMessages();
+  const { signedIn, slugs, isFavorite, toggle } = useFavorites();
+  if (!signedIn || slugs === undefined) return null;
+  const on = isFavorite(slug);
+  const label = on ? m.player.unfavorite : m.player.favorite;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={on}
+      title={label}
+      onClick={() => void toggle(slug)}
+      className="absolute top-2 right-2 grid size-8 place-items-center rounded-full bg-background/70 text-foreground ring-1 ring-white/10 backdrop-blur-md transition-[color,transform] outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring active:scale-90"
+    >
+      <HugeiconsIcon icon={FavouriteIcon} className={cn("size-4", on && "fill-current text-primary")} />
+    </button>
   );
 }

@@ -4,6 +4,7 @@ import {
   FavouriteIcon,
   Joystick02Icon,
   LibraryIcon,
+  NewReleasesIcon,
   Store01Icon,
   UserGroupIcon,
   VolumeHighIcon,
@@ -57,6 +58,7 @@ export function Sidebar() {
   const arcade = mounted && path.startsWith("/library") && arcadeFilter && !coopFilter && !onlineFilter;
   const library = mounted && path.startsWith("/library") && !coopFilter && !onlineFilter && !arcadeFilter;
   const favorites = mounted && path.startsWith("/favorites");
+  const changelog = mounted && path.startsWith("/changelog");
   // Favourites live on the account: signed-in players only
   const signedIn = Boolean(useSession().data?.user);
 
@@ -116,10 +118,16 @@ export function Sidebar() {
           <HugeiconsIcon icon={muted ? VolumeOffIcon : VolumeHighIcon} className="size-5" />
           {muted ? m.sidebar.soundOff : m.sidebar.soundOn}
         </button>
+        {/* Every game's update history, one timeline */}
+        <Link to="/changelog" className={SIDEBAR_ITEM} data-active={changelog}>
+          {changelog && <ActiveBar />}
+          <HugeiconsIcon icon={NewReleasesIcon} className="size-5" />
+          {m.nav.changelog}
+        </Link>
         <HelpDialog triggerClassName={SIDEBAR_ITEM} />
         <LanguageMenu variant="sidebar" triggerClassName={SIDEBAR_ITEM} />
         {/* The arcade ticket wallet, beside the account it belongs to */}
-        <TicketChip className="mx-3 mt-1" />
+        <TicketChip className="mt-1 w-full justify-start px-3" />
         <AccountButton variant="sidebar" />
       </div>
 

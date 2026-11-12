@@ -1199,7 +1199,7 @@ export function drawFlyingCoin(ctx: Ctx, sp: Sprites, x: number, y: number, size
 // ---------------------------------------------------------------- reels and counters
 
 /** An LED counter: a cream bezel round a dark window, a label tab on top, ghost 8s behind the lit digits. */
-export function drawCounter(ctx: Ctx, r: Rect, label: string, value: number, color: string, digits: number, bump = 0) {
+export function drawCounter(ctx: Ctx, r: Rect, label: string, value: number, color: string, digits: number, bump = 0, caption?: string) {
   ctx.save();
   ctx.fillStyle = BROWN;
   ctx.beginPath();
@@ -1226,6 +1226,8 @@ export function drawCounter(ctx: Ctx, r: Rect, label: string, value: number, col
   ctx.fill();
   ctx.stroke();
   text(ctx, label, r.x + 10 + lw / 2, r.y - 2, 15, BROWN, "center", null);
+  // A tiny caption right of the tab (e.g. "Ví chung"): fits the 156px box next to a 44px tab.
+  if (caption) text(ctx, caption, r.x + r.w - 6, r.y - 3, 13, CREAM, "right", BROWN);
   const size = (r.h - 8) * (1 + bump * 0.12);
   ctx.font = `700 ${size}px ${LED_FONT}`;
   ctx.textAlign = "right";

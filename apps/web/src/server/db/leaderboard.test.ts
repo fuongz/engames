@@ -107,14 +107,65 @@ describe("weeklyTicketBoard", () => {
     expect((await board("u1", { now: vn(2026, 11, 16) })).entries).toEqual([]);
   });
 
-  it("counts earnings only: spends and adjustments never move the board", async () => {
+  const shop = [{ id: "bag", name: { vi: "Túi", en: "Bag" }, kind: "coins", amount: 1, price: 600 }];
+  const buy = (userId: string, now: number, slug = "xu-vu-tru") => buyItem(db, { userId, slug, itemId: "bag", now, shop });
+
+  it("ranks net tickets: this game's Prize Counter spends come off the week's earnings", async () => {
+    await earn("u1", 1000, vn(2026, 11, 9, 8));
+    await earn("u2", 700, vn(2026, 11, 10, 8));
+    expect(await buy("u1", NOW)).toMatchObject({ ok: true });
+    const b = await board("u1");
+    expect(b.entries.map((e) => [e.name, e.score])).toEqual([
+      ["Bình", 700],
+      ["An", 400],
+    ]);
+    // `createdAt` stays the last EARNING, not the later spend
+    expect(b.entries[1].createdAt).toBe(vn(2026, 11, 9, 8) / 1000);
+    expect(b.me).toEqual({ rank: 2, score: 400, id: 2 });
+  });
+
+  it("ignores a spend at another game's counter, and hand adjustments", async () => {
     await earn("u1", 1000, NOW);
-    const shop = [{ id: "bag", name: { vi: "Túi", en: "Bag" }, kind: "coins", amount: 1, price: 600 }];
-    expect(await buyItem(db, { userId: "u1", slug: "xu-vu-tru", itemId: "bag", now: NOW, shop })).toMatchObject({ ok: true });
+    await earn("u1", 10, NOW, "xep-tang");
+    expect(await buy("u1", NOW, "xep-tang")).toMatchObject({ ok: true });
+    raw.run(
+      `insert into ticket_ledger (user_id, game_id, delta, reason, created_at) select 'u1', id, -500, 'adjust', ${NOW} from game where slug = 'xu-vu-tru'`,
+    );
     raw.run(
       `insert into ticket_ledger (user_id, game_id, delta, reason, created_at) select 'u1', id, 5000, 'adjust', ${NOW} from game where slug = 'xu-vu-tru'`,
     );
     expect((await board("u1")).me).toEqual({ rank: 1, score: 1000, id: 1 });
+    // The spend lands on the other game's board instead (floored there: 10 − 600)
+    expect((await board("u1", { slug: "xep-tang" })).me).toBeNull();
+  });
+
+  it("floors the week's net at zero: spending more than you earned takes you off the board", async () => {
+    await earn("u1", 2000, vn(2026, 11, 5)); // last week: the wallet can pay, the board never sees it
+    await earn("u1", 100, vn(2026, 11, 9, 8));
+    expect(await buy("u1", NOW)).toMatchObject({ ok: true });
+    await earn("u2", 50, NOW);
+    const b = await board("u1");
+    expect(b.entries.map((e) => [e.name, e.score])).toEqual([["Bình", 50]]);
+    expect(b.me).toBeNull();
+    // The floor is on the week's total: 100 − 600 + 400 is still below zero…
+    await earn("u1", 400, NOW);
+    expect((await board("u1")).me).toBeNull();
+    // …and 100 − 600 + 400 + 180 is back on the board
+    await earn("u1", 180, NOW);
+    expect((await board("u1")).me).toEqual({ rank: 1, score: 80, id: 1 });
+  });
+
+  it("only subtracts spends made this Vietnam week", async () => {
+    await earn("u1", 2000, vn(2026, 11, 8, 12));
+    expect(await buy("u1", vn(2026, 11, 8, 23, 59, 59, 999))).toMatchObject({ ok: true }); // Sunday: last week
+    await earn("u1", 900, vn(2026, 11, 9));
+    expect((await board("u1")).me?.score).toBe(900);
+    expect(await buy("u1", vn(2026, 11, 9))).toMatchObject({ ok: true }); // Monday 00:00: this week
+    expect((await board("u1")).me?.score).toBe(300);
+    // Last week's board took its own Sunday spend: 2000 − 600
+    expect((await board("u1", { now: vn(2026, 11, 8, 23, 59, 59, 999) })).me?.score).toBe(1400);
+    // Next Monday starts clean
+    expect((await board("u1", { now: vn(2026, 11, 16) })).me).toBeNull();
   });
 
   it("never counts a Lucky Jar win (reason 'jackpot')", async () => {

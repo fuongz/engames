@@ -1,4 +1,5 @@
 import type { GameManifest } from "@web-games/core";
+import { changelog } from "./changelog";
 import banner from "./banner.webp";
 import { H, W } from "./config";
 import posterEn from "./poster-en.webp";
@@ -44,6 +45,8 @@ const manifest: GameManifest = {
   height: H,
   online: { modes: ["versus"], minPlayers: 2, maxPlayers: 2 },
   releasedAt: "2026-11-08T14:00",
+  version: changelog[0].version,
+  changelog,
   inspiredBy: {
     vi: "Cờ vua theo Luật Cờ vua của FIDE",
     en: "Chess, as in the FIDE Laws of Chess",
