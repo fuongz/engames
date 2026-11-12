@@ -9,6 +9,13 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
 
+  // The prerendered shell is dist/client/index.html, and asset matching ignores
+  // the query, so `/?lang=en` would get the Vietnamese shell. Sending `/` to the
+  // Worker first lets it SSR the home page in the URL's language.
+  "assets": {
+    "run_worker_first": ["/"]
+  },
+
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

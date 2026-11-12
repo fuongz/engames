@@ -14,6 +14,7 @@ import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as LibraryRouteImport } from './routes/library'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as GamesSlugRouteImport } from './routes/games.$slug'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiOnlineResultsRouteImport } from './routes/api/online/results'
@@ -43,6 +44,11 @@ const LibraryRoute = LibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GamesSlugRoute = GamesSlugRouteImport.update({
   id: '/games/$slug',
   path: '/games/$slug',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/games/$slug': typeof GamesSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/online/results': typeof ApiOnlineResultsRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/games/$slug': typeof GamesSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/online/results': typeof ApiOnlineResultsRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/games/$slug': typeof GamesSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/online/results': typeof ApiOnlineResultsRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/history'
     | '/library'
+    | '/sitemap.xml'
     | '/games/$slug'
     | '/api/auth/$'
     | '/api/online/results'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/history'
     | '/library'
+    | '/sitemap.xml'
     | '/games/$slug'
     | '/api/auth/$'
     | '/api/online/results'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/history'
     | '/library'
+    | '/sitemap.xml'
     | '/games/$slug'
     | '/api/auth/$'
     | '/api/online/results'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   FavoritesRoute: typeof FavoritesRoute
   HistoryRoute: typeof HistoryRoute
   LibraryRoute: typeof LibraryRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   GamesSlugRoute: typeof GamesSlugRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiOnlineResultsRoute: typeof ApiOnlineResultsRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/games/$slug': {
       id: '/games/$slug'
       path: '/games/$slug'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   FavoritesRoute: FavoritesRoute,
   HistoryRoute: HistoryRoute,
   LibraryRoute: LibraryRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   GamesSlugRoute: GamesSlugRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiOnlineResultsRoute: ApiOnlineResultsRoute,

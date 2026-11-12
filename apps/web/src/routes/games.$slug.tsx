@@ -10,8 +10,8 @@ import { LeaderboardList } from "#/components/shared/leaderboard/leaderboard-lis
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { getLeaderboard, getWeeklyLeaderboard } from "#/server/leaderboard";
 import { onlineMode } from "#/lib/online";
-import { socialMeta } from "#/lib/seo";
-import { useLocaleStore } from "#/stores/locale";
+import { headLocale, socialMeta, videoGameJsonLd } from "#/lib/seo";
+import { storedLocale } from "#/stores/locale";
 
 export const Route = createFileRoute("/games/$slug")({
   // ?room=<code> opens an online room for games that play online
@@ -31,18 +31,19 @@ export const Route = createFileRoute("/games/$slug")({
     ]);
     return { game, board, coop, week };
   },
-  head: ({ loaderData }) => {
+  head: ({ loaderData, match }) => {
     if (!loaderData) return { meta: [{ title: "Engames" }] };
     const { game } = loaderData;
-    const locale = useLocaleStore.getState().locale;
+    const locale = headLocale(match.search, storedLocale);
     const title = `${game.title[locale]} | Engames`;
+    const description = game.tagline[locale];
+    const path = `/games/${game.slug}`;
+    // The game's own card: its banner with the title on it. ?room= is never in the canonical.
+    const { meta, links } = socialMeta({ title, description, locale, image: game.share, imageAlt: game.title[locale], path });
     return {
-      meta: [
-        { title },
-        { name: "description", content: game.tagline[locale] },
-        // The game's own card: its banner with the title on it
-        ...socialMeta({ title, description: game.tagline[locale], image: game.share, imageAlt: game.title[locale], path: `/games/${game.slug}` }),
-      ],
+      meta: [{ title }, { name: "description", content: description }, ...meta],
+      links,
+      scripts: [videoGameJsonLd({ name: game.title[locale], description, path, image: game.share, locale })],
     };
   },
   component: GamePage,

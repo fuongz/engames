@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { categories } from "@web-games/games";
 import { LibraryView } from "#/components/features/library/library-view";
 import { catalogs } from "#/content/messages";
-import { socialMeta } from "#/lib/seo";
-import { useLocaleStore } from "#/stores/locale";
+import { headLocale, socialMeta } from "#/lib/seo";
+import { storedLocale } from "#/stores/locale";
 
 export const Route = createFileRoute("/library")({
   // ?category=<id> deep-links a filter (the ⌘K palette uses it); anything else means all.
@@ -18,11 +18,14 @@ export const Route = createFileRoute("/library")({
       ...(on(search.online) ? { online: 1 as const } : {}),
     };
   },
-  // head runs outside React; it picks up a language switch on the next navigation
-  head: () => {
-    const m = catalogs[useLocaleStore.getState().locale];
+  // The filters are state, not pages: the canonical is /library whatever they are
+  head: ({ match }) => {
+    const locale = headLocale(match.search, storedLocale);
+    const m = catalogs[locale];
+    const { meta, links } = socialMeta({ title: m.library.pageTitle, description: m.library.description, locale, path: "/library" });
     return {
-      meta: [{ title: m.library.pageTitle }, ...socialMeta({ title: m.library.pageTitle, description: m.app.description, path: "/library" })],
+      meta: [{ title: m.library.pageTitle }, { name: "description", content: m.library.description }, ...meta],
+      links,
     };
   },
   component: Library,

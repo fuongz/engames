@@ -11,8 +11,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
-import { useLocale, useMessages } from "#/hooks/use-messages";
-import { chooseLocale } from "#/stores/locale";
+import { useChooseLocale, useLocale, useMessages } from "#/hooks/use-messages";
 
 /**
  * Tiếng Việt / English picker. `sidebar`: a full-width row styled by the caller;
@@ -21,6 +20,7 @@ import { chooseLocale } from "#/stores/locale";
 export function LanguageMenu({ variant, triggerClassName }: { variant: "sidebar" | "compact"; triggerClassName?: string }) {
   const locale = useLocale();
   const m = useMessages();
+  const chooseLocale = useChooseLocale();
 
   return (
     <DropdownMenu>

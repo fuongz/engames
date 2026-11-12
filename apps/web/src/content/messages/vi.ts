@@ -116,6 +116,7 @@ export const vi = {
   library: {
     title: "Thư viện",
     pageTitle: "Thư viện | Engames",
+    description: "Tất cả game trên Engames theo thể loại: hành động, chiến thuật, trí tuệ, game thùng, cùng game co-op và chơi online với bạn bè. Chơi ngay trên trình duyệt, không cần cài.",
     count: { one: "{n} game, chơi ngay không cần cài.", other: "{n} game, chơi ngay không cần cài." },
     searchPlaceholder: "Tìm trong thư viện...",
     searchLabel: "Tìm trong thư viện",

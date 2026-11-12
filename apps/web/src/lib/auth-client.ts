@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/client";
 import { inferAdditionalFields } from "better-auth/client/plugins";
+import { langParam, urlLocale } from "#/lib/seo";
 
 // Framework-free Better Auth client (same origin as the page). React code reads
 // the session through hooks/use-session; actions are plain functions here.
@@ -11,9 +12,11 @@ export const authClient = createAuthClient({
   plugins: [inferAdditionalFields({ user: { locale: { type: "string", required: false } } })],
 });
 
-/** Full-page redirect to Google; comes back to `returnTo` signed in. */
+/** Full-page redirect to Google; comes back to `returnTo` signed in, in the page's language (`?lang=`). */
 export function signInWithGoogle(returnTo = window.location.pathname) {
-  return authClient.signIn.social({ provider: "google", callbackURL: returnTo });
+  const lang = urlLocale(Object.fromEntries(new URLSearchParams(window.location.search)));
+  const param = lang && !returnTo.includes("?") ? langParam(lang) : undefined;
+  return authClient.signIn.social({ provider: "google", callbackURL: param ? `${returnTo}?lang=${param}` : returnTo });
 }
 
 export function signOut() {

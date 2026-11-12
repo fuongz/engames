@@ -8,8 +8,9 @@
 //    live data, and caching an OAuth callback would be actively harmful.
 //
 // Bump VERSION to drop old caches after a change to this file's strategy (or to
-// push new precached files at once: v3 shipped the new logo and icons).
-const VERSION = "v3";
+// push new precached files at once: v3 shipped the new logo and icons; v4 stopped
+// serving the shell for sitemap.xml and robots.txt).
+const VERSION = "v4";
 const CACHE = `engames-${VERSION}`;
 const SHELL = "/";
 const PRECACHE = [SHELL, "/manifest.webmanifest", "/icons/logo.svg", "/icons/logo-192.png", "/icons/logo-512.png"];
@@ -33,6 +34,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_serverFn")) return;
+  // Crawler files are real documents, never the app shell
+  if (url.pathname === "/sitemap.xml" || url.pathname === "/robots.txt") return;
 
   if (request.mode === "navigate") {
     event.respondWith(
