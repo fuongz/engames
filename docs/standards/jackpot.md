@@ -29,8 +29,8 @@ mắn" / "Lucky Jar Hall".
   wallet as a `ticket_ledger` row with reason **`jackpot`**, which is **not
   earnings**: it never counts toward the daily earn cap, `earned_total` or the
   weekly board.
-- **The portal** shows a ticker in the top bar (pool + recent winners, a crawl
-  announcing a new win once) and the Lucky Jar Hall (pool, cap, last 20
+- **The portal** shows a ticker in the top bar (the jar, "Jackpot" and the
+  pool; a new win lights it up once) and the Lucky Jar Hall (pool, cap, last 20
   winners). Hidden until some game has `jackpot: true`. Works signed out.
 
 ---
@@ -203,8 +203,9 @@ manifest lacks `jackpot: true`, and anyone signed out.
 each visible tab asks at most every 30 s.
 
 A new win (newer than the stored `wonAt`; on a first visit, one in the last
-24 h) crawls across the ticker twice, then the ticker settles back to cycling
-the recent winners. Under `prefers-reduced-motion` the text stays still.
+24 h) lights the ticker up for a few seconds (its jar bounces, unless
+`prefers-reduced-motion`) and is read once to screen readers; the winners
+themselves are listed in the Hall, not in the ticker.
 
 ---
 

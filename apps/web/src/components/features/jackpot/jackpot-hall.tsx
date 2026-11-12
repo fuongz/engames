@@ -1,4 +1,4 @@
-import { JarIcon, Ticket01Icon } from "@hugeicons/core-free-icons";
+import { Ticket01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { findGame } from "@web-games/games";
 import { useEffect, useState } from "react";
@@ -61,9 +61,7 @@ export function JackpotHall({ onClose }: { onClose: () => void }) {
           <>
             <section className="grid gap-3 rounded-2xl bg-muted/50 p-4 ring-1 ring-border">
               <div className="flex items-center gap-3">
-                <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
-                  <HugeiconsIcon icon={JarIcon} className="size-6" aria-hidden />
-                </span>
+                <img src="/jackpot/jar.webp" alt="" aria-hidden width={56} height={56} draggable={false} className="size-14 shrink-0 select-none drop-shadow-md" />
                 <div className="grid min-w-0 gap-0.5">
                   <span className="text-xs font-medium text-muted-foreground">{m.jackpot.hall.poolLabel}</span>
                   <span className="text-2xl font-bold tracking-tight tabular-nums">
@@ -71,7 +69,11 @@ export function JackpotHall({ onClose }: { onClose: () => void }) {
                   </span>
                 </div>
               </div>
-              <Progress value={pct} aria-label={fmt(m.jackpot.hall.fill, { pct })} />
+              <Progress
+                value={pct}
+                aria-label={fmt(m.jackpot.hall.fill, { pct })}
+                className="[&_[data-slot=progress-indicator]]:rounded-full [&_[data-slot=progress-track]]:bg-foreground/15"
+              />
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 <span className="font-medium tabular-nums text-foreground">{fmt(m.jackpot.hall.fill, { pct })}</span>
                 <span className="tabular-nums">{fmt(m.jackpot.hall.cap, { n: nf.format(state.cap) })}</span>
@@ -85,8 +87,8 @@ export function JackpotHall({ onClose }: { onClose: () => void }) {
               {state.recent.length === 0 ? (
                 <Empty className="rounded-xl border border-dashed py-8">
                   <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <HugeiconsIcon icon={JarIcon} />
+                    <EmptyMedia>
+                      <img src="/jackpot/jar.webp" alt="" aria-hidden width={48} height={48} draggable={false} className="size-12 opacity-60 grayscale select-none" />
                     </EmptyMedia>
                     <EmptyTitle>{m.jackpot.hall.emptyTitle}</EmptyTitle>
                     <EmptyDescription>{m.jackpot.hall.emptyDescription}</EmptyDescription>

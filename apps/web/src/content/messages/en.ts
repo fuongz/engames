@@ -98,6 +98,8 @@ export const en: Messages = {
     checkinError: "Couldn't claim, try again",
     level: "Level {n}",
     xp: "{into}/{total} XP",
+    menuTitle: "Account",
+    close: "Close",
   },
   history: {
     pageTitle: "Match history | Engames",
@@ -177,6 +179,7 @@ export const en: Messages = {
     openShop: "{balance}. Open the Prize Counter",
   },
   jackpot: {
+    label: "Jackpot",
     name: "Lucky Jar",
     open: "The Lucky Jar holds {n} tickets. Open the Lucky Jar Hall",
     pool: "{n} tickets",
@@ -459,12 +462,14 @@ export const en: Messages = {
       close: "Awesome!",
     },
     badges: {
-      title: "Badges",
+      title: "Achievements",
       count: "{n}/{total} unlocked",
       locked: "Locked",
       unlocked: "Unlocked",
       unlockedOn: "Unlocked {date}",
       howTo: "How to unlock",
+      progress: { games: "{n}/{total} games", plays: "{n}/{total} plays", tickets: "{n}/{total} tickets" },
+      remaining: { games: "{n} more to go", plays: "{n} more to go", tickets: "{n} more to go" },
       tiers: { bronze: "Bronze", silver: "Silver", gold: "Gold" },
     },
     stats: {
@@ -479,11 +484,12 @@ export const en: Messages = {
       badges: "Badges",
       daysWithUs: "Days on Engames",
       xp: "Total XP",
-      perGame: "By game",
+      perGame: "Played lately",
       empty: "No games played yet. Pick one and get started!",
       browse: "Browse the library",
       playsN: { one: "{n} play", other: "{n} plays" },
       best: "Best",
+      play: "Play",
       lastPlayed: "Played {when}",
     },
     public: {

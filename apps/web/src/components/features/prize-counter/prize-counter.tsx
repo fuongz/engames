@@ -103,7 +103,7 @@ export function PrizeCounter({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90dvh] gap-5 overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:max-w-xl">
+      <DialogContent className="max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-w-[calc(100%-1rem-env(safe-area-inset-left)-env(safe-area-inset-right))] gap-4 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:max-h-[90dvh] sm:max-w-xl sm:gap-5 sm:p-6 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <DialogHeader className="pr-8">
           <DialogTitle>{signedOut ? m.shop.signInTitle : m.shop.title}</DialogTitle>
           <DialogDescription>{signedOut ? m.shop.signInHint : m.shop.description}</DialogDescription>
@@ -149,14 +149,15 @@ export function PrizeCounter({ onClose }: { onClose: () => void }) {
               <section
                 key={game.slug}
                 aria-labelledby={`shop-${game.slug}`}
-                className="grid gap-3 rounded-3xl bg-secondary/60 p-3 ring-1 ring-border sm:p-4"
+                // Flat on phones (the dialog is already the card); a tinted shelf from sm up
+                className="grid gap-3 sm:rounded-3xl sm:bg-secondary/60 sm:p-4 sm:ring-1 sm:ring-border"
               >
                 {/* The game this shelf belongs to: its art, its name, a way into it */}
                 <Link
                   to="/games/$slug"
                   params={{ slug: game.slug }}
                   onClick={onClose}
-                  className="group flex items-center gap-3 rounded-2xl p-1 outline-none transition-colors hover:bg-secondary focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="group flex min-h-11 items-center gap-3 rounded-2xl sm:p-1 outline-none transition-colors hover:bg-secondary focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                   {findGame(game.slug) && (
                     <img
@@ -176,7 +177,7 @@ export function PrizeCounter({ onClose }: { onClose: () => void }) {
                     <HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" aria-hidden />
                   </span>
                 </Link>
-                <ul className="grid grid-cols-2 gap-3 sm:gap-4">
+                <ul className="grid grid-cols-2 gap-2.5 sm:gap-4">
                   {game.items.map((item, i) => {
                     const state = items[itemKey(game.slug, item.id)];
                     const soldOut = item.remaining === 0;
@@ -190,7 +191,7 @@ export function PrizeCounter({ onClose }: { onClose: () => void }) {
                       <li
                         key={item.id}
                         className={cn(
-                          "relative isolate flex flex-col items-center overflow-hidden rounded-3xl bg-linear-to-b px-3 pt-9 pb-3 text-center shadow-lg ring-1 ring-foreground/10",
+                          "relative isolate flex flex-col items-center overflow-hidden rounded-3xl bg-linear-to-b px-2.5 pt-9 pb-2.5 text-center sm:px-3 sm:pb-3 shadow-lg ring-1 ring-foreground/10",
                           TONES[i % TONES.length],
                           soldOut && "grayscale-[.7]",
                         )}

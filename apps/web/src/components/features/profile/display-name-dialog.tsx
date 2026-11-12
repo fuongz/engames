@@ -33,7 +33,7 @@ export function DisplayNameEditButton({ name, onSaved }: { name: string; onSaved
         <HugeiconsIcon icon={PencilEdit02Icon} className="size-4" />
       </Button>
       <Dialog open={open} onOpenChange={(next) => !(busy && !next) && setOpen(next)}>
-        <DialogContent showCloseButton={false} className="gap-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:max-w-sm">
+        <DialogContent showCloseButton={false} className="gap-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:max-w-sm">
           <DisplayNameForm name={name} onClose={() => setOpen(false)} onSaved={onSaved} onBusyChange={setBusy} />
         </DialogContent>
       </Dialog>
@@ -82,7 +82,7 @@ function DisplayNameForm({
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="grid gap-4">
+    <form onSubmit={(e) => void submit(e)} className="grid gap-3">
       <DialogHeader>
         <DialogTitle className="text-lg font-bold">{t.title}</DialogTitle>
         <DialogDescription>{t.description}</DialogDescription>
@@ -108,15 +108,17 @@ function DisplayNameForm({
             setError(null);
           }}
         />
-        <p id={counterId} className="text-right text-xs text-muted-foreground tabular-nums">
-          {fmt(t.counter, { n: value.length, max: DISPLAY_NAME_MAX })}
-        </p>
+        {/* Error and counter share one row, always in the layout, so an error never moves the buttons */}
+        <div className="flex min-h-4 items-start justify-between gap-3 text-xs">
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+          <p id={counterId} className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+            {fmt(t.counter, { n: value.length, max: DISPLAY_NAME_MAX })}
+          </p>
+        </div>
       </div>
-      {/* Always in the layout, so an error appearing never moves the buttons */}
-      <p role="alert" className="min-h-5 text-sm text-destructive">
-        {error}
-      </p>
-      <DialogFooter>
+      <DialogFooter className="flex-row justify-end gap-2 *:flex-1 sm:*:flex-none">
         <Button type="button" variant="secondary" className="h-11 rounded-full px-6" disabled={saving} onClick={onClose}>
           {t.cancel}
         </Button>

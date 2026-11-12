@@ -262,11 +262,22 @@ export interface ProfileFacts {
   shieldAt: number | null;
 }
 
+/** What a counted badge counts, for its progress label. */
+export type BadgeUnit = "games" | "plays" | "tickets";
+
+export interface BadgeProgress {
+  current: number;
+  target: number;
+  unit: BadgeUnit;
+}
+
 export interface BadgeState {
   id: BadgeId;
   unlocked: boolean;
   /** Unix ms, when the data says exactly (not for ticket and play counts). */
   unlockedAt?: number;
+  /** How far along a locked, counted badge is (games tried, plays, tickets). */
+  progress?: BadgeProgress;
 }
 
 /** Every badge, in `BADGES` order, unlocked or not. */
@@ -292,5 +303,18 @@ export function badgeUnlocks(f: ProfileFacts): BadgeState[] {
     "streak-100": at(f.milestoneAt[100]),
     "shield-saved": at(f.shieldAt),
   };
-  return BADGES.map((b) => ({ id: b.id, ...when[b.id] }));
+  const counted: Partial<Record<BadgeId, BadgeProgress>> = {
+    "explorer-5": { current: firsts.length, target: 5, unit: "games" },
+    ...(f.catalogSize > 0 ? { "explorer-all": { current: firsts.length, target: f.catalogSize, unit: "games" as const } } : {}),
+    "plays-100": { current: f.plays, target: 100, unit: "plays" },
+    "tickets-1k": { current: f.earnedTotal, target: 1_000, unit: "tickets" },
+    "tickets-10k": { current: f.earnedTotal, target: 10_000, unit: "tickets" },
+  };
+  return BADGES.map((b) => {
+    const state = when[b.id];
+    const progress = counted[b.id];
+    return state.unlocked || !progress
+      ? { id: b.id, ...state }
+      : { id: b.id, ...state, progress: { ...progress, current: Math.min(progress.current, progress.target) } };
+  });
 }

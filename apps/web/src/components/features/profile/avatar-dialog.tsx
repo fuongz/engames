@@ -41,7 +41,7 @@ export function AvatarEditButton({ image, name, onChanged }: { image: string | n
       <Dialog open={open} onOpenChange={(next) => !(busy && !next) && setOpen(next)}>
         <DialogContent
           showCloseButton={false}
-          className="max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+          className="max-h-[calc(100dvh-2rem)] gap-3 overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         >
           <AvatarDialogBody image={image} name={name} onClose={() => setOpen(false)} onChanged={onChanged} onBusyChange={setBusy} />
         </DialogContent>
@@ -151,7 +151,7 @@ function AvatarDialogBody({
       </DialogHeader>
 
       {step === "pick" || !bitmap || !crop ? (
-        <div className="grid gap-3">
+        <div className="grid">
           {/* biome-ignore lint/a11y/noStaticElementInteractions: a drop target is a pointer-only convenience; the Choose button inside is the keyboard path */}
           <div
             onDragOver={(e) => {
@@ -161,11 +161,11 @@ function AvatarDialogBody({
             onDragLeave={() => setDragging(false)}
             onDrop={drop}
             className={cn(
-              "mx-auto grid aspect-square w-full max-w-72 place-content-center justify-items-center gap-3 rounded-3xl border-2 border-dashed p-4 text-center motion-safe:transition-colors",
+              "mx-auto grid w-full max-w-72 place-content-center justify-items-center gap-2 rounded-3xl border-2 border-dashed p-4 text-center motion-safe:transition-colors",
               dragging ? "border-primary bg-primary/10" : "border-border bg-muted/40",
             )}
           >
-            <Avatar className="size-24">
+            <Avatar className="size-20">
               {image && <AvatarImage src={image} alt="" referrerPolicy="no-referrer" />}
               <AvatarFallback className="text-3xl font-bold">{name.slice(0, 1).toUpperCase()}</AvatarFallback>
             </Avatar>
@@ -189,25 +189,17 @@ function AvatarDialogBody({
               }}
             />
           </div>
-          <div className="mx-auto flex h-9 w-full max-w-72 items-center justify-center">
-            {image && (
-              <Button type="button" variant="destructive" className="h-9 rounded-full px-4" disabled={busy} onClick={() => void remove()}>
-                <HugeiconsIcon icon={Delete02Icon} data-icon="inline-start" />
-                {working === "remove" ? t.removing : t.remove}
-              </Button>
-            )}
-          </div>
         </div>
       ) : (
         <AvatarCropper bitmap={bitmap} crop={crop} onChange={setCrop} disabled={busy} />
       )}
 
-      {/* Always in the layout, so an error appearing never moves the buttons */}
-      <p role="alert" className="min-h-5 text-center text-sm text-destructive">
+      {/* Collapses when empty, so no gap is left above the footer */}
+      <p role="alert" className="text-center text-sm text-destructive empty:hidden">
         {error}
       </p>
 
-      <DialogFooter className="sm:justify-center">
+      <DialogFooter className="flex-row justify-end gap-2 *:flex-1 sm:*:flex-none">
         {step === "crop" ? (
           <>
             <Button
@@ -227,9 +219,17 @@ function AvatarDialogBody({
             </Button>
           </>
         ) : (
-          <Button type="button" variant="secondary" className="h-11 rounded-full px-6" disabled={busy} onClick={onClose}>
-            {t.cancel}
-          </Button>
+          <>
+            {image && (
+              <Button type="button" variant="destructive" className="h-11 rounded-full px-6" disabled={busy} onClick={() => void remove()}>
+                <HugeiconsIcon icon={Delete02Icon} data-icon="inline-start" />
+                {working === "remove" ? t.removing : t.remove}
+              </Button>
+            )}
+            <Button type="button" variant="secondary" className="h-11 rounded-full px-6" disabled={busy} onClick={onClose}>
+              {t.cancel}
+            </Button>
+          </>
         )}
       </DialogFooter>
     </>

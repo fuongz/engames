@@ -97,6 +97,8 @@ export const vi = {
     checkinError: "Chưa nhận được, thử lại nhé",
     level: "Cấp {n}",
     xp: "{into}/{total} XP",
+    menuTitle: "Tài khoản",
+    close: "Đóng",
   },
   history: {
     pageTitle: "Lịch sử đấu | Engames",
@@ -176,6 +178,7 @@ export const vi = {
     openShop: "{balance}. Mở quầy đổi thưởng",
   },
   jackpot: {
+    label: "Jackpot",
     name: "Hũ may mắn",
     open: "Hũ may mắn đang có {n} vé. Mở Đại sảnh Hũ may mắn",
     pool: "{n} vé",
@@ -458,12 +461,14 @@ export const vi = {
       close: "Tuyệt vời!",
     },
     badges: {
-      title: "Huy hiệu",
+      title: "Thành tựu",
       count: "{n}/{total} đã mở",
       locked: "Chưa mở khóa",
       unlocked: "Đã mở khóa",
       unlockedOn: "Mở khóa {date}",
       howTo: "Cách mở",
+      progress: { games: "{n}/{total} trò", plays: "{n}/{total} lượt", tickets: "{n}/{total} vé" },
+      remaining: { games: "Còn {n} trò nữa", plays: "Còn {n} lượt nữa", tickets: "Còn {n} vé nữa" },
       tiers: { bronze: "Đồng", silver: "Bạc", gold: "Vàng" },
     },
     stats: {
@@ -478,11 +483,12 @@ export const vi = {
       badges: "Huy hiệu",
       daysWithUs: "Ngày cùng Engames",
       xp: "Tổng XP",
-      perGame: "Từng trò",
+      perGame: "Chơi gần đây",
       empty: "Chưa chơi trò nào. Chọn một trò và bắt đầu thôi!",
       browse: "Vào thư viện",
       playsN: { one: "{n} lượt", other: "{n} lượt" },
       best: "Kỷ lục",
+      play: "Chơi",
       lastPlayed: "Chơi {when}",
     },
     public: {

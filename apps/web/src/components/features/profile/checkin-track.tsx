@@ -243,17 +243,18 @@ export function CheckinTrack({
       </div>
 
       {/* The road */}
-      <div className="-mx-1 overflow-x-auto px-1 pt-5 pb-1">
-        <ol className="relative grid min-w-[20rem] grid-cols-[repeat(6,minmax(0,1fr))_minmax(0,1.5fr)] items-end">
-          {/* The track the boxes sit on, filled up to the last opened one */}
+      {/* Phones: two rows (days 1-4, then 5-6 and the featured chest); sm up: one row on the track */}
+      <div className="pt-2 pb-1 sm:pt-5">
+        <ol className="relative grid grid-cols-4 items-end gap-x-2 gap-y-5 sm:grid-cols-[repeat(6,minmax(0,1fr))_minmax(0,1.5fr)] sm:gap-0">
+          {/* The track the boxes sit on, filled up to the last opened one (one-row layout only) */}
           <span
             aria-hidden
-            className="absolute right-[10%] bottom-[2.1rem] left-[6.67%] h-2 rounded-full bg-secondary"
+            className="absolute right-[10%] bottom-[2.1rem] left-[6.67%] hidden h-2 rounded-full bg-secondary sm:block"
           />
           {lastClaimed > 0 && (
             <motion.span
               aria-hidden
-              className="absolute bottom-[2.1rem] left-[6.67%] h-2 rounded-full bg-primary"
+              className="absolute bottom-[2.1rem] left-[6.67%] hidden h-2 rounded-full bg-primary sm:block"
               initial={false}
               animate={{ width: `${center(lastClaimed) - center(0)}%` }}
               transition={{ duration: reduce ? 0 : 0.6, ease: EASE_OUT }}
@@ -262,7 +263,10 @@ export function CheckinTrack({
           {state.next7.map((d, i) => (
             <li
               key={d.day}
-              className="relative grid justify-items-center gap-1.5"
+              className={cn(
+                "relative grid justify-items-center gap-1.5",
+                d.isChest && "col-span-2 sm:col-span-1",
+              )}
             >
               {i === today && showToday ? (
                 <TodayBox
@@ -279,7 +283,7 @@ export function CheckinTrack({
               )}
               <span
                 className={cn(
-                  "text-[11px] font-medium whitespace-nowrap",
+                  "text-xs font-medium whitespace-nowrap",
                   d.isChest
                     ? "font-semibold text-highlight"
                     : i === today
@@ -375,7 +379,7 @@ export function CheckinTrack({
                 <Progress
                   value={milestoneProgress}
                   aria-label={m.profile.checkin.milestone}
-                  className="gap-0 [&_[data-slot=progress-indicator]]:bg-highlight"
+                  className="gap-0 [&_[data-slot=progress-indicator]]:rounded-full [&_[data-slot=progress-indicator]]:bg-highlight [&_[data-slot=progress-track]]:bg-foreground/15"
                 />
                 <p className="text-[11px] text-muted-foreground">
                   {milestone.daysLeft === 0
@@ -505,11 +509,14 @@ function TicketBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-full px-1 py-0.5 text-[9px] leading-none font-bold whitespace-nowrap tabular-nums sm:px-1.5 sm:text-[11px]",
+        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-1 text-[11px] leading-none font-bold whitespace-nowrap tabular-nums",
         BADGE_TONE[tone],
       )}
     >
-      <TicketIcon px={14} className={cn("size-3 sm:size-3.5", tone === "today" && "brightness-0 invert")} />
+      <TicketIcon
+        px={14}
+        className={cn("size-3.5", tone === "today" && "brightness-0 invert")}
+      />
       +{amount}
     </span>
   );
@@ -545,15 +552,15 @@ function StaticBox({ day }: { day: CheckinDay }) {
           look={day.claimed ? "claimed" : "future"}
           className={
             day.isChest
-              ? "size-14 sm:size-20 lg:size-24"
-              : "size-10 sm:size-14 lg:size-16"
+              ? "size-20 lg:size-24"
+              : "size-14 lg:size-16"
           }
         />
         {day.claimed && (
-          <span className="absolute top-5 -right-1 grid size-4 place-items-center rounded-full bg-brand text-primary-foreground ring-2 ring-card sm:top-6 sm:size-5">
+          <span className="absolute top-7 -right-1 grid size-5 place-items-center rounded-full bg-brand text-primary-foreground ring-2 ring-card">
             <HugeiconsIcon
               icon={Tick02Icon}
-              className="size-3 sm:size-3.5"
+              className="size-3.5"
               strokeWidth={3}
             />
           </span>
@@ -679,8 +686,8 @@ function TodayBox({
               pop={!reduce}
               className={
                 day.isChest
-                  ? "size-16 sm:size-24 lg:size-28"
-                  : "size-12 sm:size-16 lg:size-20"
+                  ? "size-24 lg:size-28"
+                  : "size-16 lg:size-20"
               }
             />
           </motion.div>
