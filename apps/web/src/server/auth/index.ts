@@ -23,6 +23,9 @@ export function getAuth() {
       // The UI language follows the account across devices (stores/locale syncs it)
       additionalFields: {
         locale: { type: "string", required: false, validator: { input: z.enum(LOCALES) } },
+        // Others may open the profile (/u/<id>). `input: false`: only
+        // setProfilePublicFn (server/profile.ts) changes it, never updateUser
+        profilePublic: { type: "boolean", required: false, defaultValue: true, input: false },
       },
     },
     socialProviders: {

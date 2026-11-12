@@ -33,6 +33,12 @@ export const user = sqliteTable("user", {
   image: text("image"),
   /** Preferred UI language ("vi" | "en"), a Better Auth additional field. Null until first synced. */
   locale: text("locale"),
+  /**
+   * Whether other players may open this player's profile (/u/<id>), a Better
+   * Auth additional field (`input: false`: only setProfilePublicFn changes it).
+   * On by default; the leaderboard links a name only when it is on.
+   */
+  profilePublic: integer("profile_public", { mode: "boolean" }).notNull().default(true),
   ...timestamps,
 });
 
@@ -175,6 +181,45 @@ export const gameStat = sqliteTable("game_stat", {
     .references(() => game.id),
   plays: integer("plays").notNull().default(0),
 });
+
+/**
+ * How many times each signed-in player started each game, and when first and
+ * last (`first_played_at`, `last_played_at`, unix ms): the per-player side of
+ * `game_stat`, written by the same `countPlay` call (migration 0011; plays before
+ * it were never counted per player). Feeds the profile's per-game stats and badges.
+ */
+export const userGameStat = sqliteTable(
+  "user_game_stat",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    plays: integer("plays").notNull().default(0),
+    firstPlayedAt: integer("first_played_at").notNull(),
+    lastPlayedAt: integer("last_played_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.gameId] })],
+);
+
+/**
+ * A badge a player has unlocked, kept forever (docs/standards/checkin.md §6).
+ * Badges are first derived from live data, then recorded here the first time
+ * their owner opens their profile, so one that later stops qualifying (top-10)
+ * stays unlocked and XP never drops. `unlocked_at` is unix ms. The primary key
+ * makes the insert a no-op for a badge already recorded.
+ */
+export const userBadge = sqliteTable(
+  "user_badge",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    badgeId: text("badge_id").notNull(),
+    unlockedAt: integer("unlocked_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.badgeId] })],
+);
 
 // ---------------------------------------------------------------- Online match history
 
@@ -337,6 +382,38 @@ export const allowanceGrant = sqliteTable(
   ],
 );
 
+// ---------------------------------------------------------------- Daily check-in
+
+/**
+ * The portal's daily check-in (docs/standards/checkin.md): one row per player
+ * per Vietnam day (`day` = "YYYY-MM-DD" in Asia/Ho_Chi_Minh). `kind` is "claim"
+ * (the player checked in and was paid `amount` arcade tickets) or "shield" (a
+ * missed day the week's free streak shield covered, `amount` 0). `streak_day`
+ * is the streak count on that day. The primary key is the race guard: one row
+ * per player per day, ever. `created_at` is unix ms.
+ */
+export const dailyCheckin = sqliteTable(
+  "daily_checkin",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    day: text("day").notNull(),
+    /** "claim" | "shield". */
+    kind: text("kind").notNull(),
+    streakDay: integer("streak_day").notNull(),
+    amount: integer("amount").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.day] }),
+    check(
+      "daily_checkin_shape",
+      sql`kind in ('claim', 'shield') and day glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and streak_day >= 1 and amount >= 0 and (kind = 'claim' or amount = 0)`,
+    ),
+  ],
+);
+
 // ---------------------------------------------------------------- Arcade tickets
 
 /**
@@ -360,8 +437,9 @@ export const ticketWallet = sqliteTable("ticket_wallet", {
  * Every change to a wallet, newest last: the audit trail, and what the daily
  * earn cap and the weekly board are summed from (`reason = 'earn'` rows only).
  * `reason` is "earn" (a game paid out), "shop:<slug>:<itemId>" (a Prize Counter
- * purchase, negative delta), "jackpot" (a Lucky Jar win, see jackpot.md), or a
- * hand-written one ("adjust", "refund:…"). `created_at` is unix ms.
+ * purchase, negative delta), "jackpot" (a Lucky Jar win, see jackpot.md),
+ * "checkin" / "checkin:milestone:<n>" (the daily check-in, against the reserved
+ * `portal` game row, see checkin.md), or a hand-written one ("adjust", "refund:…"). `created_at` is unix ms.
  */
 export const ticketLedger = sqliteTable(
   "ticket_ledger",

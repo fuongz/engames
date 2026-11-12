@@ -218,7 +218,8 @@ function Slide({ game, active, at, track, parallax }: { game: GameManifest; acti
     >
       <img
         src={game.banner}
-        alt=""
+        // Named for image search; only the showing slide is exposed (aria-hidden above)
+        alt={game.title[locale]}
         draggable={false}
         className={cn(
           // Ken Burns: the showing slide drifts in slowly for as long as it shows; a slide

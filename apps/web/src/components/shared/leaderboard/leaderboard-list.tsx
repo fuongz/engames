@@ -1,10 +1,11 @@
 import { Crown02Icon, RankingIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Link } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { useLocale, useMessages } from "#/hooks/use-messages";
-import { intlTag } from "#/lib/i18n";
+import { fmt, intlTag } from "#/lib/i18n";
 import { FADE, RISE, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
 import type { LeaderboardEntry } from "#/server/leaderboard";
@@ -73,7 +74,19 @@ export function LeaderboardList({
               <AvatarFallback className="text-xs font-semibold">{e.name.slice(0, 1).toUpperCase()}</AvatarFallback>
             </Avatar>
             <span className="grid min-w-0 flex-1">
-              <span className="truncate text-sm font-medium">{e.name}</span>
+              {/* A public profile's name opens its passport */}
+              {e.userId && e.profilePublic ? (
+                <Link
+                  to="/u/$userId"
+                  params={{ userId: e.userId }}
+                  aria-label={fmt(m.leaderboard.viewProfile, { name: e.name })}
+                  className="truncate text-sm font-medium underline-offset-4 outline-none hover:text-primary hover:underline focus-visible:underline"
+                >
+                  {e.name}
+                </Link>
+              ) : (
+                <span className="truncate text-sm font-medium">{e.name}</span>
+              )}
               {e.detail && <span className="truncate text-xs text-muted-foreground">{e.detail}</span>}
             </span>
             <span className="shrink-0 text-sm font-semibold tabular-nums">{score.format(e.score)}</span>

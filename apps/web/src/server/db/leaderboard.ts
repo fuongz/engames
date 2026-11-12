@@ -20,6 +20,10 @@ export interface LeaderboardEntry {
   createdAt: number;
   image: string | null;
   signedIn: boolean;
+  /** The player's account (link to /u/<userId>), or null for an anonymous run. */
+  userId: string | null;
+  /** Their profile is public: only then should the name link to it. False for anonymous runs. */
+  profilePublic: boolean;
 }
 
 export async function topScores(db: Db, gameSlug: string, limit: number): Promise<LeaderboardEntry[]> {
@@ -33,6 +37,7 @@ export async function topScores(db: Db, gameSlug: string, limit: number): Promis
       createdAt: score.createdAt,
       image: user.image,
       userId: score.userId,
+      profilePublic: user.profilePublic,
     })
     .from(score)
     .leftJoin(user, eq(score.userId, user.id))
@@ -40,10 +45,11 @@ export async function topScores(db: Db, gameSlug: string, limit: number): Promis
     // Ties go to whoever got there first
     .orderBy(desc(score.score), score.createdAt, score.id)
     .limit(limit);
-  return rows.map(({ userId, createdAt, ...r }) => ({
+  return rows.map(({ createdAt, profilePublic, ...r }) => ({
     ...r,
     createdAt: Math.floor(createdAt.getTime() / 1000),
-    signedIn: userId !== null,
+    signedIn: r.userId !== null,
+    profilePublic: r.userId !== null && profilePublic === true,
   }));
 }
 
@@ -168,7 +174,14 @@ export async function weeklyTicketBoard(
     .as("week");
 
   const rows = await db
-    .select({ userId: week.userId, total: week.total, last: week.last, name: user.name, image: user.image })
+    .select({
+      userId: week.userId,
+      total: week.total,
+      last: week.last,
+      name: user.name,
+      image: user.image,
+      profilePublic: user.profilePublic,
+    })
     .from(week)
     .innerJoin(user, eq(user.id, week.userId))
     // Net 0 (nothing earned, or all of it spent here) is not a place on the board
@@ -183,6 +196,8 @@ export async function weeklyTicketBoard(
     createdAt: Math.floor(Number(r.last) / 1000),
     image: r.image,
     signedIn: true,
+    userId: r.userId,
+    profilePublic: r.profilePublic,
   }));
 
   let me: WeeklyBoard["me"] = null;

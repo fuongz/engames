@@ -205,3 +205,35 @@ describe("weeklyTicketBoard", () => {
     expect((await board("u1")).me).toBeNull();
   });
 });
+
+describe("profile links on the boards", () => {
+  it("all-time rows carry the player's id and whether their profile is public", async () => {
+    raw.run("update user set profile_public = 0 where id = 'u2'");
+    await saveScore(db, { ...base, score: 900, name: "An", userId: "u1" });
+    await saveScore(db, { ...base, score: 800, name: "Bình", userId: "u2" });
+    await saveScore(db, { ...base, score: 700, name: "Khách", userId: null });
+    const rows = (await topScores(db, "tinh-tu", 10)).map(({ name, userId, profilePublic, signedIn }) => ({
+      name,
+      userId,
+      profilePublic,
+      signedIn,
+    }));
+    expect(rows).toEqual([
+      { name: "An", userId: "u1", profilePublic: true, signedIn: true },
+      { name: "Bình", userId: "u2", profilePublic: false, signedIn: true },
+      { name: "Khách", userId: null, profilePublic: false, signedIn: false },
+    ]);
+  });
+
+  it("weekly rows carry them too", async () => {
+    raw.run("update user set profile_public = 0 where id = 'u1'");
+    const now = Date.UTC(2026, 10, 12, 5);
+    await depositTickets(db, { userId: "u1", slug: "xu-vu-tru", tickets: true, amount: 300, now });
+    await depositTickets(db, { userId: "u2", slug: "xu-vu-tru", tickets: true, amount: 200, now });
+    const b = await weeklyTicketBoard(db, { slug: "xu-vu-tru", limit: 10, userId: null, now });
+    expect(b.entries.map(({ userId, profilePublic }) => ({ userId, profilePublic }))).toEqual([
+      { userId: "u1", profilePublic: false },
+      { userId: "u2", profilePublic: true },
+    ]);
+  });
+});
