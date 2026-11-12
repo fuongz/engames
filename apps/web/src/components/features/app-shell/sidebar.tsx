@@ -70,7 +70,7 @@ export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col gap-8 border-r bg-background px-5 py-7 lg:flex">
       <Link to="/" className="flex items-center gap-2.5 px-1">
-        <img src="/icons/logo.svg" alt="" className="size-9 rounded-xl" />
+        <img src="/icons/logo.svg" alt="Engames" aria-hidden className="size-9 rounded-xl" />
         <span className="text-lg font-bold tracking-wide uppercase">Engames</span>
       </Link>
 

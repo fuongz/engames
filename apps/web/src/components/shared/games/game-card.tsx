@@ -79,7 +79,10 @@ export function GameCard({ game, className }: { game: GameManifest; className?: 
         >
           <img
             src={game.poster[locale]}
-            alt=""
+            // Named for crawlers and image search; hidden from screen readers, which
+            // already read the title just below (a visible alt would say it twice)
+            alt={game.title[locale]}
+            aria-hidden
             loading="lazy"
             className="size-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
           />

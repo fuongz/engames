@@ -130,7 +130,7 @@ export const en: Messages = {
   library: {
     title: "Library",
     pageTitle: "Library | Engames",
-    description: "Every game on Engames by genre: action, strategy, puzzle and arcade, plus co-op and online games to play with friends. Play right in your browser, nothing to install.",
+    description: "Every game on Engames by genre: action, strategy, puzzle, arcade, co-op and online play with friends. Play right in your browser, no install.",
     count: { one: "{n} game, ready to play, nothing to install.", other: "{n} games, ready to play, nothing to install." },
     searchPlaceholder: "Search the library...",
     searchLabel: "Search the library",

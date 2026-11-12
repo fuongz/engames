@@ -527,7 +527,7 @@ function StartScreen({
       transition={LEAVE}
       className={cn("absolute inset-0 grid place-items-center overflow-hidden p-6 [container-type:size]", !present && "pointer-events-none")}
     >
-      <img src={game.banner} alt="" aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-50 blur-2xl" />
+      <img src={game.banner} alt={game.title[locale]} aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-50 blur-2xl" />
       <motion.div
         variants={ARRIVE}
         initial="hidden"

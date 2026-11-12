@@ -82,7 +82,7 @@ export function Lobby({
 
   return (
     <div className="absolute inset-0 grid place-items-center overflow-y-auto overscroll-contain p-5">
-      <img src={game.banner} alt="" aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-40 blur-2xl" />
+      <img src={game.banner} alt={game.title[locale]} aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-40 blur-2xl" />
       <div className="relative grid w-full max-w-sm gap-4 rounded-3xl bg-background/80 p-5 ring-1 ring-white/10 backdrop-blur-xl">
         <div className="flex items-start justify-between gap-3">
           <div className="grid gap-0.5">

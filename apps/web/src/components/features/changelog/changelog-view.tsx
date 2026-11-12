@@ -49,7 +49,7 @@ export function ChangelogView({ game, onGame }: { game?: string; onGame: (slug: 
             {listed.map((g) => (
               <ToggleGroupItem key={g.slug} value={g.slug} className={CHIP}>
                 {value === g.slug && <ActiveChip />}
-                <img src={g.poster[locale]} alt="" className="aspect-[3/4] h-7 rounded-md object-cover" />
+                <img src={g.poster[locale]} alt={g.title[locale]} aria-hidden className="aspect-[3/4] h-7 rounded-md object-cover" />
                 {g.title[locale]}
               </ToggleGroupItem>
             ))}
@@ -101,7 +101,7 @@ function Release({ item: { game, entry } }: { item: TimelineItem }) {
       <span aria-hidden className="absolute top-6 -left-[21px] size-2.5 rounded-full bg-primary ring-4 ring-background md:-left-[25px]" />
       <article className="group relative grid gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow hover:ring-primary/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
         <header className="flex items-center gap-3">
-          <img src={game.poster[locale]} alt="" loading="lazy" className="aspect-[3/4] w-10 shrink-0 rounded-lg object-cover ring-1 ring-border" />
+          <img src={game.poster[locale]} alt={game.title[locale]} aria-hidden loading="lazy" className="aspect-[3/4] w-10 shrink-0 rounded-lg object-cover ring-1 ring-border" />
           <div className="grid min-w-0 flex-1 gap-1">
             {/* Stretched over the card, so a tap anywhere on it opens the game */}
             <Link

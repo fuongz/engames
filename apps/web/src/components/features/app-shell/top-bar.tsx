@@ -22,7 +22,7 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
       {/* Sticky, full-bleed to the column's edges; it carries the notch inset itself */}
       <header className="sticky top-0 z-30 -mx-4 flex items-center gap-2 bg-background/85 px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 backdrop-blur-md lg:-mx-8 lg:px-8 lg:py-4">
         <Link to="/" className="flex items-center gap-2.5 lg:hidden">
-          <img src="/icons/logo.svg" alt="" className="size-9 rounded-xl" />
+          <img src="/icons/logo.svg" alt="Engames" aria-hidden className="size-9 rounded-xl" />
           <span className="text-lg font-bold tracking-wide uppercase">Engames</span>
         </Link>
 
