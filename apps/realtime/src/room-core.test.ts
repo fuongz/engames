@@ -179,3 +179,44 @@ describe("RoomCore settings", () => {
     expect(room.settings).toEqual({ bestOf: "5" });
   });
 });
+
+describe("paid cosmetic ownership", () => {
+  it("passes only server-signed ownership to the knife input parser", () => {
+    const run = (owned: string[]) => {
+      let now = 1000;
+      const room = new RoomCore(
+        "phi-dao",
+        "ABC234",
+        onlineGames["phi-dao"],
+        { setTicking() {}, onResults() {} },
+        () => now,
+      );
+      const conn = new FakeConn();
+      room.join(
+        {
+          r: "ABC234",
+          s: "phi-dao",
+          p: "a",
+          n: "An",
+          u: "a",
+          e: 100000,
+          c: owned,
+        },
+        conn,
+      );
+      room.message("a", { t: "start" });
+      room.message("a", {
+        t: "in",
+        seq: 1,
+        move: { x: 0, y: 0 },
+        actions: [{ type: "throw", skin: "dragon", cosmetics: ["dragon"] }],
+      });
+      now += 34;
+      room.tick();
+      const ev = conn.last("ev");
+      return ev?.events[0];
+    };
+    expect(run([])).toMatchObject({ type: "throw", skin: "classic" });
+    expect(run(["dragon"])).toMatchObject({ type: "throw", skin: "dragon" });
+  });
+});

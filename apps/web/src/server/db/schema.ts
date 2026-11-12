@@ -570,3 +570,35 @@ export const jackpotWin = sqliteTable(
   },
   (t) => [index("jackpot_win_won_at_idx").on(t.wonAt), uniqueIndex("jackpot_win_round_uq").on(t.round)],
 );
+
+/** Permanent cosmetic ownership. The migration's INSERT trigger atomically charges and logs the purchase. */
+export const gameCosmetic = sqliteTable(
+  "game_cosmetic",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    itemId: text("item_id").notNull(),
+    price: integer("price").notNull(),
+    purchasedAt: integer("purchased_at").notNull(),
+    ledgerId: integer("ledger_id").references(() => ticketLedger.id),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.gameId, t.itemId] }),
+    check("cosmetic_price_positive", sql`${t.price} > 0`),
+  ],
+);
+
+/** No row means the free default; paid equipment is checked against ownership in the server boundary. */
+export const cosmeticEquipment = sqliteTable(
+  "cosmetic_equipment",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: gameId().notNull(),
+    itemId: text("item_id").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.gameId] })],
+);

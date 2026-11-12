@@ -45,3 +45,20 @@ describe("protocol", () => {
       expect(parseClientMessage(bad)).toBeNull();
   });
 });
+
+describe("signed cosmetic ownership", () => {
+  it("signs the owned ids and rejects adding paid ids to the payload", async () => {
+    const owned = { ...claims, c: ["dragon"] };
+    const t = await signTicket(SECRET, owned);
+    expect(await verifyTicket(SECRET, t)).toEqual(owned);
+    const free = await signTicket(SECRET, claims);
+    const [, signature] = free.split(".");
+    const forged = btoa(JSON.stringify(owned)).replace(/=+$/, "");
+    expect(await verifyTicket(SECRET, `${forged}.${signature}`)).toBeNull();
+    const invalid = await signTicket(SECRET, {
+      ...claims,
+      c: new Array(65).fill("dragon"),
+    });
+    expect(await verifyTicket(SECRET, invalid)).toBeNull();
+  });
+});

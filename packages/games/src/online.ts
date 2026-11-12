@@ -5,12 +5,14 @@ import { coLatOnline } from "./co-lat/online";
 import { coTyPhuOnline } from "./co-ty-phu/online";
 import { coVuaOnline } from "./co-vua/online";
 import { kyTucXaOnline } from "./ky-tuc-xa/online";
+import { phiDaoOnline } from "./phi-dao/online";
 import { oAnQuanOnline } from "./o-an-quan/online";
 
 // Every game playable online, by slug. Explicit (not import.meta.glob) because
 // the realtime Worker is bundled by Wrangler. online.test.ts keeps this in
 // step with the manifests' `online` blocks.
 export const onlineGames: Record<string, RoomGame> = {
+  "phi-dao": phiDaoOnline as RoomGame,
   "ky-tuc-xa": kyTucXaOnline as RoomGame,
   caro: caroOnline as RoomGame,
   "co-ca-ngua": coCaNguaOnline as RoomGame,

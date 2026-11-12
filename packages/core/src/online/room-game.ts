@@ -29,7 +29,7 @@ export interface RoomGame<Input = unknown> {
   settings?: RoomSetting[];
   create(seed: number, humans: Seated[], settings: RoomSettings): RoomSim<Input>;
   /** Untrusted input from a socket → a valid Input, or null to drop it. The only door into the simulation. */
-  parseInput(raw: { move: { x: number; y: number }; actions: unknown[] }): Input | null;
+  parseInput(raw: { move: { x: number; y: number }; actions: unknown[] }, context?: { cosmetics: readonly string[] }): Input | null;
 }
 
 export interface RoomSim<Input> {

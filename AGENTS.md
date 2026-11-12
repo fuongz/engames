@@ -165,6 +165,10 @@ bun run gate     # lint (incl. layout audit) → typecheck → build
 
 - For a **structural** change the build is the gate, not the typecheck.
 - If verification can't run, explain why and state the remaining risk.
+- **Do not use Computer Use to test the app or games.** The user tests the UI
+  and gameplay themselves. Run code checks from the terminal, then tell the user
+  what to test manually, including mobile at 390×844 and multiplayer/QR flows.
+  Use Computer Use for testing only if the user explicitly asks for it again.
 - Say plainly what remains **visually unverified**.
 - End every completed task with a **"What's next for you"** handoff.
 

@@ -421,3 +421,24 @@ next to `vnDayStart` (both re-exported by `server/db/allowance.ts`).
 Every row of both boards also carries the player's `userId` (null for an
 anonymous run) and `profilePublic`, so the UI can link a name to `/u/<userId>`
 when that profile is public ([`checkin.md`](checkin.md) §6).
+
+## 6. Permanent in-game cosmetics
+
+`manifest.cosmetics` declares permanent skins (`id`, localized `name`, ticket `price`). Exactly one free item is the default. This catalog is separate from the Prize Counter's consumable `shop` grants: there is no allowance currency or daily grant for a permanent skin.
+
+The portal provides `ctx.cosmetics` to games with a catalog, including signed-out and online mounts:
+
+- `state()` returns account ownership, equipped id, sign-in status and the shared wallet balance. Guests own only free cosmetics.
+- `buy(itemId)` is available outside an online match. The boundary takes only the id and game slug; it resolves the price from the manifest. The in-game UI confirms the ticket cost before calling it. Repeating a purchase returns `already-owned` without charging again.
+- `equip(itemId)` refuses an unowned paid skin and saves the selection to the account. Buying and equipping are separate actions.
+- `signIn()` opens the portal's existing sign-in flow.
+
+Migration `0013_game_cosmetics` adds permanent ownership (`game_cosmetic`) and account equipment (`cosmetic_equipment`). A single ownership INSERT invokes an AFTER INSERT trigger that deducts the guarded wallet balance, inserts the `shop:<slug>:skin-<id>` ledger row and links that row to the ownership. The entire statement rolls back on insufficient funds or a ledger failure. The ownership primary key makes concurrent duplicate buys no-ops. The shared wallet's `earned_total` is unchanged; these spends follow the existing `shop:` weekly-board accounting.
+
+The trigger is intentionally handwritten after Drizzle's generated table SQL: future schema generation must preserve it. Query functions live in `server/db/cosmetics.ts` and accept `db`, so tests run the real migration in bun:sqlite. A game's UI must show loading, errors, sign-in, confirmation, insufficient tickets, ownership and equipment states, and must never trust local storage as proof of purchase.
+
+For online play, `createOnlineTicket` reads the account's paid ids and signs them in the join ticket's optional `c` claim. RoomCore supplies those trusted ids as `parseInput` context. Phi Dao turns an unauthorized dragon throw into a Classic throw; client-provided ids or ownership lists confer no entitlement. Buy before joining a room so its signed ticket carries the new ownership; rejoining issues a fresh ticket. Read-only inventory/equipment remain available in an online match, but purchasing is disabled there.
+
+Phi Dao's initial catalog is Classic (free) and Storm Dragon (2,000 shared tickets). Cosmetics change appearance and effects only; flight time, cooldown, collisions, lives and scoring stay equal.
+
+References: [D1 SQL](https://developers.cloudflare.com/d1/sql-api/sql-statements/) and [SQLite trigger semantics](https://www.sqlite.org/lang_createtrigger.html).

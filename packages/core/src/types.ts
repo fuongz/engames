@@ -95,7 +95,12 @@ export interface GameManifest {
    * `streak[(n - 1) % streak.length]`. A missed day starts over at day 1; the
    * welcome day is not a streak day.
    */
-  allowance?: { kind: string; welcome: number; daily: number; streak?: number[] };
+  allowance?: {
+    kind: string;
+    welcome: number;
+    daily: number;
+    streak?: number[];
+  };
   /**
    * Pays out into the shared arcade ticket wallet (docs/standards/tickets.md).
    * Signed-in players get `GameContext.tickets`.
@@ -113,6 +118,8 @@ export interface GameManifest {
    * must also declare `allowance`.
    */
   shop?: ShopItem[];
+  /** Permanent skins sold by an in-game shop for shared tickets. */
+  cosmetics?: CosmeticItem[];
   /**
    * What changed in each release, NEWEST FIRST (docs/standards/changelog.md).
    * Shown as "Update history" on the game page and on the site-wide /changelog.
@@ -179,6 +186,8 @@ export interface ScoreReport {
 
 export interface GameContext {
   storage: GameStorage;
+  /** Account inventory and permanent cosmetic purchases, including read-only state online. */
+  cosmetics?: GameCosmetics;
   audio: AudioBus;
   /**
    * Call once when a run ends (game over / round complete), never on quit.
@@ -405,4 +414,28 @@ export interface GameInstance {
 /** What every `src/<slug>/index.ts` must default-export. */
 export interface GameModule {
   mount(root: HTMLElement, ctx: GameContext): GameInstance;
+}
+
+/** A permanent cosmetic, purchased once with the shared ticket wallet. Free items are always owned. */
+export interface CosmeticItem {
+  id: string;
+  name: Localized<string>;
+  price: number;
+}
+export interface CosmeticInventory {
+  signedIn: boolean;
+  balance: number | null;
+  owned: string[];
+  equipped: string;
+}
+export type CosmeticBuyResult = {
+  ok: boolean;
+  reason?: "insufficient" | "already-owned" | "unknown-item";
+  inventory: CosmeticInventory;
+};
+export interface GameCosmetics {
+  signIn?(): Promise<void>;
+  state(): Promise<CosmeticInventory>;
+  buy(itemId: string): Promise<CosmeticBuyResult>;
+  equip(itemId: string): Promise<CosmeticInventory>;
 }
