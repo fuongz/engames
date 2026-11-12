@@ -85,6 +85,11 @@
           "a11y": {
             "useSemanticElements": "off",
             "useKeyWithClickEvents": "off"
+          },
+          // slider.tsx keys its thumbs by index; they are positional and never
+          // reorder. Regeneration would undo an edit.
+          "suspicious": {
+            "noArrayIndexKey": "off"
           }
         }
       }

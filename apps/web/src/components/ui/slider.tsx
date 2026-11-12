@@ -36,13 +36,9 @@ function Slider({
             className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
           />
         </SliderPrimitive.Track>
-        {/* EDITED (not registry): the index key is the registry's own; thumbs are positional and never reorder.
-            The exception belongs in the root biome.jsonc `components/ui/**` override (suspicious/noArrayIndexKey),
-            which this task's write scope did not cover. Move it there, then delete this ignore. */}
         {Array.from({ length: _values.length }, (_, index) => (
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
-            // biome-ignore lint/suspicious/noArrayIndexKey: thumbs are positional and never reorder
             key={index}
             className="block size-4 shrink-0 rounded-2xl bg-white shadow-md ring-1 ring-black/10 transition-[color,box-shadow] duration-200 select-none not-dark:bg-clip-padding hover:ring-4 hover:ring-ring/30 focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
           />

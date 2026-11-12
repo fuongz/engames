@@ -20,6 +20,7 @@ import { Route as GamesSlugRouteImport } from './routes/games.$slug'
 import { Route as UUserIdRouteImport } from './routes/u.$userId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiOnlineResultsRouteImport } from './routes/api/online/results'
+import { Route as MediaAvatarsUserIdFileRouteImport } from './routes/media.avatars.$userId.$file'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -76,6 +77,11 @@ const ApiOnlineResultsRoute = ApiOnlineResultsRouteImport.update({
   path: '/api/online/results',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaAvatarsUserIdFileRoute = MediaAvatarsUserIdFileRouteImport.update({
+  id: '/media/avatars/$userId/$file',
+  path: '/media/avatars/$userId/$file',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/u/$userId': typeof UUserIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/online/results': typeof ApiOnlineResultsRoute
+  '/media/avatars/$userId/$file': typeof MediaAvatarsUserIdFileRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/u/$userId': typeof UUserIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/online/results': typeof ApiOnlineResultsRoute
+  '/media/avatars/$userId/$file': typeof MediaAvatarsUserIdFileRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/u/$userId': typeof UUserIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/online/results': typeof ApiOnlineResultsRoute
+  '/media/avatars/$userId/$file': typeof MediaAvatarsUserIdFileRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/u/$userId'
     | '/api/auth/$'
     | '/api/online/results'
+    | '/media/avatars/$userId/$file'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/u/$userId'
     | '/api/auth/$'
     | '/api/online/results'
+    | '/media/avatars/$userId/$file'
   id:
     | '__root__'
     | '/'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/u/$userId'
     | '/api/auth/$'
     | '/api/online/results'
+    | '/media/avatars/$userId/$file'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,6 +183,7 @@ export interface RootRouteChildren {
   UUserIdRoute: typeof UUserIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiOnlineResultsRoute: typeof ApiOnlineResultsRoute
+  MediaAvatarsUserIdFileRoute: typeof MediaAvatarsUserIdFileRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOnlineResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media/avatars/$userId/$file': {
+      id: '/media/avatars/$userId/$file'
+      path: '/media/avatars/$userId/$file'
+      fullPath: '/media/avatars/$userId/$file'
+      preLoaderRoute: typeof MediaAvatarsUserIdFileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -267,6 +287,7 @@ const rootRouteChildren: RootRouteChildren = {
   UUserIdRoute: UUserIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiOnlineResultsRoute: ApiOnlineResultsRoute,
+  MediaAvatarsUserIdFileRoute: MediaAvatarsUserIdFileRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
