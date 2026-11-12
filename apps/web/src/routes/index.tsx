@@ -30,6 +30,8 @@ function Home() {
 
   return (
     <main className="grid gap-8 lg:gap-10">
+      {/* The page's one h1, for search engines and screen readers; the hero's game titles are h2s */}
+      <h1 className="sr-only">{m.app.title}</h1>
       <Hero />
       <OffersRow />
       {recent.length > 0 && <GameShelf title={m.home.continue} games={recent} />}
