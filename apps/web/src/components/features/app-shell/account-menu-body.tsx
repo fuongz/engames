@@ -1,10 +1,12 @@
-import { FavouriteIcon, Logout01Icon, UserCircleIcon, WorkHistoryIcon } from "@hugeicons/core-free-icons";
+import { FavouriteIcon, GiftIcon, GoogleIcon, Logout01Icon, UserCircleIcon, WorkHistoryIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { isLocale, LOCALES } from "@web-games/core/i18n";
 import { Link } from "@tanstack/react-router";
 import { play } from "cuelume";
 import { type ComponentProps, type ReactNode, useState } from "react";
 import { TicketIcon } from "#/components/shared/tickets/ticket-icon";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
+import { Button } from "#/components/ui/button";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuGroup,
@@ -13,9 +15,10 @@ import {
   DropdownMenuSeparator,
 } from "#/components/ui/dropdown-menu";
 import { Switch } from "#/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { useHistoryConsent } from "#/hooks/use-history-consent";
-import { useMessages } from "#/hooks/use-messages";
-import { signOut } from "#/lib/auth-client";
+import { useChooseLocale, useLocale, useMessages } from "#/hooks/use-messages";
+import { signInWithGoogle, signOut } from "#/lib/auth-client";
 import { fmt } from "#/lib/i18n";
 import { cn } from "#/lib/utils";
 import type { CheckinState } from "#/server/checkin";
@@ -248,6 +251,41 @@ function SwitchRow({
 }
 
 /**
+ * The sheet's language row: Tiếng Việt / English as a segmented control. It
+ * switches at once and, signed in, saves to the account (the same
+ * `useChooseLocale` as the top bar's language menu, which phones no longer show).
+ */
+function LanguageRow() {
+  const m = useMessages();
+  const locale = useLocale();
+  const chooseLocale = useChooseLocale();
+  return (
+    <div className={cn(ROW, "flex min-h-12 items-center justify-between")}>
+      <span id="sheet-language">{m.language.label}</span>
+      <ToggleGroup
+        aria-labelledby="sheet-language"
+        spacing={1}
+        value={[locale]}
+        // Tapping the current language would empty the group: ignore that
+        onValueChange={(v) => v[0] && isLocale(v[0]) && chooseLocale(v[0])}
+        className="shrink-0 rounded-full bg-secondary p-1"
+      >
+        {LOCALES.map((l) => (
+          <ToggleGroupItem
+            key={l}
+            value={l}
+            lang={l}
+            className="h-10 rounded-full px-3.5 text-sm text-muted-foreground hover:bg-transparent aria-pressed:bg-background aria-pressed:font-semibold aria-pressed:text-foreground aria-pressed:shadow-sm"
+          >
+            {m.language[l]}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  );
+}
+
+/**
  * The account menu's content, shared by the dropdown (`menu`) and the full-screen sheet (`sheet`):
  * a profile card, today's quick check-in, the links, the settings and sign-out.
  * `onNavigate` closes the shell (the dropdown's items close it themselves).
@@ -319,6 +357,10 @@ export function AccountMenuBody({
           <span className="flex-1">{m.account.profile}</span>
           {checkinDue && <span aria-hidden className="size-2 rounded-full bg-destructive" />}
         </NavRow>
+        {/* Phones have no tab for it: the Prize Counter is reached from here (and the ticket chip) */}
+        <NavRow shell={shell} to="/prize-counter" icon={GiftIcon} onNavigate={onNavigate}>
+          {m.nav.prizes}
+        </NavRow>
         <NavRow shell={shell} to="/favorites" icon={FavouriteIcon} onNavigate={onNavigate}>
           {m.nav.favorites}
         </NavRow>
@@ -330,6 +372,8 @@ export function AccountMenuBody({
       {/* Settings get their own group, as switches */}
       <Group>
         <Label className={cn("px-3 text-xs text-muted-foreground", !menu && "py-1.5")}>{m.account.settings}</Label>
+        {/* Phones only: from lg the top bar keeps its language menu */}
+        {!menu && <LanguageRow />}
         {/* Unasked (null) reads as off; switching it on is the answer */}
         <SwitchRow shell={shell} checked={history.value === true} onChange={(on) => void history.set(on)}>
           {m.account.saveHistory}
@@ -358,6 +402,33 @@ export function AccountMenuBody({
           {m.account.signOut}
         </button>
       )}
+    </>
+  );
+}
+
+/**
+ * The phone account sheet for a signed-out visitor: Google sign-in, the pages
+ * that work without an account, and the language. The Prize Counter is one of them: it shows the
+ * sign-in prompt itself, so it must stay reachable from here.
+ */
+export function GuestMenuBody({ onNavigate }: { onNavigate: () => void }) {
+  const m = useMessages();
+  return (
+    <>
+      <div className="grid gap-3 rounded-xl border bg-card p-3">
+        <p className="text-sm text-pretty text-muted-foreground">{m.account.guestHint}</p>
+        <Button size="lg" className="h-11" onClick={() => void signInWithGoogle()}>
+          <HugeiconsIcon icon={GoogleIcon} data-icon="inline-start" />
+          {m.account.signIn}
+        </Button>
+      </div>
+      <div className="mt-1.5">
+        <NavRow shell="sheet" to="/prize-counter" icon={GiftIcon} onNavigate={onNavigate}>
+          {m.nav.prizes}
+        </NavRow>
+      </div>
+      <SheetSeparator className="my-1.5" />
+      <LanguageRow />
     </>
   );
 }

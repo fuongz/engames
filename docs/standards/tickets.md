@@ -23,7 +23,7 @@ change. Ticket games also rank **this week's** earnings.
   and on `pagehide`.
 - **The chip** in the sidebar (desktop) and top bar (phones) shows the balance;
   a small Zustand store (`stores/tickets.ts`) keeps it and every
-  `onBalance` listener in step. Clicking it opens the Prize Counter.
+  `onBalance` listener in step. It links to the Prize Counter page.
 - **The Prize Counter** (§4) sells `manifest.shop` items for tickets. A purchase
   is a negative ledger row plus a `pending_grant`, delivered by the game's next
   `ctx.allowance.claim()`. **Spends never count as earnings**: the daily earn cap
@@ -380,10 +380,16 @@ delivered unpaid. `shop.test.ts` races both rules.
 - `listShopFn` (GET, `apps/web/src/server/shop.ts`): every game with a shop, its
   items with today's `remaining` for the signed-in player, and their balance.
 - `buyItemFn` (POST): sign-in required; refuses a slug without a shop.
-- The counter (`components/features/prize-counter/`) is a Dialog opened from the
-  ticket chip. Signed out it offers Google sign-in. After a purchase it writes the
-  new balance to `stores/tickets.ts`, so the chip and any open game's
-  `onBalance` update at once.
+- The counter is a page, `/prize-counter` (`routes/prize-counter.tsx`, UI in
+  `components/features/prize-counter/`), reached from the ticket chip, the
+  sidebar (desktop), the account sheet (phones, signed in or out: the tab bar
+  only has Discover and Library), and a "Redeem prizes" link on each game
+  page that sells something. The player picks a game first (`?game=<slug>`, shareable; the first
+  game when missing), then redeems that game's shop items and paid cosmetics.
+  `lib/prizes.ts` (`hasPrizes`, `prizeCount`) decides which games are listed.
+  Signed out it offers Google sign-in. After a purchase it writes the new balance
+  to `stores/tickets.ts`, so the chip and any open game's `onBalance` update at
+  once.
 
 ---
 

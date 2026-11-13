@@ -19,6 +19,7 @@ export const vi = {
     favorites: "Yêu thích",
     changelog: "Có gì mới",
     profile: "Hồ sơ",
+    prizes: "Đổi quà",
   },
   favorites: {
     pageTitle: "Game yêu thích | Engames",
@@ -79,6 +80,7 @@ export const vi = {
     ],
   },
   account: {
+    guestHint: "Đăng nhập để lưu tên trên bảng xếp hạng, nhận vé điểm danh và đổi quà.",
     signIn: "Đăng nhập Google",
     signInHint: "Lưu tên trên bảng xếp hạng",
     signOut: "Đăng xuất",
@@ -201,6 +203,12 @@ export const vi = {
     },
   },
   shop: {
+    pageTitle: "Quầy đổi thưởng | Engames",
+    pickGame: "Chọn game",
+    prizeCount: { one: "{n} món quà", other: "{n} món quà" },
+    itemsHeading: "Quà trong game",
+    skinsHeading: "Trang phục",
+    redeem: "Đổi thưởng",
     title: "Quầy đổi thưởng",
     description: "Đổi vé game thùng lấy quà cho từng game. Quà vào game ở lần mở tiếp theo.",
     open: "Mở quầy đổi thưởng",

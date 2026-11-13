@@ -1,6 +1,6 @@
-import { Cancel01Icon, GoogleIcon } from "@hugeicons/core-free-icons";
+import { Cancel01Icon, GoogleIcon, UserCircleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "#/components/ui/dropdown-menu";
@@ -11,7 +11,7 @@ import { signInWithGoogle } from "#/lib/auth-client";
 import { cn } from "#/lib/utils";
 import { useCheckin } from "#/stores/checkin";
 import { useLevel } from "#/stores/level";
-import { AccountMenuBody, progressOf, XpRing } from "./account-menu-body";
+import { AccountMenuBody, GuestMenuBody, progressOf, XpRing } from "./account-menu-body";
 
 /**
  * Google sign-in (only used to put your name on leaderboards).
@@ -59,15 +59,27 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
         </span>
       </button>
     ) : (
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-10 rounded-full"
-        aria-label={m.account.signIn}
-        onClick={() => void signInWithGoogle()}
-      >
-        <HugeiconsIcon icon={GoogleIcon} />
-      </Button>
+      <>
+        {/* From lg: straight to Google (the sidebar has the rest) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-10 rounded-full max-lg:hidden"
+          aria-label={m.account.signIn}
+          onClick={() => void signInWithGoogle()}
+        >
+          <HugeiconsIcon icon={GoogleIcon} />
+        </Button>
+        {/* Below lg: the account sheet, so the pages that left the tab bar stay reachable */}
+        <AccountSheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          trigger={<Button variant="ghost" size="icon" className="size-10 rounded-full lg:hidden" aria-label={m.account.menuTitle} />}
+          triggerBody={<HugeiconsIcon icon={UserCircleIcon} className="size-6" />}
+        >
+          <GuestMenuBody onNavigate={() => setSheetOpen(false)} />
+        </AccountSheet>
+      </>
     );
   }
 
@@ -110,29 +122,54 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
         </DropdownMenuContent>
       </DropdownMenu>
       {/* Below lg: the same body as a full-screen sheet (it covers the bottom nav) */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetTrigger render={<button type="button" className={cn(triggerClass, "lg:hidden")} />}>
-          {triggerBody}
-        </SheetTrigger>
-        <SheetContent
-          side="right"
-          showCloseButton={false}
-          className="w-full gap-0 bg-background data-[side=right]:w-full data-[side=right]:border-l-0 data-[side=right]:sm:max-w-none lg:hidden"
-        >
-          <SheetHeader className="flex-row items-center justify-between border-b px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3">
-            <SheetTitle className="text-lg font-semibold">{m.account.menuTitle}</SheetTitle>
-            <SheetClose
-              render={<Button variant="ghost" size="icon" className="size-10 rounded-full bg-secondary" />}
-              aria-label={m.account.close}
-            >
-              <HugeiconsIcon icon={Cancel01Icon} />
-            </SheetClose>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-            <AccountMenuBody shell="sheet" user={user} onNavigate={() => setSheetOpen(false)} />
-          </div>
-        </SheetContent>
-      </Sheet>
+      <AccountSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        trigger={<button type="button" className={cn(triggerClass, "lg:hidden")} />}
+        triggerBody={triggerBody}
+      >
+        <AccountMenuBody shell="sheet" user={user} onNavigate={() => setSheetOpen(false)} />
+      </AccountSheet>
     </>
+  );
+}
+
+/** The phone shell of the account menu: a full-screen sheet from the right, clear of the notch and home bar. */
+function AccountSheet({
+  open,
+  onOpenChange,
+  trigger,
+  triggerBody,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  trigger: ReactElement;
+  triggerBody: ReactNode;
+  children: ReactNode;
+}) {
+  const m = useMessages();
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetTrigger render={trigger}>{triggerBody}</SheetTrigger>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-full gap-0 bg-background data-[side=right]:w-full data-[side=right]:border-l-0 data-[side=right]:sm:max-w-none lg:hidden"
+      >
+        <SheetHeader className="flex-row items-center justify-between border-b px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3">
+          <SheetTitle className="text-lg font-semibold">{m.account.menuTitle}</SheetTitle>
+          <SheetClose
+            render={<Button variant="ghost" size="icon" className="size-10 rounded-full bg-secondary" />}
+            aria-label={m.account.close}
+          >
+            <HugeiconsIcon icon={Cancel01Icon} />
+          </SheetClose>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+          {children}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

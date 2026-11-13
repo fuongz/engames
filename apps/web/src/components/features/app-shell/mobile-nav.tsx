@@ -1,22 +1,27 @@
-import { FavouriteIcon, LibraryIcon, Search01Icon, Store01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
+import { LibraryIcon, Store01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { useMessages } from "#/hooks/use-messages";
-import { useSession } from "#/hooks/use-session";
 import { INDICATOR_SPRING } from "#/lib/motion";
 
+/** Fixed-width tabs: with only two, stretching them across the screen reads as empty slabs. */
 const ITEM =
-  "relative isolate flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[11px] font-medium text-muted-foreground transition-colors data-[active=true]:text-primary";
+  "relative isolate flex w-28 flex-col items-center gap-0.5 rounded-xl py-2 text-[11px] font-medium text-muted-foreground transition-colors data-[active=true]:text-primary";
 
 /** The tint behind the current tab; it slides to the tapped one. */
 function ActivePill() {
   return <motion.span layoutId="tab-active" transition={INDICATOR_SPRING} className="absolute inset-0 -z-10 rounded-xl bg-primary/12" />;
 }
 
-/** Floating tab bar for phones (the sidebar's job on desktop), clear of the home indicator. */
-export function MobileNav({ onSearch }: { onSearch: () => void }) {
+/**
+ * Floating tab bar for phones (the sidebar's job on desktop), clear of the home
+ * indicator, centred and only as wide as its two tabs. Search is the magnifier in
+ * the top bar; the Prize Counter, favourites, profile and language live in the
+ * account sheet (the avatar in the top bar).
+ */
+export function MobileNav() {
   const m = useMessages();
   const path = useRouterState({ select: (s) => s.location.pathname });
   // Decided after mount: the prerendered "/" shell's attributes survive hydration.
@@ -24,13 +29,9 @@ export function MobileNav({ onSearch }: { onSearch: () => void }) {
   useEffect(() => setMounted(true), []);
   const discover = mounted && path === "/";
   const library = mounted && path.startsWith("/library");
-  const favorites = mounted && path.startsWith("/favorites");
-  const profile = mounted && path.startsWith("/profile");
-  // Favourites live on the account: the tab is for signed-in players only
-  const signedIn = Boolean(useSession().data?.user);
 
   return (
-    <nav className="fixed inset-x-4 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex gap-1 rounded-[25px] border bg-card/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
+    <nav aria-label={m.nav.label} className="fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit gap-1 rounded-[25px] border bg-card/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
       <Link to="/" className={ITEM} data-active={discover}>
         {discover && <ActivePill />}
         <HugeiconsIcon icon={Store01Icon} className="size-5" />
@@ -41,24 +42,6 @@ export function MobileNav({ onSearch }: { onSearch: () => void }) {
         <HugeiconsIcon icon={LibraryIcon} className="size-5" />
         {m.nav.library}
       </Link>
-      {mounted && signedIn && (
-        <Link to="/favorites" className={ITEM} data-active={favorites}>
-          {favorites && <ActivePill />}
-          <HugeiconsIcon icon={FavouriteIcon} className="size-5" />
-          {m.nav.favorites}
-        </Link>
-      )}
-      {mounted && signedIn && (
-        <Link to="/profile" className={ITEM} data-active={profile}>
-          {profile && <ActivePill />}
-          <HugeiconsIcon icon={UserCircleIcon} className="size-5" />
-          {m.nav.profile}
-        </Link>
-      )}
-      <button type="button" onClick={onSearch} className={ITEM}>
-        <HugeiconsIcon icon={Search01Icon} className="size-5" />
-        {m.nav.search}
-      </button>
     </nav>
   );
 }

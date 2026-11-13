@@ -2,6 +2,7 @@ import {
   CloudSavingDone01Icon,
   Download04Icon,
   FavouriteIcon,
+  GiftIcon,
   Joystick02Icon,
   LibraryIcon,
   NewReleasesIcon,
@@ -56,6 +57,7 @@ export function Sidebar() {
   const arcade = mounted && path.startsWith("/library") && arcadeFilter && !coopFilter && !onlineFilter;
   const library = mounted && path.startsWith("/library") && !coopFilter && !onlineFilter && !arcadeFilter;
   const favorites = mounted && path.startsWith("/favorites");
+  const prizes = mounted && path.startsWith("/prize-counter");
   const changelog = mounted && path.startsWith("/changelog");
   const profile = mounted && path.startsWith("/profile");
   // Favourites live on the account: signed-in players only
@@ -102,6 +104,12 @@ export function Sidebar() {
           {online && <ActiveBar />}
           <HugeiconsIcon icon={CloudSavingDone01Icon} className="size-5" />
           {m.nav.online}
+        </Link>
+        {/* Tickets → each game's prizes (signed out, the page asks them to sign in) */}
+        <Link to="/prize-counter" className={SIDEBAR_ITEM} data-active={prizes}>
+          {prizes && <ActiveBar />}
+          <HugeiconsIcon icon={GiftIcon} className="size-5" />
+          {m.nav.prizes}
         </Link>
         {mounted && signedIn && (
           <Link to="/favorites" className={SIDEBAR_ITEM} data-active={favorites}>

@@ -20,6 +20,7 @@ export const en: Messages = {
     favorites: "Favourites",
     changelog: "What's new",
     profile: "Profile",
+    prizes: "Prizes",
   },
   favorites: {
     pageTitle: "Favourite games | Engames",
@@ -80,6 +81,7 @@ export const en: Messages = {
     ],
   },
   account: {
+    guestHint: "Sign in to put your name on the leaderboards, collect check-in tickets and trade them for prizes.",
     signIn: "Sign in with Google",
     signInHint: "Puts your name on leaderboards",
     signOut: "Sign out",
@@ -202,6 +204,12 @@ export const en: Messages = {
     },
   },
   shop: {
+    pageTitle: "Prize Counter | Engames",
+    pickGame: "Pick a game",
+    prizeCount: { one: "{n} prize", other: "{n} prizes" },
+    itemsHeading: "In-game prizes",
+    skinsHeading: "Outfits",
+    redeem: "Redeem prizes",
     title: "Prize Counter",
     description: "Trade arcade tickets for prizes in each game. A prize arrives the next time you open the game.",
     open: "Open the Prize Counter",

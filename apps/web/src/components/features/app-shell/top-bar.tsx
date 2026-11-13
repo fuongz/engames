@@ -12,8 +12,8 @@ import { useMessages } from "#/hooks/use-messages";
 /**
  * Desktop: wide search field (opens the ⌘K palette), the Lucky Jar ticker, then
  * the ticket wallet, language and account menu on the right.
- * Phones: logo and search icon, the same right-hand group, the ticker as a slim
- * strip underneath. Installing lives in the sidebar card.
+ * Phones: logo and search icon, the ticket chip and account (language moves into
+ * the account sheet), the ticker as a slim strip underneath. Installing lives in the sidebar card.
  */
 export function TopBar({ onSearch }: { onSearch: () => void }) {
   const m = useMessages();
@@ -46,7 +46,10 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
           {/* The wallet beside the account it belongs to; the avatar opens the options */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <TicketChip />
-            <LanguageMenu variant="compact" />
+            {/* Phones choose the language in the account sheet */}
+            <span className="hidden lg:contents">
+              <LanguageMenu variant="compact" />
+            </span>
             <AccountButton variant="compact" />
           </div>
         </div>

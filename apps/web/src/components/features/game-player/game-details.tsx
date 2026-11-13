@@ -1,3 +1,6 @@
+import { GiftIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Link } from "@tanstack/react-router";
 import type { GameManifest } from "@web-games/core";
 import { categories } from "@web-games/games";
 import { useLayoutEffect, useRef, useState } from "react";
@@ -8,6 +11,7 @@ import { Button } from "#/components/ui/button";
 import { Kbd, KbdGroup } from "#/components/ui/kbd";
 import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
+import { hasPrizes } from "#/lib/prizes";
 import { UpdateHistory } from "./update-history";
 
 /** Description, controls, tags and update history. Rendered on the desktop page and in the phone info dialog. */
@@ -36,6 +40,19 @@ export function GameDetails({ game }: { game: GameManifest }) {
           </Badge>
         ))}
       </div>
+      {/* Games that sell prizes for tickets: straight to this game's shelf at the counter */}
+      {hasPrizes(game) && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-fit"
+          nativeButton={false}
+          render={<Link to="/prize-counter" search={{ game: game.slug }} />}
+        >
+          <HugeiconsIcon icon={GiftIcon} data-icon="inline-start" />
+          {m.shop.redeem}
+        </Button>
+      )}
       <div className="grid justify-items-start gap-1">
         <p
           ref={text}

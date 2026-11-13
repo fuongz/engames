@@ -14,6 +14,7 @@ import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as LibraryRouteImport } from './routes/library'
+import { Route as PrizeCounterRouteImport } from './routes/prize-counter'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as GamesSlugRouteImport } from './routes/games.$slug'
@@ -45,6 +46,11 @@ const HistoryRoute = HistoryRouteImport.update({
 const LibraryRoute = LibraryRouteImport.update({
   id: '/library',
   path: '/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrizeCounterRoute = PrizeCounterRouteImport.update({
+  id: '/prize-counter',
+  path: '/prize-counter',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
+  '/prize-counter': typeof PrizeCounterRoute
   '/profile': typeof ProfileRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/games/$slug': typeof GamesSlugRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
+  '/prize-counter': typeof PrizeCounterRoute
   '/profile': typeof ProfileRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/games/$slug': typeof GamesSlugRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
   '/library': typeof LibraryRoute
+  '/prize-counter': typeof PrizeCounterRoute
   '/profile': typeof ProfileRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/games/$slug': typeof GamesSlugRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/history'
     | '/library'
+    | '/prize-counter'
     | '/profile'
     | '/sitemap.xml'
     | '/games/$slug'
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/history'
     | '/library'
+    | '/prize-counter'
     | '/profile'
     | '/sitemap.xml'
     | '/games/$slug'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/history'
     | '/library'
+    | '/prize-counter'
     | '/profile'
     | '/sitemap.xml'
     | '/games/$slug'
@@ -177,6 +189,7 @@ export interface RootRouteChildren {
   FavoritesRoute: typeof FavoritesRoute
   HistoryRoute: typeof HistoryRoute
   LibraryRoute: typeof LibraryRoute
+  PrizeCounterRoute: typeof PrizeCounterRoute
   ProfileRoute: typeof ProfileRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   GamesSlugRoute: typeof GamesSlugRoute
@@ -221,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/library'
       fullPath: '/library'
       preLoaderRoute: typeof LibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prize-counter': {
+      id: '/prize-counter'
+      path: '/prize-counter'
+      fullPath: '/prize-counter'
+      preLoaderRoute: typeof PrizeCounterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -281,6 +301,7 @@ const rootRouteChildren: RootRouteChildren = {
   FavoritesRoute: FavoritesRoute,
   HistoryRoute: HistoryRoute,
   LibraryRoute: LibraryRoute,
+  PrizeCounterRoute: PrizeCounterRoute,
   ProfileRoute: ProfileRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   GamesSlugRoute: GamesSlugRoute,
