@@ -24,7 +24,9 @@ export function OnlineEntry({ game }: { game: GameManifest }) {
   const codeId = useId();
   if (!game.online) return null;
   const versus = onlineMode(game) === "versus";
-  const title = versus ? m.online.versus : m.online.coop;
+  // More than two players against each other: not a 1-on-1
+  const group = versus && game.online.maxPlayers > 2;
+  const title = group ? m.online.versusGroup : versus ? m.online.versus : m.online.coop;
 
   const go = (room: string, slug = game.slug) => {
     setOpen(false);
@@ -49,7 +51,11 @@ export function OnlineEntry({ game }: { game: GameManifest }) {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{versus ? m.online.versusHint : fmt(m.online.coopHint, { max: game.online.maxPlayers })}</DialogDescription>
+            <DialogDescription>{group
+                ? fmt(m.online.versusGroupHint, { min: game.online.minPlayers, max: game.online.maxPlayers })
+                : versus
+                  ? m.online.versusHint
+                  : fmt(m.online.coopHint, { max: game.online.maxPlayers })}</DialogDescription>
           </DialogHeader>
           <Button size="lg" className="h-11" onClick={() => go(randomRoomCode())}>
             <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />

@@ -23,14 +23,20 @@ export function CoopBadge({
   const m = useMessages();
   if (!game.online) return null;
   const versus = onlineMode(game) === "versus";
+  // A versus game for more than two (Ludo, the property game, the street race): everyone against everyone
+  const group = versus && game.online.maxPlayers > 2;
   const label =
     variant === "long"
-      ? versus
-        ? m.online.badgeLongVersus
-        : fmt(m.online.badgeLong, { n: game.online.maxPlayers })
-      : versus
-        ? m.online.badgeVersus
-        : m.online.badge;
+      ? group
+        ? fmt(m.online.badgeLongVersusGroup, { min: game.online.minPlayers, n: game.online.maxPlayers })
+        : versus
+          ? m.online.badgeLongVersus
+          : fmt(m.online.badgeLong, { n: game.online.maxPlayers })
+      : group
+        ? m.online.badgeVersusGroup
+        : versus
+          ? m.online.badgeVersus
+          : m.online.badge;
   return (
     <span
       className={cn(
@@ -50,5 +56,5 @@ export function CoopBadge({
 /** Extra search words for a co-op game, in both languages, so "co-op" or "online" finds it. */
 export const coopKeywords = (game: GameManifest) =>
   game.online
-    ? `co-op coop online multiplayer chơi cùng bạn nhiều người${onlineMode(game) === "versus" ? " 1v1 versus đấu đối kháng" : ""}`
+    ? `co-op coop online multiplayer chơi cùng bạn nhiều người${onlineMode(game) === "versus" ? (game.online.maxPlayers > 2 ? " versus đấu nhiều người" : " 1v1 versus đấu đối kháng") : ""}`
     : "";

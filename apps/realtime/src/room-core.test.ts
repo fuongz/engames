@@ -220,3 +220,55 @@ describe("paid cosmetic ownership", () => {
     expect(run(["dragon"])).toMatchObject({ type: "throw", skin: "dragon" });
   });
 });
+
+describe("Qua Đường race room", () => {
+  const race = onlineGames["qua-duong"];
+  function raceRoom() {
+    let now = 1000;
+    const results: MatchResult[][] = [];
+    const room = new RoomCore("qua-duong", "QDR234", race, { setTicking() {}, onResults: (r) => results.push(r) }, () => now);
+    const join = (p: string, c: string[] = []) => {
+      const conn = new FakeConn();
+      room.join({ r: "QDR234", s: "qua-duong", p, n: p.toUpperCase(), u: p, e: now + 60_000, ...(c.length ? { c } : {}) }, conn);
+      now += 1;
+      return conn;
+    };
+    const advance = (ms: number) => {
+      for (let t = 0; t < ms; t += 34) {
+        now += 34;
+        room.tick();
+      }
+    };
+    return { room, join, advance, results };
+  }
+
+  it("waits for a second racer, then races to a result for every seat", () => {
+    const { room, join, advance, results } = raceRoom();
+    const a = join("a");
+    room.message("a", { t: "start" });
+    expect(a.last("start")).toBeUndefined();
+    const b = join("b");
+    room.message("a", { t: "start" });
+    expect(a.last("start")?.you).toBe(0);
+    expect(b.last("start")?.you).toBe(1);
+    // Nobody hops: the ward officer catches both, and the match ends on its own
+    advance(20_000);
+    expect(a.last("end")?.results.map((r) => r.seat)).toEqual([0, 1]);
+    expect(results).toHaveLength(1);
+  });
+
+  it("passes only server-signed ownership to the skin parser", () => {
+    const run = (owned: string[]) => {
+      const { room, join, advance } = raceRoom();
+      const a = join("a", owned);
+      join("b");
+      room.message("a", { t: "start" });
+      room.message("a", { t: "in", seq: 1, move: { x: 0, y: 0 }, actions: [{ type: "skin", id: "vit-ao-dai", cosmetics: ["vit-ao-dai"] }] });
+      advance(100);
+      const snap = a.last("snap")?.state as { racers: { skin: string }[] };
+      return snap.racers[0].skin;
+    };
+    expect(run([])).toBe("vit-vang");
+    expect(run(["vit-ao-dai"])).toBe("vit-ao-dai");
+  });
+});

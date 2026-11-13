@@ -7,6 +7,7 @@ import { coVuaOnline } from "./co-vua/online";
 import { kyTucXaOnline } from "./ky-tuc-xa/online";
 import { phiDaoOnline } from "./phi-dao/online";
 import { oAnQuanOnline } from "./o-an-quan/online";
+import { quaDuongOnline } from "./qua-duong/online";
 
 // Every game playable online, by slug. Explicit (not import.meta.glob) because
 // the realtime Worker is bundled by Wrangler. online.test.ts keeps this in
@@ -20,6 +21,7 @@ export const onlineGames: Record<string, RoomGame> = {
   "co-ty-phu": coTyPhuOnline as RoomGame,
   "co-vua": coVuaOnline as RoomGame,
   "o-an-quan": oAnQuanOnline as RoomGame,
+  "qua-duong": quaDuongOnline as RoomGame,
 };
 
 export const findOnlineGame = (slug: string): RoomGame | undefined =>

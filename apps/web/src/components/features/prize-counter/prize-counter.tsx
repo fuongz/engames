@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import { findGame } from "@web-games/games";
 import { useCallback, useEffect, useState } from "react";
+import { CosmeticShelves, cosmeticGames } from "#/components/features/prize-counter/cosmetic-shelves";
 import { TicketIcon } from "#/components/shared/tickets/ticket-icon";
 import { Button } from "#/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "#/components/ui/dialog";
@@ -35,7 +36,8 @@ const FALLBACK_ART = "/shop/gift.webp";
 
 /**
  * The Prize Counter (docs/standards/tickets.md §4): every game's shop, where
- * shared arcade tickets buy a game's own currency. Opened from the ticket chip.
+ * shared arcade tickets buy a game's own currency and permanent outfits
+ * (cosmetic-shelves.tsx). Opened from the ticket chip.
  * Signed out it offers Google sign-in; signed in it lists the items by game with
  * today's remaining limits, and keeps the ticket chip in step after a purchase.
  */
@@ -127,7 +129,7 @@ export function PrizeCounter({ onClose }: { onClose: () => void }) {
           <p aria-live="polite" className="py-6 text-center text-sm text-muted-foreground">
             {m.shop.loading}
           </p>
-        ) : listing.games.length === 0 ? (
+        ) : listing.games.length === 0 && cosmeticGames.length === 0 ? (
           <Empty className="rounded-xl border border-dashed py-8">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -270,6 +272,7 @@ export function PrizeCounter({ onClose }: { onClose: () => void }) {
                 </ul>
               </section>
             ))}
+            <CosmeticShelves onClose={onClose} balance={balance} userId={userId} />
           </>
         )}
       </DialogContent>

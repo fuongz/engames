@@ -63,6 +63,7 @@ decision and the minor as a starting point.
 | Rendered markdown | `react-markdown` + `remark-gfm` |
 | Charts | **Recharts** |
 | Drag and drop | `@dnd-kit/core` |
+| Per-game 3D | **three.js** (`three` + `@types/three`), a dependency of `packages/games` only. Imported by one game's `game.ts`/`art.ts` (first: `qua-duong`), so it ships inside that game's lazy chunk and never reaches the portal bundle or `@web-games/core`. The game puts a `WebGLRenderer` canvas under the engine's 2D stage canvas and keeps using the runtime's loop, input and teardown |
 | Realtime multiplayer | **Durable Objects** + WebSockets (Hibernation API) in a separate Worker, `apps/realtime`. See `docs/standards/online-multiplayer.md` |
 | Interface sounds | **Cuelume** (`cuelume`) — synthesized Web Audio cues, no files. Bound once in `hooks/use-interface-sounds.ts` (theme `bubble`), tied to the portal's Sound switch (`audioBus`). Every clickable is auto-marked `tap` and every text field `type`; set a `data-cuelume-*` attribute only to override, and play outcomes (`success`, `error`, `count`) with `play()`. Never on hover |
 
