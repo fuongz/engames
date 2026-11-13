@@ -23,14 +23,19 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { HALF, LANE_HALF, PALETTE, type SkinId } from "./config";
-import { type Lane, type State, laneAt, moverX, trainAt } from "./logic";
+import { HALF, LANE_HALF, NET_HALF, NET_SWIPE, NET_WARN, PALETTE, type SkinId } from "./config";
+import { type Lane, type Net, type State, laneAt, moverX, trainAt } from "./logic";
 import {
+  COURIER_LOOKS,
   type GroundKind,
+  NET_GRIP,
+  NINJA_LOOKS,
   baGacModel,
   bananaModel,
   busModel,
   coinModel,
+  courierModel,
+  dogThiefModel,
   duckModel,
   foodCartModel,
   gheModel,
@@ -39,6 +44,8 @@ import {
   houseModel,
   hyacinthModel,
   motoModel,
+  netModel,
+  ninjaModel,
   officerModel,
   poleModel,
   raftModel,
@@ -204,6 +211,10 @@ export class Scene3D {
     for (const k of ["grass-a", "grass-b", "road", "road-line", "river", "rail"] as const) ground(k);
     for (const [i, [body, shirt, helmet]] of MOTO_LOOKS.entries()) this.pool(`moto${i}`, motoModel(body, shirt, helmet, false), 60);
     this.pool("moto-box", motoModel(PALETTE.motoBlue, PALETTE.shirtWhite, PALETTE.helmetGreen, true), 60);
+    for (const [i, c] of COURIER_LOOKS.entries()) this.pool(`courier${i}`, courierModel(c), 40);
+    for (const [i, look] of NINJA_LOOKS.entries()) this.pool(`ninja${i}`, ninjaModel(look, i % 2 === 1), 30);
+    this.pool("dog-thief", dogThiefModel(), 12);
+    for (const pose of ["carry", "up", "swing"] as const) this.pool(`net-${pose}`, netModel(pose), 12);
     this.pool("ba-gac", baGacModel(), 40);
     this.pool("bus", busModel(), 30);
     this.pool("train", trainModel(), 8);
@@ -382,7 +393,7 @@ export class Scene3D {
     } else if (lane.kind === "road") {
       this.add("road", 0, 0, z);
       if (laneAt(s, row - 1)?.kind === "road") this.add("road-line", 0, 0, z);
-      this.traffic(lane, z, f);
+      this.traffic(s, lane, z, f);
     } else if (lane.kind === "river") {
       this.add("river", 0, 0, z);
       this.floaters(lane, z, f);
@@ -412,19 +423,28 @@ export class Scene3D {
     }
   }
 
-  private traffic(lane: Lane, z: number, f: Frame) {
+  private traffic(s: State, lane: Lane, z: number, f: Frame) {
     const rot = lane.dir > 0 ? 0 : Math.PI;
     const lit = 0.16 + f.dusk * 0.06;
     lane.movers.forEach((m, i) => {
       const x = moverX(lane, m, f.time);
       if (Math.abs(x) > LANE_HALF) return;
       const front = x + lane.dir * (m.len / 2 + 0.01);
-      if (m.kind === "moto") {
-        this.add(`moto${(lane.row * 7 + i) % MOTO_LOOKS.length}`, x, 0, z, rot);
+      if (m.kind === "moto" || m.kind === "moto-box" || m.kind === "courier" || m.kind === "ninja") {
+        const key =
+          m.kind === "moto"
+            ? `moto${(lane.row * 7 + i) % MOTO_LOOKS.length}`
+            : m.kind === "courier"
+              ? `courier${(m.v ?? 0) % COURIER_LOOKS.length}`
+              : m.kind === "ninja"
+                ? `ninja${(m.v ?? 0) % NINJA_LOOKS.length}`
+                : "moto-box";
+        this.add(key, x, 0, z, rot);
         this.glow.add(front - lane.dir * 0.2, 0.36, z, 0, lit, lit, lit, this.head);
-      } else if (m.kind === "moto-box") {
-        this.add("moto-box", x, 0, z, rot);
-        this.glow.add(front - lane.dir * 0.2, 0.36, z, 0, lit, lit, lit, this.head);
+      } else if (m.kind === "dog-thief") {
+        this.add("dog-thief", x, 0, z, rot);
+        this.glow.add(front - lane.dir * 0.2, 0.34, z, 0, lit * 0.8, lit * 0.8, lit * 0.8, this.head);
+        this.net(s, lane, i, x, z, rot, f);
       } else if (m.kind === "ba-gac") {
         this.add("ba-gac", x, 0, z, rot);
         this.glow.add(front - lane.dir * 0.16, 0.42, z, 0, lit, lit, lit, this.head);
@@ -433,6 +453,38 @@ export class Scene3D {
         for (const dz of [-0.28, 0.28]) this.glow.add(front, 0.26, z + dz, 0, lit, lit * 0.8, lit, this.head);
       }
     });
+  }
+
+  /** A dog-thief bike's pole and net: carried, raised (with the swipe zone blinking), swung, or holding a duck. */
+  private net(s: State, lane: Lane, i: number, x: number, z: number, rot: number, f: Frame) {
+    const n = s.nets.find((k: Net) => k.row === lane.row && k.i === i && (k.hit || f.time - k.at < NET_SWIPE + 0.2));
+    const gx = x - lane.dir * NET_GRIP.back;
+    const gy = NET_GRIP.up;
+    if (n?.hit || (n && f.time < n.at)) {
+      // raised: the net stands up and shakes a little; a caught duck rides in it
+      const shake = n.hit ? 0 : Math.sin(f.time * 30) * 0.05;
+      this.add("net-up", gx, gy, z, rot + shake);
+      if (!n.hit) this.zone(lane, n, z, f, (n.at - f.time) / NET_WARN);
+    } else if (n && f.time < n.at + NET_SWIPE) {
+      // the swipe: from over the lane behind (+z), round the back of the bike, to the lane in front (−z)
+      const k = (f.time - n.at) / NET_SWIPE;
+      const ease = k * k * (3 - 2 * k);
+      this.add("net-swing", gx, gy, z, rot - Math.PI * ease);
+    } else this.add("net-carry", gx, gy, z, rot);
+  }
+
+  /** The strip of the rows either side the swipe will cover, blinking faster as it comes. */
+  private zone(lane: Lane, n: Net, z: number, f: Frame, left: number) {
+    if (Math.floor(f.time * (left < 0.5 ? 16 : 9)) % 2) return;
+    const bx = moverX(lane, lane.movers[n.i], n.at);
+    const w = NET_HALF * 2;
+    for (const dz of [-1, 1]) {
+      const cz = z + dz;
+      this.glow.add(bx, 0.02, cz + 0.42, 0, w, 0.03, 0.07, this.lightOn);
+      this.glow.add(bx, 0.02, cz - 0.42, 0, w, 0.03, 0.07, this.lightOn);
+      this.glow.add(bx - NET_HALF, 0.02, cz, 0, 0.07, 0.03, 0.84, this.lightOn);
+      this.glow.add(bx + NET_HALF, 0.02, cz, 0, 0.07, 0.03, 0.84, this.lightOn);
+    }
   }
 
   private floaters(lane: Lane, z: number, f: Frame) {

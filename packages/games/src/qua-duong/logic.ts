@@ -10,6 +10,15 @@ import {
   type BlockKind,
   CATCH_TIME,
   COIN_CHANCE,
+  COURIER_CHANCE,
+  COURIER_FROM,
+  COURIER_GAP,
+  COURIER_PACE,
+  COURIER_RAMP,
+  COURIER_SHARE,
+  COURIER_VARIANTS,
+  DOG_CHANCE,
+  DOG_FROM,
   DUCK_HALF,
   type FloaterKind,
   HALF,
@@ -18,6 +27,11 @@ import {
   LAND_SLACK,
   LENGTH,
   MAX_DEPOSIT,
+  NET_CHANCE,
+  NET_HALF,
+  NET_WARN,
+  NINJA_SHARE,
+  NINJA_VARIANTS,
   RACE_COUNTDOWN,
   RACE_GOT_KEEP,
   RACE_SECONDS,
@@ -43,7 +57,7 @@ import {
 
 export type Dir = "up" | "down" | "left" | "right";
 export type LaneKind = "grass" | "road" | "river" | "rail";
-export type Death = "hit" | "train" | "drown" | "edge" | "caught";
+export type Death = "hit" | "train" | "drown" | "edge" | "caught" | "netted";
 
 export interface Block {
   x: number;
@@ -55,6 +69,23 @@ export interface Mover {
   x0: number;
   len: number;
   kind: VehicleKind | FloaterKind;
+  /** Look variant, drawn from the seeded generator (couriers and scooter riders). */
+  v?: number;
+}
+
+/**
+ * A dog-thief bike's strike: its net goes up NET_WARN seconds before `at`, then
+ * swipes the rows either side of its lane at `at`. Keyed by the bike (its lane
+ * row and index) and its lap round the wrap span: one strike per lap.
+ */
+export interface Net {
+  row: number;
+  i: number;
+  lap: number;
+  /** World time of the swipe. */
+  at: number;
+  /** The swipe caught this duck. */
+  hit: boolean;
 }
 
 export interface Lane {
@@ -63,6 +94,8 @@ export interface Lane {
   dir: 1 | -1;
   /** Cells per second (road and river). */
   speed: number;
+  /** Road only: a courier lane, faster and mostly delivery riders. */
+  courier: boolean;
   movers: Mover[];
   /** Grass only: cells that cannot be entered. */
   blocks: Block[];
@@ -96,7 +129,7 @@ export interface State {
   /** The next row to generate. */
   genRow: number;
   /** Generator memory: current run of one lane kind, the guaranteed free column. */
-  gen: { kind: LaneKind; left: number; pathX: number; prevKind: LaneKind | null; prevDir: 1 | -1 };
+  gen: { kind: LaneKind; left: number; pathX: number; prevKind: LaneKind | null; prevDir: 1 | -1; prevCourier: boolean };
   x: number;
   row: number;
   facing: Dir;
@@ -112,6 +145,8 @@ export interface State {
   warned: boolean;
   /** Seconds since the officer's whistle, while he runs in. */
   catchT: number | null;
+  /** Dog-thief strikes raised or swung near this duck, oldest first. */
+  nets: Net[];
   death: Death | null;
   overT: number;
 }
@@ -126,6 +161,8 @@ export type GameEvent =
   | { type: "stall-warn" }
   | { type: "whistle" }
   | { type: "train-warn"; row: number }
+  | { type: "net-warn"; row: number }
+  | { type: "net-swipe"; row: number; hit: boolean }
   | { type: "die"; cause: Death };
 
 const STEP_OF: Record<Dir, [number, number]> = {
@@ -212,18 +249,24 @@ function nextKind(s: State, row: number, rand: () => number): { kind: LaneKind; 
   return { kind, len };
 }
 
-/** Lay movers along the whole wrap span, `gap()` apart. */
-function fill(rand: () => number, kindOf: () => { kind: Mover["kind"]; len: number }, gap: () => number): Mover[] {
+type MoverKind = Pick<Mover, "kind" | "len" | "v">;
+
+/** Lay movers along the whole wrap span, `gap()` apart; the gap across the wrap is at least `tail`. */
+function fill(rand: () => number, kindOf: () => MoverKind, gap: () => number, tail = 1): Mover[] {
   const out: Mover[] = [];
   let u = rand() * 2;
   for (;;) {
-    const { kind, len } = kindOf();
-    if (u + len > SPAN - 1 && out.length > 0) break;
-    out.push({ x0: -SPAN_HALF + u + len / 2, len, kind });
-    u += len + gap();
+    const k = kindOf();
+    if (u + k.len > SPAN - tail && out.length > 0) break;
+    out.push({ x0: -SPAN_HALF + u + k.len / 2, ...k });
+    u += k.len + gap();
   }
   return out;
 }
+
+/** Chance a road lane at `row` is a courier lane. */
+export const courierChance = (row: number) =>
+  row < COURIER_FROM ? 0 : lerp(COURIER_CHANCE[0], COURIER_CHANCE[1], clamp((row - COURIER_FROM) / COURIER_RAMP, 0, 1));
 
 function makeLane(s: State): Lane {
   const row = s.genRow++;
@@ -236,7 +279,7 @@ function makeLane(s: State): Lane {
   s.gen.left--;
   const kind = s.gen.kind;
   const d = difficulty(row);
-  const lane: Lane = { row, kind, dir: 1, speed: 0, movers: [], blocks: [], coin: null, period: 0, phase: 0 };
+  const lane: Lane = { row, kind, dir: 1, speed: 0, courier: false, movers: [], blocks: [], coin: null, period: 0, phase: 0 };
 
   if (kind === "grass") {
     const prevPath = s.gen.pathX;
@@ -259,16 +302,36 @@ function makeLane(s: State): Lane {
     // One kind of traffic per lane, alternating direction inside a run
     lane.dir = s.gen.prevKind === "road" ? (-s.gen.prevDir as 1 | -1) : rand() < 0.5 ? 1 : -1;
     const family = rand();
+    // Never two courier lanes side by side
+    lane.courier = !(s.gen.prevKind === "road" && s.gen.prevCourier) && rand() < courierChance(row);
     const busChance = 0.18 + 0.12 * d;
-    const kindOf: () => { kind: VehicleKind; len: number } =
-      family < busChance
-        ? () => ({ kind: "bus", len: LENGTH.bus })
+    const variant = (n: number) => Math.min(n - 1, Math.floor(rand() * n));
+    const one = (kind: VehicleKind, v?: number): MoverKind => (v === undefined ? { kind, len: LENGTH[kind] } : { kind, len: LENGTH[kind], v });
+    const motos = (): MoverKind => {
+      const u = rand();
+      if (u < 0.35) return one("moto-box");
+      if (u < 0.35 + NINJA_SHARE) return one("ninja", variant(NINJA_VARIANTS));
+      return one("moto");
+    };
+    const kindOf: () => MoverKind = lane.courier
+      ? () => (rand() < COURIER_SHARE ? one("courier", variant(COURIER_VARIANTS)) : one("moto"))
+      : family < busChance
+        ? () => one("bus")
         : family < busChance + 0.22
-          ? () => ({ kind: "ba-gac", len: LENGTH["ba-gac"] })
-          : () => (rand() < 0.35 ? { kind: "moto-box", len: 1 } : { kind: "moto", len: 1 });
-    const pace = family < busChance ? 0.85 : family < busChance + 0.22 ? 0.75 : 1.15;
+          ? () => one("ba-gac")
+          : motos;
+    // Lanes average a pace of 1 (bus 0.85, cart 0.75, moto 1.15); couriers ride COURIER_PACE
+    const pace = lane.courier ? COURIER_PACE : family < busChance ? 0.85 : family < busChance + 0.22 ? 0.75 : 1.15;
+    const gapK = lane.courier ? COURIER_GAP : 1;
     lane.speed = pick(ROAD_SPEED, d, rand()) * pace;
-    lane.movers = fill(rand, kindOf, () => pick(ROAD_GAP, d, rand()));
+    lane.movers = fill(rand, kindOf, () => pick(ROAD_GAP, d, rand()) * gapK, lerp(ROAD_GAP.min[0], ROAD_GAP.min[1], d) * gapK);
+    // Now and then a dog-thief bike rides a moto lane in place of one rider
+    const motoLane = !lane.courier && family >= busChance + 0.22;
+    if (motoLane && row >= DOG_FROM && rand() < lerp(DOG_CHANCE[0], DOG_CHANCE[1], d)) {
+      const i = Math.floor(rand() * lane.movers.length);
+      const m = lane.movers[i];
+      lane.movers[i] = { x0: m.x0, len: LENGTH["dog-thief"], kind: "dog-thief" };
+    }
   } else if (kind === "river") {
     lane.dir = s.gen.prevKind === "river" ? (-s.gen.prevDir as 1 | -1) : rand() < 0.5 ? 1 : -1;
     lane.speed = pick(RIVER_SPEED, d, rand());
@@ -291,6 +354,7 @@ function makeLane(s: State): Lane {
   }
   s.gen.prevKind = kind;
   s.gen.prevDir = lane.dir;
+  s.gen.prevCourier = lane.courier;
   return lane;
 }
 
@@ -309,7 +373,7 @@ export function createRun(seed: number): State {
     phase: "ready",
     lanes: [],
     genRow: 0,
-    gen: { kind: "grass", left: 0, pathX: 0, prevKind: null, prevDir: 1 },
+    gen: { kind: "grass", left: 0, pathX: 0, prevKind: null, prevDir: 1, prevCourier: false },
     x: 0,
     row: 0,
     facing: "up",
@@ -321,6 +385,7 @@ export function createRun(seed: number): State {
     stall: 0,
     warned: false,
     catchT: null,
+    nets: [],
     death: null,
     overT: 0,
   };
@@ -425,6 +490,87 @@ function hitBy(s: State): Death | null {
   return null;
 }
 
+// ---------------------------------------------------------------- dog-thief nets
+//
+// A dog-thief bike that reaches a duck standing next to its lane may strike: a
+// pure roll on (seed, bike, lap), never s.rng, so the lanes stay the same for
+// every racer whatever their duck does. The net goes up NET_WARN seconds before
+// the swipe, aimed so the bike is level with the duck when it swings; the swipe
+// catches a duck in the row either side of the lane within NET_HALF of the bike.
+
+/** A stable 0..1 for one bike's lap, independent of the lane generator. */
+function roll(seed: number, row: number, i: number, lap: number) {
+  const h = (seed ^ Math.imul(row + 1, 0x9e3779b1) ^ Math.imul(i + 1, 0x85ebca77) ^ Math.imul(lap, 0xc2b2ae3d)) | 0;
+  return nextRandom({ seed: h });
+}
+
+/** Which lap round the wrap span a mover is on at `time`. */
+const lapOf = (lane: Lane, m: Mover, time: number) => Math.floor((m.x0 + lane.dir * lane.speed * time + SPAN_HALF) / SPAN);
+
+/** A net's bike and its lane (null once the lane is forgotten). */
+export function netBike(s: State, n: Net): { lane: Lane; mover: Mover } | null {
+  const lane = laneAt(s, n.row);
+  const mover = lane?.movers[n.i];
+  return lane && mover ? { lane, mover } : null;
+}
+
+/** Would a swipe of `n` catch a duck at (x, row)? Measured from where the bike is at the swipe. */
+export function inNet(s: State, n: Net, x: number, row: number): boolean {
+  const b = netBike(s, n);
+  return !!b && Math.abs(row - n.row) === 1 && Math.abs(x - moverX(b.lane, b.mover, n.at)) < NET_HALF;
+}
+
+/** A strike only goes for a duck that can get out of it: one hop away from the bike's lane, or two hops sideways. */
+function canDodge(s: State, row: number, away: number, x: number) {
+  const free = (r: number, cx: number) => {
+    const l = r >= 0 ? laneAt(s, r) : undefined;
+    return !!l && Math.abs(cx) <= HALF && !(l.kind === "grass" && isBlocked(l, cx));
+  };
+  if (free(away, x)) return true;
+  return [-1, 1].some((d) => free(row, x + d) && free(row, x + 2 * d));
+}
+
+/** Raise a net for every dog-thief bike that has just come within NET_WARN of the duck's column. */
+function raiseNets(s: State, before: number, ev: GameEvent[]) {
+  const row = s.hop ? s.hop.toRow : s.row;
+  const x = s.hop ? s.hop.toX : s.x;
+  const here = laneAt(s, row);
+  if (!here || (here.kind !== "grass" && here.kind !== "road")) return;
+  for (const side of [-1, 1]) {
+    const lane = laneAt(s, row + side);
+    if (lane?.kind !== "road" || lane.row < DOG_FROM) continue;
+    const aim = x - lane.dir * lane.speed * NET_WARN;
+    lane.movers.forEach((m, i) => {
+      if (m.kind !== "dog-thief") return;
+      const was = moverX(lane, m, before);
+      const now = moverX(lane, m, s.time);
+      if (Math.abs(now - was) > SPAN_HALF || lane.dir * (was - aim) >= 0 || lane.dir * (now - aim) < 0) return;
+      const lap = lapOf(lane, m, s.time);
+      if (s.nets.some((n) => n.row === lane.row && n.i === i && n.lap === lap)) return;
+      if (roll(s.seed, lane.row, i, lap) >= NET_CHANCE || !canDodge(s, row, row - side, x)) return;
+      s.nets.push({ row: lane.row, i, lap, at: s.time + NET_WARN, hit: false });
+      ev.push({ type: "net-warn", row: lane.row });
+    });
+  }
+}
+
+/** Swing every net whose moment has come; true when one caught the duck. */
+function swingNets(s: State, before: number, ev: GameEvent[]): boolean {
+  const p = duckPos(s);
+  const h = s.hop;
+  const row = h ? (h.t < 0.5 ? h.fromRow : h.toRow) : s.row;
+  for (const n of s.nets) {
+    if (before >= n.at || s.time < n.at) continue;
+    n.hit = inNet(s, n, p.x, row);
+    ev.push({ type: "net-swipe", row: n.row, hit: n.hit });
+    if (n.hit) {
+      die(s, "netted", ev);
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Advance the run by `dt` seconds with at most one new input. Call it at a fixed
  * dt (config STEP) and the same seed + inputs give the same run, step for step.
@@ -485,11 +631,15 @@ export function step(s: State, input: Dir | null, dt: number): GameEvent[] {
     }
   }
 
+  if (swingNets(s, before, ev)) return ev;
   const hit = hitBy(s);
   if (hit) {
     die(s, hit, ev);
     return ev;
   }
+  raiseNets(s, before, ev);
+  // Old strikes are only kept long enough to draw (and not to strike twice in a lap)
+  if (s.nets.length > 0) s.nets = s.nets.filter((n) => s.time - n.at < 4 && laneAt(s, n.row));
 
   s.stall += dt;
   if (!s.warned && s.stall >= STALL_WARN) {

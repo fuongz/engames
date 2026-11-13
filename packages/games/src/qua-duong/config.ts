@@ -51,7 +51,7 @@ export const RAMP_ROWS = 260;
 /** The first rail lane may appear from this row. */
 export const RAIL_FROM = 18;
 
-export type VehicleKind = "moto" | "moto-box" | "ba-gac" | "bus";
+export type VehicleKind = "moto" | "moto-box" | "ba-gac" | "bus" | "courier" | "ninja" | "dog-thief";
 export type FloaterKind = "ghe" | "raft" | "hyacinth";
 export type BlockKind = "banana" | "stool" | "food-cart" | "hedge";
 
@@ -61,6 +61,9 @@ export const LENGTH: Record<VehicleKind | FloaterKind | "train", number> = {
   "moto-box": 1,
   "ba-gac": 2,
   bus: 3,
+  courier: 1,
+  ninja: 1,
+  "dog-thief": 1,
   ghe: 3,
   raft: 2,
   hyacinth: 1,
@@ -71,6 +74,40 @@ export const LENGTH: Record<VehicleKind | FloaterKind | "train", number> = {
 export const ROAD_SPEED = { min: [1.3, 2.4], max: [2.4, 4.6] } as const;
 /** Gap between vehicles (cells) at difficulty 0 and 1. */
 export const ROAD_GAP = { min: [3.2, 2.2], max: [6.5, 4.2] } as const;
+// Courier lanes: a road lane given over to delivery riders, faster than the rest.
+/** The first courier lane may appear from this row. */
+export const COURIER_FROM = 8;
+/** Chance a road lane is a courier lane, from COURIER_FROM to COURIER_FROM + COURIER_RAMP rows. */
+export const COURIER_CHANCE = [0.08, 0.3] as const;
+export const COURIER_RAMP = 120;
+/** A courier lane's speed against an ordinary lane's at the same row (bus, cart and moto lanes average 1). */
+export const COURIER_PACE = 1.5;
+/** Its gaps are this much wider, so the faster stream still leaves room to cross. */
+export const COURIER_GAP = 1.3;
+/** Share of a courier lane's riders that are couriers (the rest are plain motos). */
+export const COURIER_SHARE = 0.8;
+/** Colour variants: green, sky blue, orange, yellow (models.ts COURIER_LOOKS). */
+export const COURIER_VARIANTS = 4;
+
+/** Share of a moto lane's riders on a step-through scooter, fully sun-covered. */
+export const NINJA_SHARE = 0.2;
+/** Pastel jacket variants (models.ts NINJA_LOOKS). */
+export const NINJA_VARIANTS = 4;
+
+// Dog-thief bikers: rare, one per lane at most, and they swing a net.
+/** No dog-thief bike before this row. */
+export const DOG_FROM = 25;
+/** Chance a moto lane past DOG_FROM carries one, at difficulty 0 and 1 (buses fill ~20–30% of lanes). */
+export const DOG_CHANCE = [0.1, 0.16] as const;
+/** Chance the bike strikes when it reaches a duck next to its lane (once per lap). */
+export const NET_CHANCE = 0.6;
+/** Seconds the net is raised before the swipe: the warning. */
+export const NET_WARN = 0.5;
+/** Seconds the swipe is drawn sweeping (the catch itself is instant, at its start). */
+export const NET_SWIPE = 0.32;
+/** The swipe covers the rows either side of the bike's lane, this far either side of its centre. */
+export const NET_HALF = 1.4;
+
 /** River current (cells/s) at difficulty 0 and 1. */
 export const RIVER_SPEED = { min: [0.9, 1.4], max: [1.6, 2.6] } as const;
 /** Gap between floaters (cells) at difficulty 0 and 1. */
@@ -196,6 +233,32 @@ export const PALETTE = {
   headOff: 0xd8d2b0,
   headOn: 0xfff2a8,
   splash: 0xe8fbff,
+  // courier riders: jacket, helmet and box share a colour
+  courierGreen: 0x2fb352,
+  courierSky: 0x7cc8f2,
+  courierOrange: 0xf5862b,
+  courierYellow: 0xf7cb17,
+  courierBike: 0x33363e,
+  reflect: 0xe4e8ec,
+  // sun-covered scooter riders
+  ninjaPink: 0xf7b6c9,
+  ninjaMint: 0xa9e3c8,
+  ninjaLilac: 0xcdb6f0,
+  ninjaPeach: 0xffd3a1,
+  brim: 0xefe3c8,
+  mask: 0x8fa6c0,
+  shades: 0x15151b,
+  scooter: 0xf2ede2,
+  wicker: 0xb98a4f,
+  // dog-thief bikers
+  hoodie: 0x2b2e38,
+  hoodieB: 0x3c3646,
+  cap: 0x17191f,
+  sportBike: 0x2a2c33,
+  sportTrim: 0xb8322c,
+  netPole: 0x9a8a6e,
+  netHoop: 0xd8d0bc,
+  netMesh: 0x6f8a80,
 } as const;
 
 // ---------------------------------------------------------------- skins

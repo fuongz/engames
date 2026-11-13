@@ -237,6 +237,23 @@ export function drawNameTag(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.fillText(text, x, y);
 }
 
+/** A pulsing red "!" badge, over a dog-thief bike about to swing its net. */
+export function drawAlert(ctx: CanvasRenderingContext2D, x: number, y: number, clock: number) {
+  const r = 17 + Math.sin(clock * 22) * 2.5;
+  const by = y - Math.abs(Math.sin(clock * 11)) * 5;
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(x, by, r + 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#e5322b";
+  ctx.beginPath();
+  ctx.arc(x, by, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = CREAM;
+  ctx.fillRect(x - 3, by - r * 0.6, 6, r * 0.75);
+  ctx.fillRect(x - 3, by + r * 0.3, 6, 6);
+}
+
 /** A line along the bottom: "You're out! Watching An". */
 export function drawBanner(ctx: CanvasRenderingContext2D, safe: Safe, text: string) {
   label(ctx, text, safe.x + safe.w / 2, safe.y + safe.h - 60, 24, "center", "#ffe27a", 700);

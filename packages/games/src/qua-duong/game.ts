@@ -14,11 +14,12 @@
 // document listeners). The loop, keys, pause and teardown stay the engine's.
 import "@fontsource/baloo-2/600.css";
 import "@fontsource/baloo-2/800.css";
-import { type CosmeticInventory, type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, clamp, inRect } from "@web-games/core";
+import { type CosmeticInventory, type GameHooks, type PointerInfo, type Rect, type Runtime, SUMMARY_KEY, clamp, inRect, lerp } from "@web-games/core";
 import type { SeatResult } from "@web-games/core/online";
 import { Color } from "three";
 import { CATCH_TIME, DAY_CYCLE, DEFAULT_SKIN, HOP_TIME, PALETTE, RACE_SECONDS, SKINS, STALL_WARN, type SkinId, isSkinId } from "./config";
 import {
+  drawAlert,
   drawBanner,
   drawCenter,
   drawClock,
@@ -43,11 +44,14 @@ import {
   createRun,
   duckPos,
   laneAt,
+  moverX,
+  netBike,
   parseBest,
   score,
   step,
   ticketsFor,
 } from "./logic";
+import { NET_GRIP, NET_UP_Y } from "./models";
 import { type Particle, type Pose, Scene3D } from "./scene";
 import { STRINGS } from "./strings";
 
@@ -279,6 +283,13 @@ export function setup(rt: Runtime): GameHooks {
       } else if (e.type === "whistle") {
         audio.tone({ freq: 2400, to: 2650, dur: 0.22, type: "square", vol: 0.04 });
         audio.tone({ freq: 2400, to: 2700, dur: 0.45, type: "square", vol: 0.04, delay: 0.26 });
+      } else if (e.type === "net-warn") {
+        // a short two-note alarm as the net goes up
+        audio.tone({ freq: 740, to: 990, dur: 0.08, type: "square", vol: 0.05 });
+        audio.tone({ freq: 740, to: 990, dur: 0.08, type: "square", vol: 0.05, delay: 0.13 });
+      } else if (e.type === "net-swipe" && !e.hit) {
+        audio.noise(0.16, 0.04);
+        audio.tone({ freq: 420, to: 180, dur: 0.16, type: "triangle", vol: 0.04 });
       } else if (e.type === "die") dieEffects(e.cause);
     }
   }
@@ -290,6 +301,10 @@ export function setup(rt: Runtime): GameHooks {
       burst(26, p.x, 0, z, [PALETTE.splash, PALETTE.water, PALETTE.splash], 1.8, 3.4);
       audio.noise(0.35, 0.08);
       audio.tone({ freq: 620, to: 140, dur: 0.35, type: "sine", vol: 0.08 });
+    } else if (cause === "netted") {
+      burst(14, p.x, 0.6, z, [PALETTE.duck, PALETTE.duckShade, PALETTE.splash], 1.6, 2.8);
+      audio.noise(0.18, 0.05);
+      for (const [i, f] of [700, 820, 700].entries()) audio.tone({ freq: f, to: f * 0.7, dur: 0.1, type: "sawtooth", vol: 0.04, delay: 0.12 + i * 0.14 });
     } else if (cause === "hit" || cause === "train") {
       burst(18, p.x, 0.4, z, [PALETTE.duck, PALETTE.splash, PALETTE.duckShade], 2.4, 2.6);
       audio.noise(0.2, 0.09);
@@ -434,6 +449,18 @@ export function setup(rt: Runtime): GameHooks {
     return { x: p.x, y: groundY(s, p.row) + p.lift * 0.55, z: -p.row, rotY: FACING[s.facing], sx: flat ? 1.4 : 1, sy: flat ? 0.14 : 1, sz: flat ? 1.4 : 1 };
   }
 
+  /** A red "!" over every dog-thief bike with its net raised. */
+  function drawNetAlerts(view: Rect) {
+    if (!scene) return;
+    for (const n of run.nets) {
+      if (n.hit || run.time >= n.at) continue;
+      const b = netBike(run, n);
+      if (!b) continue;
+      const at = scene.project(moverX(b.lane, b.mover, run.time), 2.6, -n.row);
+      if (at) drawAlert(ctx, view.x + at.x * view.w, view.y + at.y * view.h, clock);
+    }
+  }
+
   function renderOnline(view: Rect, safe: Rect) {
     const l = tr();
     if (!snap) {
@@ -528,6 +555,24 @@ export function setup(rt: Runtime): GameHooks {
     } else if (death === "drown" || death === "edge") {
       y = base - 0.15 - run.overT * 1.4;
       if (run.overT > 0.5) return null;
+    } else if (death === "netted") {
+      // Scooped into the net and carried off with the bike, wriggling
+      const n = run.nets.find((k) => k.hit);
+      const b = n ? netBike(run, n) : null;
+      if (n && b) {
+        const gx = moverX(b.lane, b.mover, run.time) - b.lane.dir * NET_GRIP.back;
+        const k = clamp((run.time - n.at) / 0.22, 0, 1);
+        const size = lerp(1, 0.55, k);
+        return {
+          x: lerp(p.x, gx, k),
+          y: lerp(base, NET_GRIP.up + NET_UP_Y - 0.24, k) + Math.sin(k * Math.PI) * 0.5,
+          z: lerp(-p.row, -n.row, k),
+          rotY: angle + Math.sin(clock * 18) * 0.35 * k,
+          sx: size,
+          sy: size,
+          sz: size,
+        };
+      }
     } else if (death === "caught") {
       const o = poseOfficer();
       return { x: (o?.x ?? p.x) + 0.42, y: 0.42 + Math.sin(clock * 14) * 0.03, z: o?.z ?? -p.row, rotY: angle, sx: 1, sy: 1, sz: 1 };
@@ -625,6 +670,7 @@ export function setup(rt: Runtime): GameHooks {
       const safe = safeArea();
       const l = tr();
       if (!scene) drawNoWebGL(ctx, view, safe, l.noWebGL);
+      drawNetAlerts(view);
       if (online) {
         renderOnline(view, safe);
       } else if (run.phase === "ready") {
