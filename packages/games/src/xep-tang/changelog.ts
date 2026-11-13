@@ -2,6 +2,23 @@ import type { ChangelogEntry } from "@web-games/core";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.1.0",
+    date: "2026-11-13",
+    title: { vi: "Tòa tháp 3D", en: "A 3D tower" },
+    changes: {
+      vi: [
+        "Đổi tòa tháp sang khối 3D cạnh vuông, có ánh sáng và bóng tiếp xúc nhẹ.",
+        "Thêm mảnh cắt xoay khi rơi; tắt xoay khi thiết bị bật giảm chuyển động.",
+        "Giữ góc nhìn, nhịp thả khối và điểm số; tự dùng đồ họa 2D khi thiết bị không hỗ trợ 3D.",
+      ],
+      en: [
+        "Changed the tower to square-edged 3D blocks with lighting and subtle contact shadows.",
+        "Added tumbling offcuts; disable their rotation when reduced motion is enabled.",
+        "Kept the camera angle, drop timing and scoring; automatically use 2D graphics when 3D is unavailable.",
+      ],
+    },
+  },
+  {
     version: "1.0.0",
     date: "2026-11-08",
     title: { vi: "Ra mắt", en: "Launch" },

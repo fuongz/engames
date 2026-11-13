@@ -4,6 +4,7 @@ import { type GameHooks, type Rect, type Runtime, SUMMARY_KEY, clamp, easeOutCub
 import { type Camera, FONT, drawButton, drawCard, drawPlinth, drawRipple, drawSky, drawSlab, inkFor, project, text } from "./art";
 import { H, PLAY_ANCHOR_Y, PLINTH_H, SCALE, SLAB_H, SPAN, W } from "./config";
 import { type Axis, type Box, type Drop, type Run, createRun, drop, hueFor, moverBox, parseBest, start, tick, top } from "./logic";
+import { StackScene } from "./scene";
 import { STRINGS } from "./strings";
 
 /** A sliced-off piece (or the whole missed slab) tumbling away. */
@@ -50,6 +51,13 @@ export function setup(rt: Runtime): GameHooks {
   const { stage, ctx } = rt;
   const { storage, audio, reportScore } = rt.game;
   const tr = () => STRINGS[rt.locale()];
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let scene: StackScene | null = null;
+  try {
+    scene = new StackScene();
+  } catch {
+    // Devices without WebGL keep the complete Canvas 2D game.
+  }
 
   let best = parseBest(storage.get<unknown>("best", 0));
   let run: Run = createRun(newSeed());
@@ -59,7 +67,13 @@ export function setup(rt: Runtime): GameHooks {
   let overT = 0;
   let newBest = false;
 
-  const cam: Camera = { focusY: 0, zoom: 1, anchorY: PLAY_ANCHOR_Y, dx: 0, dy: 0 };
+  const cam: Camera = {
+    focusY: 0,
+    zoom: 1,
+    anchorY: PLAY_ANCHOR_Y,
+    dx: 0,
+    dy: 0,
+  };
   /** Floor the sky shows, eased toward the score. */
   let skyFloor = 0;
   let nudge = 0;
@@ -270,13 +284,39 @@ export function setup(rt: Runtime): GameHooks {
     const topBox = top(run);
     const depthKey = topBox.x + topBox.z;
 
-    // Pieces behind the tower first, the rest after it
-    for (const p of pieces) if (p.box.x + p.box.z < depthKey) drawPiece(p);
-    drawTower();
-    for (const r of ripples) if (r.t > 0) drawRipple(ctx, cam, r.box, r.y, r.t / 0.7);
-    if (run.phase === "play") drawMover(alpha);
-    else if (run.phase === "ready") drawGlide();
-    for (const p of pieces) if (p.box.x + p.box.z >= depthKey) drawPiece(p);
+    const moving =
+      run.phase === "play"
+        ? interpolatedMover(alpha)
+        : run.phase === "ready"
+          ? { ...moverBox(run), x: Math.sin(t * 1.4) * SPAN * 0.75 }
+          : null;
+    const rendered = scene?.draw(
+      ctx,
+      v,
+      cam,
+      run,
+      squash,
+      moving,
+      pieces.map((p) => ({
+        box: p.box,
+        y: p.y,
+        rot: reducedMotion.matches ? 0 : p.rot,
+        hue: p.hue,
+        opacity: clamp((PIECE_LIFE - p.t) / 0.6, 0, 1),
+      })),
+    );
+    if (!rendered) {
+      // Pieces behind the tower first, the rest after it in the 2D fallback.
+      for (const p of pieces) if (p.box.x + p.box.z < depthKey) drawPiece(p);
+      drawTower();
+      if (moving) {
+        const y = run.score * SLAB_H;
+        drawSlab(ctx, cam, moving, y, y + SLAB_H, hueFor(run, run.score + 1));
+      }
+      for (const p of pieces) if (p.box.x + p.box.z >= depthKey) drawPiece(p);
+    }
+    for (const r of ripples)
+      if (r.t > 0) drawRipple(ctx, cam, r.box, r.y, r.t / 0.7);
     drawSparks();
 
     if (run.phase === "ready") drawStart(ink);
@@ -300,20 +340,14 @@ export function setup(rt: Runtime): GameHooks {
     }
   }
 
-  function drawMover(alpha: number) {
+  function interpolatedMover(alpha: number): Box {
     const m = moverBox(run);
-    // Between fixed steps, unless it just bounced
-    const pos = prevDir === run.mover.dir ? lerp(prevPos, run.mover.pos, alpha) : run.mover.pos;
-    const b = run.mover.axis === "x" ? { ...m, x: pos } : { ...m, z: pos };
-    const y0 = run.score * SLAB_H;
-    drawSlab(ctx, cam, b, y0, y0 + SLAB_H, hueFor(run, run.score + 1));
-  }
-
-  /** On the start screen the first slab drifts to and fro, showing what is coming. */
-  function drawGlide() {
-    const m = moverBox(run);
-    const b = { ...m, x: Math.sin(t * 1.4) * SPAN * 0.75 };
-    drawSlab(ctx, cam, b, 0, SLAB_H, hueFor(run, 1));
+    // Between fixed steps, unless it just bounced.
+    const pos =
+      prevDir === run.mover.dir
+        ? lerp(prevPos, run.mover.pos, alpha)
+        : run.mover.pos;
+    return run.mover.axis === "x" ? { ...m, x: pos } : { ...m, z: pos };
   }
 
   function drawPiece(p: Piece) {
@@ -418,6 +452,9 @@ export function setup(rt: Runtime): GameHooks {
         e.preventDefault();
         act(true);
       }
+    },
+    dispose() {
+      scene?.dispose();
     },
     suspend() {
       if (run.phase === "play") paused = true;

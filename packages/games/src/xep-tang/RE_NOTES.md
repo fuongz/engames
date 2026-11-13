@@ -21,12 +21,25 @@ slide speed is the same on 60 Hz and 120 Hz screens.
 
 ## Look
 
-"Khối màu tối giản": flat isometric slabs with three shaded faces, the hue turning 5° a floor.
-The sky is our own day: dawn (rose/peach) → day (soft blue) → sunset (violet/apricot) → night
-(indigo, twinkling stars), each held ~22 floors, then around again. The score ink switches
-between plum and warm white with the sky's brightness. Landing: a short squash and screen
-thump; a perfect adds a ripple of the top face's outline and sparks. At game over the camera
-pulls back to show the whole tower above the result card.
+"Khối màu tối giản": square Three.js blocks, the hue turning 5° a floor. The
+original fixed isometric camera and colours are preserved, with Lambert lighting. No rounded geometry, glossy materials, tone mapping or
+end-of-run orbit. Each block is 12 triangles instead of the rounded mesh's 300.
+
+Subtle contact shadows are transparent 12%-opacity rectangles, shifted in the
+light's direction and clipped to the supporting slab. All patches share one
+instanced draw call. They are a deliberate approximation, without a shadow map,
+extra shadow render pass, blur or physically simulated falling-piece shadows.
+
+The core's single render loop composites the transparent WebGL canvas over the
+2D sky before painting the HUD. Geometry/materials are reused, tower blocks are
+instanced, resolution is capped at 1.5× CSS pixels, and GPU resources are disposed
+on exit. Canvas 2D remains the fallback when WebGL creation fails or its context
+is lost. The canvas copy remains a per-frame cost; phone performance is still
+subject to manual validation, not an asserted frame-rate improvement.
+
+The sky moves from dawn to day, sunset and starry night. Landing retains the
+original squash and screen thump; a perfect adds a ripple and sparks. The camera
+only pulls back at game over. Reduced motion disables 3D fragment rotation.
 
 ## Art
 
