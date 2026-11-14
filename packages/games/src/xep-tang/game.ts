@@ -427,7 +427,7 @@ export function setup(rt: Runtime): GameHooks {
     text(ctx, l.over.toUpperCase(), W / 2, r.y + 38, 18, "#8a7c9a", { weight: 600, spacing: 3 });
     text(ctx, String(run.score), W / 2, r.y + 100, 84, `hsl(${hue} 45% 38%)`);
     text(ctx, l.floors, W / 2, r.y + 148, 20, "#6e6182", { weight: 600 });
-    const line = newBest ? `${l.newBest} · ${l.perfects(run.perfects)}` : `${l.best(best)} · ${l.perfects(run.perfects)}`;
+    const line = newBest ? `${l.newBest}, ${l.perfects(run.perfects)}` : `${l.best(best)}, ${l.perfects(run.perfects)}`;
     const ls = fitFontSize(ctx, line, 19, r.w - 40, FONT, 600);
     text(ctx, line, W / 2, r.y + 186, ls, newBest ? `hsl(${hue} 60% 40%)` : "#5a4d6e", { weight: 600 });
     ctx.globalAlpha = 1;

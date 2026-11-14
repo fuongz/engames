@@ -20,6 +20,9 @@ export const vi = {
     changelog: "Có gì mới",
     profile: "Hồ sơ",
     prizes: "Đổi quà",
+    groupBrowse: "Duyệt game",
+    groupModes: "Kiểu chơi",
+    groupYou: "Của bạn",
   },
   favorites: {
     pageTitle: "Game yêu thích | Engames",

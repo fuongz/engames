@@ -39,7 +39,7 @@ export const STRINGS: Localized<Strings> = {
     newBest: "Kỷ lục mới!",
     perfects: (n) => `${n} lần hoàn hảo`,
     again: "Chơi lại",
-    detail: (f, p) => `${f} tầng · ${p} hoàn hảo`,
+    detail: (f, p) => `${f} tầng, ${p} hoàn hảo`,
     summary: (b) => `Kỷ lục ${b} tầng`,
   },
   en: {
@@ -57,7 +57,7 @@ export const STRINGS: Localized<Strings> = {
     newBest: "New best!",
     perfects: (n) => `${n} perfect drops`,
     again: "Play again",
-    detail: (f, p) => `${f} floors · ${p} perfect`,
+    detail: (f, p) => `${f} floors, ${p} perfect`,
     summary: (b) => `Best ${b} floors`,
   },
 };

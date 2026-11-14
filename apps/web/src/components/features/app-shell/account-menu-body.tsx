@@ -253,7 +253,7 @@ function SwitchRow({
 /**
  * The sheet's language row: Tiếng Việt / English as a segmented control. It
  * switches at once and, signed in, saves to the account (the same
- * `useChooseLocale` as the top bar's language menu, which phones no longer show).
+ * `useChooseLocale` as the signed-out top bar's language menu).
  */
 function LanguageRow() {
   const m = useMessages();
@@ -372,8 +372,8 @@ export function AccountMenuBody({
       {/* Settings get their own group, as switches */}
       <Group>
         <Label className={cn("px-3 text-xs text-muted-foreground", !menu && "py-1.5")}>{m.account.settings}</Label>
-        {/* Phones only: from lg the top bar keeps its language menu */}
-        {!menu && <LanguageRow />}
+        {/* In the sheet and the dropdown alike: the top bar has no language menu when signed in */}
+        <LanguageRow />
         {/* Unasked (null) reads as off; switching it on is the answer */}
         <SwitchRow shell={shell} checked={history.value === true} onChange={(on) => void history.set(on)}>
           {m.account.saveHistory}

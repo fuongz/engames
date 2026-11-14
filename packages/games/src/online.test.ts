@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { kyTucXaOnline } from "./ky-tuc-xa/online";
 import { findOnlineGame, onlineGames } from "./online";
-import { games } from "./registry";
+import { allGames as games } from "./registry";
 
 describe("registry", () => {
   it("lists exactly the games whose manifest declares online play", () => {

@@ -16,7 +16,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { audioBus } from "@web-games/core";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useMessages } from "#/hooks/use-messages";
 import { useSession } from "#/hooks/use-session";
 import { INDICATOR_SPRING } from "#/lib/motion";
@@ -26,6 +26,16 @@ import { HelpDialog } from "./help-dialog";
 /** Sidebar row; the active one gets the orange text and the left bar. */
 const SIDEBAR_ITEM =
   "relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[active=true]:text-primary";
+
+/** A labelled block of the rail: the label names what its links have in common. */
+function NavGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-1">
+      <span className="px-3 pb-1 text-xs font-medium text-muted-foreground/70">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 /** One bar shared by the nav links: it glides to the new page instead of blinking. */
 function ActiveBar() {
@@ -76,7 +86,8 @@ export function Sidebar() {
         <span className="text-lg font-bold tracking-wide uppercase">Engames</span>
       </Link>
 
-      <nav className="grid gap-1" aria-label={m.nav.label}>
+      <nav className="grid gap-5" aria-label={m.nav.label}>
+        <NavGroup label={m.nav.groupBrowse}>
         <Link to="/" className={SIDEBAR_ITEM} data-active={discover}>
           {discover && <ActiveBar />}
           <HugeiconsIcon icon={Store01Icon} className="size-5" />
@@ -87,6 +98,8 @@ export function Sidebar() {
           <HugeiconsIcon icon={LibraryIcon} className="size-5" />
           {m.nav.library}
         </Link>
+        </NavGroup>
+        <NavGroup label={m.nav.groupModes}>
         {/* The library, filtered to the arcade category (Xu Vũ Trụ, Xếp Tầng…) */}
         <Link to="/library" search={{ category: "arcade" }} className={SIDEBAR_ITEM} data-active={arcade}>
           {arcade && <ActiveBar />}
@@ -105,6 +118,8 @@ export function Sidebar() {
           <HugeiconsIcon icon={CloudSavingDone01Icon} className="size-5" />
           {m.nav.online}
         </Link>
+        </NavGroup>
+        <NavGroup label={m.nav.groupYou}>
         {/* Tickets → each game's prizes (signed out, the page asks them to sign in) */}
         <Link to="/prize-counter" className={SIDEBAR_ITEM} data-active={prizes}>
           {prizes && <ActiveBar />}
@@ -125,6 +140,7 @@ export function Sidebar() {
             {m.nav.profile}
           </Link>
         )}
+        </NavGroup>
       </nav>
 
       <div className="mt-auto grid gap-1">

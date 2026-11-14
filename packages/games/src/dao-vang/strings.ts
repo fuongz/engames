@@ -78,7 +78,7 @@ export const STRINGS: Localized<Strings> = {
     paused: "Tạm dừng",
     resume: "Chạm để đào tiếp",
     detail: (n) => `Màn ${n}`,
-    best: (n, level) => `Kỷ lục ${money(n)} · màn ${level}`,
+    best: (n, level) => `Kỷ lục ${money(n)}, màn ${level}`,
   },
   en: {
     level: (n) => `LEVEL ${n}`,
@@ -122,6 +122,6 @@ export const STRINGS: Localized<Strings> = {
     paused: "Paused",
     resume: "Tap to keep digging",
     detail: (n) => `Level ${n}`,
-    best: (n, level) => `Best ${n.toLocaleString("en-US")} · level ${level}`,
+    best: (n, level) => `Best ${n.toLocaleString("en-US")}, level ${level}`,
   },
 };

@@ -825,7 +825,7 @@ export function outlined(ctx: Ctx, str: string, x: number, y: number, size: numb
   ctx.fillText(str, x, y);
 }
 
-/** A small rounded tag, e.g. "Máy · Khó". */
+/** A small rounded tag, e.g. "Máy (Khó)". */
 export function drawTag(ctx: Ctx, str: string, x: number, y: number, size: number, fill: string, align: "left" | "right" | "center" = "center") {
   ctx.font = `800 ${size}px ${FONT}`;
   const w = ctx.measureText(str).width + size;

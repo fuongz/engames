@@ -18,7 +18,7 @@ export function VersionBadge({ version, className }: { version: string; classNam
 export function ChangeList({ entry, className }: { entry: ChangelogEntry; className?: string }) {
   const locale = useLocale();
   return (
-    <ul className={cn("grid list-disc gap-1.5 pl-5 leading-relaxed text-muted-foreground marker:text-primary/70", className)}>
+    <ul className={cn("grid list-disc gap-1.5 pl-4 leading-snug text-muted-foreground marker:text-primary/70", className)}>
       {entry.changes[locale].map((c) => (
         <li key={c}>{c}</li>
       ))}

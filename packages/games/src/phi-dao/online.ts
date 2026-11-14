@@ -48,7 +48,7 @@ export const phiDaoOnline: RoomGame<ThrowInput> = {
         humans.map((_, seat) => ({
           seat,
           score: s.score,
-          detail: `${s.stage}/15 · ${s.hits[seat]}`,
+          detail: `${s.stage}/15, ${s.hits[seat]}`,
           outcome: s.won ? "win" : "loss",
         })),
     };

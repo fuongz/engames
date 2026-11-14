@@ -21,6 +21,9 @@ export const en: Messages = {
     changelog: "What's new",
     profile: "Profile",
     prizes: "Prizes",
+    groupBrowse: "Browse",
+    groupModes: "Ways to play",
+    groupYou: "Yours",
   },
   favorites: {
     pageTitle: "Favourite games | Engames",

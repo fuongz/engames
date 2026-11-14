@@ -58,7 +58,7 @@ export const quaDuongOnline: RoomGame<RaceInput> = {
         return race.racers.map((r, seat) => ({
           seat,
           score: score(r.duck),
-          detail: `#${order.indexOf(seat) + 1}/${race.racers.length} · ${r.duck.coins}🪙`,
+          detail: `#${order.indexOf(seat) + 1}/${race.racers.length}, ${r.duck.coins}🪙`,
           outcome: raceOutcome(race, seat),
         }));
       },

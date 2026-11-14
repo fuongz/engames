@@ -9,6 +9,7 @@ import { fmt, intlTag } from "#/lib/i18n";
 import { FADE, RISE, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
 import type { LeaderboardEntry } from "#/server/leaderboard";
+import { tidyDetail } from "#/lib/format";
 
 const ROWS = stagger(0.05);
 
@@ -87,7 +88,7 @@ export function LeaderboardList({
               ) : (
                 <span className="truncate text-sm font-medium">{e.name}</span>
               )}
-              {e.detail && <span className="truncate text-xs text-muted-foreground">{e.detail}</span>}
+              {e.detail && <span className="truncate text-xs text-muted-foreground">{tidyDetail(e.detail)}</span>}
             </span>
             <span className="shrink-0 text-sm font-semibold tabular-nums">{score.format(e.score)}</span>
           </motion.li>

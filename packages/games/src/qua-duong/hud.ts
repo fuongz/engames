@@ -4,6 +4,7 @@
 import type { Rect } from "@web-games/core";
 import { fitFontSize } from "@web-games/core";
 import type { SeatResult } from "@web-games/core/online";
+import { TICKETS_PER_COIN } from "./config";
 import type { Strings } from "./strings";
 
 export const FONT = '"Baloo 2", system-ui, sans-serif';
@@ -149,7 +150,7 @@ export function drawOver(ctx: CanvasRenderingContext2D, view: Rect, safe: Safe, 
   ctx.fillStyle = `rgba(20,12,8,${0.35 * k})`;
   ctx.fillRect(view.x, view.y, view.w, view.h);
   const w = Math.min(440, safe.w - 40);
-  const h = 330;
+  const h = 380;
   const r: Rect = { x: safe.x + (safe.w - w) / 2, y: safe.y + safe.h / 2 - h / 2 + (1 - k) * 60, w, h };
   ctx.globalAlpha = k;
   panel(ctx, r, "rgba(255,248,232,0.97)");
@@ -161,18 +162,24 @@ export function drawOver(ctx: CanvasRenderingContext2D, view: Rect, safe: Safe, 
   ctx.fillText(card.reason, cx, r.y + 86, w - 30);
   label(ctx, tr.rows(card.rows), cx, r.y + 134, 46, "center", GOLD);
   label(ctx, card.newBest ? tr.newBest : tr.best(card.best), cx, r.y + 182, 24, "center", card.newBest ? "#ffe27a" : CREAM, 700);
+  // What the coins were for: each one is worth TICKETS_PER_COIN tickets
+  const coinLine = tr.coinValue(card.coins, card.coins * TICKETS_PER_COIN);
+  ctx.font = `800 22px ${FONT}`;
+  const cw = ctx.measureText(coinLine).width;
+  coinIcon(ctx, cx - cw / 2 - 14, r.y + 218, 18);
+  label(ctx, coinLine, cx + 14, r.y + 218, 22, "center", GOLD);
+  ctx.font = `600 16px ${FONT}`;
+  ctx.fillStyle = INK;
+  ctx.textAlign = "center";
   if (card.tickets === null) {
-    coinIcon(ctx, cx - 40, r.y + 218, 18);
-    label(ctx, `+${card.coins}`, cx - 22, r.y + 218, 24, "left", GOLD);
+    ctx.fillText(tr.signInForTickets, cx, r.y + 250, w - 30);
   } else {
-    coinIcon(ctx, cx - 120, r.y + 218, 18);
-    label(ctx, `+${card.coins}`, cx - 102, r.y + 218, 24, "left", GOLD);
-    label(ctx, tr.ticketsWon(card.tickets), cx + 110, r.y + 218, 24, "right", "#ffe27a");
+    label(ctx, tr.ticketsWon(card.tickets), cx, r.y + 252, 24, "center", "#ffe27a");
     if (card.ticketCap) {
       ctx.font = `600 15px ${FONT}`;
       ctx.fillStyle = INK;
       ctx.textAlign = "center";
-      ctx.fillText(tr.ticketCap, cx, r.y + 238, w - 30);
+      ctx.fillText(tr.ticketCap, cx, r.y + 280, w - 30);
     }
   }
   const again: Rect = { x: cx - 130, y: r.y + h - 82, w: 260, h: 60 };

@@ -246,7 +246,7 @@ export function setup(rt: Runtime): GameHooks {
       text(ctx, `${str.score}  ${s.score}`, 270, 427, 30, C.lime);
       text(
         ctx,
-        `${str.best}  ${best}   ·   ${str.wave} ${Math.max(1, s.wave)}`,
+        `${str.best}  ${best}, ${str.wave} ${Math.max(1, s.wave)}`,
         270,
         473,
         22,
@@ -263,9 +263,9 @@ export function setup(rt: Runtime): GameHooks {
       C.ink,
     );
     // Separate lines keep the desktop controls legible at phone width.
-    const parts = str.keys.split(" · ");
-    text(ctx, parts.slice(0, 2).join(" · "), 270, 674, 17, C.muted);
-    text(ctx, parts.slice(2).join(" · "), 270, 704, 17, C.muted);
+    const parts = str.keys.split(", ");
+    text(ctx, parts.slice(0, 2).join(", "), 270, 674, 17, C.muted);
+    text(ctx, parts.slice(2).join(", "), 270, 704, 17, C.muted);
   }
   return {
     update(dt) {

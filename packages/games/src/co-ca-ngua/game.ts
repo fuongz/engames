@@ -218,7 +218,7 @@ export function setup(rt: Runtime): GameHooks {
   function subOf(pi: number): string {
     const t = tr();
     const p = match.players[pi];
-    if (p.seat === null) return online ? t.cpu : `${t.cpu} · ${t.level[p.level]}`;
+    if (p.seat === null) return online ? t.cpu : `${t.cpu} (${t.level[p.level]})`;
     if (online) return t.color[p.corner];
     return played.people === 1 ? t.color[p.corner] : t.person(p.seat + 1);
   }
@@ -939,13 +939,13 @@ export function setup(rt: Runtime): GameHooks {
     const name = nameOf(match.turn);
     if (localTurn()) {
       const hot = !online && played.people > 1;
-      if (match.phase === "roll") return { str: hot ? `${t.turnOf(name)} · ${t.roll}!` : t.yourRoll, color: LIGHT[p.corner] };
+      if (match.phase === "roll") return { str: hot ? `${t.turnOf(name)}: ${t.roll}!` : t.yourRoll, color: LIGHT[p.corner] };
       if (match.phase === "move") {
         // Bring one out, walk the total, or either
         const out = movable().some((tk) => p.tokens[tk] < 0);
         const walk = movable().some((tk) => p.tokens[tk] >= 0);
         const str = t.pickHorse(walk ? rollTotal(match.dice) : null, out);
-        return { str: hot ? `${name} · ${str}` : str, color: LIGHT[p.corner] };
+        return { str: hot ? `${name}: ${str}` : str, color: LIGHT[p.corner] };
       }
       // Your die is tumbling or your horse is hopping: the board says it all
       if (!hot) return { str: "", color: "#ffffff" };

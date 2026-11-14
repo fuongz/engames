@@ -953,7 +953,7 @@ export function setup(rt: Runtime): GameHooks {
               ? t.reason[match.reason]
               : "";
       const mine = results?.find((r) => r.seat === me);
-      if (mine && mine.score > 0) line = `${line} · ${t.score(mine.score)}`;
+      if (mine && mine.score > 0) line = `${line}, ${t.score(mine.score)}`;
       color = match.winner === null ? CREAM : won || myColor === 0 ? AMBER : RED;
     } else {
       const r = game.result;
@@ -964,16 +964,16 @@ export function setup(rt: Runtime): GameHooks {
         line = why;
       } else if (mode === "hot") {
         title = t.winOf(t.side(r.winner === WHITE));
-        line = `${why} · ${t.side(true)} ${hotWins.white} – ${hotWins.black} ${t.side(false)}`;
+        line = `${why}, ${t.side(true)} ${hotWins.white} – ${hotWins.black} ${t.side(false)}`;
         color = AMBER;
       } else if (r.winner === human) {
         title = t.youWin;
         const moves = movesBy(game, human);
-        line = `${why} · ${t.winLine(moves, runScore(moves))}`;
+        line = `${why}, ${t.winLine(moves, runScore(moves))}`;
         color = AMBER;
       } else {
         title = t.youLose;
-        line = `${why} · ${t.loseLine}`;
+        line = `${why}, ${t.loseLine}`;
         color = RED;
       }
     }

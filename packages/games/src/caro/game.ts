@@ -366,7 +366,7 @@ export function setup(rt: Runtime): GameHooks {
         goal = { z: 1, ox: 0, oy: 0 };
         const name = match.seats[seatOf(e.first)]?.name ?? "";
         notice = {
-          text: `${tr().gameN(e.n)} · ${tr().firstMove(e.first === mySide ? tr().you : name)}`,
+          text: `${tr().gameN(e.n)}: ${tr().firstMove(e.first === mySide ? tr().you : name)}`,
           until: now + 2.4,
         };
         break;
@@ -898,7 +898,7 @@ export function setup(rt: Runtime): GameHooks {
     if (game.result !== null) return "";
     if (mode === "ai" && game.turn !== HUMAN) return t.aiThinking;
     if (selected !== null) return t.tapAgain;
-    if (mode === "hot") return `${t.turnOf(t.player(game.turn === 1 ? "X" : "O"))} · ${t.tapToPick}`;
+    if (mode === "hot") return `${t.turnOf(t.player(game.turn === 1 ? "X" : "O"))}: ${t.tapToPick}`;
     return game.moves.length < 2 ? t.tapToPick : t.yourTurn;
   }
 
@@ -994,7 +994,7 @@ export function setup(rt: Runtime): GameHooks {
       title = match.winner === null ? t.matchDraw : mySide === 0 ? t.winOf(match.seats[match.winner]?.name ?? "") : won ? t.matchWin : t.matchLose;
       if (match.forfeit && mySide !== 0) line = won ? t.forfeitWin : t.forfeitLose;
       const mine = results?.find((r) => r.seat === me);
-      if (mine && mine.score > 0) line = line ? `${line} · ${t.score(mine.score)}` : t.score(mine.score);
+      if (mine && mine.score > 0) line = line ? `${line}, ${t.score(mine.score)}` : t.score(mine.score);
       if (!line) line = `${match.seats[0]?.wins ?? 0} – ${match.seats[1]?.wins ?? 0}`;
       color = match.winner === null ? INK : markColor(match.seats[match.winner]?.side ?? 1);
     } else {

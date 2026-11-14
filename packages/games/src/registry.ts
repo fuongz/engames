@@ -13,7 +13,15 @@ const gameLoaders = import.meta.glob<GameModule>("./*/index.ts", {
 
 const slugFromPath = (path: string) => path.split("/").at(-2) ?? "";
 
-export const games: GameManifest[] = Object.entries(manifestModules)
+/**
+ * Games pulled from every listing for now (library, search, Prize Counter,
+ * changelog, sitemap). Their pages, saves and history still resolve through
+ * findGame, so old links and records keep working. Remove a slug to bring it back.
+ */
+export const HIDDEN_GAMES: ReadonlySet<string> = new Set(["phi-dao", "khu-cach-ly"]);
+
+/** Every game folder, hidden ones included (rooms, saves and history need them). */
+export const allGames: GameManifest[] = Object.entries(manifestModules)
   .map(([path, manifest]) => {
     if (manifest.slug !== slugFromPath(path)) {
       throw new Error(
@@ -24,8 +32,11 @@ export const games: GameManifest[] = Object.entries(manifestModules)
   })
   .sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
 
+/** Every listed game, newest first. */
+export const games: GameManifest[] = allGames.filter((g) => !HIDDEN_GAMES.has(g.slug));
+
 export function findGame(slug: string) {
-  return games.find((g) => g.slug === slug);
+  return allGames.find((g) => g.slug === slug);
 }
 
 export async function loadGame(slug: string): Promise<GameModule> {

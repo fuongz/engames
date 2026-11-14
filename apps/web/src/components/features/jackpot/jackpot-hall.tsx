@@ -103,10 +103,11 @@ export function JackpotHall({ onClose }: { onClose: () => void }) {
                     >
                       <div className="grid min-w-0 flex-1 gap-0.5">
                         <span className="truncate text-sm font-medium">{w.name || m.jackpot.someone}</span>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {findGame(w.gameSlug)?.title[locale] ?? w.gameSlug}
-                          {" · "}
-                          <time dateTime={new Date(w.wonAt).toISOString()}>{timeAgo(w.wonAt, now, locale)}</time>
+                        <span className="flex min-w-0 gap-x-2 text-xs text-muted-foreground">
+                          <span className="truncate">{findGame(w.gameSlug)?.title[locale] ?? w.gameSlug}</span>
+                          <time className="shrink-0" dateTime={new Date(w.wonAt).toISOString()}>
+                            {timeAgo(w.wonAt, now, locale)}
+                          </time>
                         </span>
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold tabular-nums">

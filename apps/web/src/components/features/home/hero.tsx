@@ -22,6 +22,7 @@ import { useLocale, useMessages } from "#/hooks/use-messages";
 import { fmt } from "#/lib/i18n";
 import { FADE, FLICK_VELOCITY, RISE_BLUR, SETTLE_SPRING, stagger } from "#/lib/motion";
 import { cn } from "#/lib/utils";
+import { tidyDetail } from "#/lib/format";
 
 const ADVANCE_MS = 6500;
 const SWIPE_PX = 40;
@@ -198,7 +199,10 @@ function Slide({ game, active, at, track, parallax }: { game: GameManifest; acti
   const locale = useLocale();
   const m = useMessages();
   const [summary, setSummary] = useState<string | null>(null);
-  useEffect(() => setSummary(summaryText(createStorage(game.slug).get<unknown>(SUMMARY_KEY, null), locale)), [game.slug, locale]);
+  useEffect(() => {
+    const text = summaryText(createStorage(game.slug).get<unknown>(SUMMARY_KEY, null), locale);
+    setSummary(text && tidyDetail(text));
+  }, [game.slug, locale]);
   const category = categories.find((c) => c.id === game.category);
   const chips = [category?.label[locale], ...game.tags[locale]].filter(Boolean).slice(0, 3);
   // Where this slide sits relative to the frame, in px; the text layer moves a bit further

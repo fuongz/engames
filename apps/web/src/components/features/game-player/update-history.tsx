@@ -29,21 +29,19 @@ export function UpdateHistory({ slug, changelog }: { slug: string; changelog: Ch
         </Link>
       </div>
       {/* Several may be open at once: comparing two releases is the point of a history */}
-      <Accordion multiple defaultValue={[changelog[0].version]}>
+      <Accordion multiple defaultValue={[changelog[0].version]} className="border-border/70">
         {changelog.map((entry) => (
-          <AccordionItem key={entry.version} value={entry.version}>
-            <AccordionTrigger className="items-center gap-3 px-3.5 py-3 hover:no-underline">
-              <span className="grid min-w-0 gap-1">
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <VersionBadge version={entry.version} />
-                  <time dateTime={entry.date} className="text-xs font-normal text-muted-foreground tabular-nums">
-                    {releaseDate(entry.date, locale)}
-                  </time>
-                </span>
+          <AccordionItem key={entry.version} value={entry.version} className="border-border/70">
+            <AccordionTrigger className="items-center gap-3 border-0 px-4 py-2.5 hover:no-underline focus-visible:bg-muted/60">
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <VersionBadge version={entry.version} />
                 {entry.title && <span className="leading-snug">{entry.title[locale]}</span>}
+                <time dateTime={entry.date} className="text-xs font-normal text-muted-foreground tabular-nums">
+                  {releaseDate(entry.date, locale)}
+                </time>
               </span>
             </AccordionTrigger>
-            <AccordionContent className="px-0.5 pb-3.5">
+            <AccordionContent className="pt-1 pb-3.5">
               <ChangeList entry={entry} />
             </AccordionContent>
           </AccordionItem>

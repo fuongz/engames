@@ -84,9 +84,8 @@ export function StatsPanel({ profile: p, className }: { profile: Profile; classN
                     <PopoverHeader>
                       <PopoverTitle className="font-semibold">{title}</PopoverTitle>
                       <PopoverDescription>
-                        {plural(locale, g.plays, m.profile.stats.playsN)}
-                        <span aria-hidden> · </span>
-                        {fmt(m.profile.stats.lastPlayed, { when: timeAgo(g.lastPlayedAt, now, locale) })}
+                        <span className="block">{plural(locale, g.plays, m.profile.stats.playsN)}</span>
+                        <span className="block">{fmt(m.profile.stats.lastPlayed, { when: timeAgo(g.lastPlayedAt, now, locale) })}</span>
                       </PopoverDescription>
                     </PopoverHeader>
                     <div className="flex items-center justify-between gap-3">

@@ -1024,7 +1024,7 @@ export function setup(rt: Runtime): GameHooks {
     text(ctx, sqName(sq), x + 32, y, 19, "#fff1d2", "left", 700);
     ctx.font = `700 19px ${FONT}`;
     const nw = ctx.measureText(sqName(sq)).width;
-    const rent = square.kind === "prop" ? `${t.rent} ${money(square.rent[0])} · ${t.rentSet} ${money(square.rent[0] * 2)}` : square.kind === "transport" ? t.transportRent : t.utilityRent;
+    const rent = square.kind === "prop" ? `${t.rent} ${money(square.rent[0])}, ${t.rentSet} ${money(square.rent[0] * 2)}` : square.kind === "transport" ? t.transportRent : t.utilityRent;
     fitText(ctx, rent, x + 44 + nw, y, 15, w * 0.55 - nw, "#cfe9dc", "left", 600);
   }
 
@@ -1374,7 +1374,7 @@ export function setup(rt: Runtime): GameHooks {
       for (const [i, l] of wrap(ctx, sq.kind === "transport" ? t.transportRent : t.utilityRent, r.w - 60, 17, 600).entries())
         text(ctx, l, r.x + 30, r.y + 172 + i * 24, 17, INK, "left", 600);
     const o = g.owner[deedSq];
-    const status = o >= 0 ? `${t.owner(nameOf(o))}${g.mortgaged[deedSq] ? ` · ${t.mortgaged}` : g.houses[deedSq] === 5 ? ` · ${t.hotel}` : g.houses[deedSq] > 0 ? ` · ${t.withHouses(g.houses[deedSq])}` : ""}` : t.noOwner;
+    const status = o >= 0 ? `${t.owner(nameOf(o))}${g.mortgaged[deedSq] ? `, ${t.mortgaged}` : g.houses[deedSq] === 5 ? `, ${t.hotel}` : g.houses[deedSq] > 0 ? `, ${t.withHouses(g.houses[deedSq])}` : ""}` : t.noOwner;
     fitText(ctx, status, r.x + r.w / 2, r.y + r.h - 28, 19, r.w - 40, o >= 0 ? colorOf(o) : INK_SOFT, "center", 700);
   }
 
@@ -1576,8 +1576,8 @@ export function setup(rt: Runtime): GameHooks {
     let line = g.endReason === "last" ? t.byLast : t.byTime;
     if (online) {
       const mine = results?.find((x) => x.seat === me);
-      if (mine && mine.score > 0) line = `${line} · ${t.scoreLine(mine.score)}`;
-    } else if (youWon) line = `${line} · ${t.scoreLine(soloScore(g, g.winner))}`;
+      if (mine && mine.score > 0) line = `${line}, ${t.scoreLine(mine.score)}`;
+    } else if (youWon) line = `${line}, ${t.scoreLine(soloScore(g, g.winner))}`;
     fitText(ctx, line, r.x + r.w / 2, r.y + 74, 18, r.w - 40, GOLD_DARK, "center", 700);
     order.forEach((seat, i) => {
       const y = r.y + 98 + i * 50;

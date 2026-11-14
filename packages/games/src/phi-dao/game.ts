@@ -309,7 +309,7 @@ export function setup(rt: Runtime): GameHooks {
       } else
         text(
           c,
-          `${i + 1} · ${name}${shop.owned(skin) ? "" : " · 2K"}`,
+          `${i + 1}. ${name}${shop.owned(skin) ? "" : " (2K)"}`,
           x + width / 2,
           y + 20,
           16,
@@ -406,8 +406,8 @@ export function setup(rt: Runtime): GameHooks {
       if (duo) {
         pill(c, 20, 666, 212, 105);
         pill(c, 248, 666, 212, 105);
-        text(c, `1 · ${tr().throw} [A]`, 126, 703, 22, P.cyan);
-        text(c, `2 · ${tr().throw} [L]`, 354, 703, 22, P.coral);
+        text(c, `1: ${tr().throw} [A]`, 126, 703, 22, P.cyan);
+        text(c, `2: ${tr().throw} [L]`, 354, 703, 22, P.coral);
         text(c, String(state.hits[0]), 126, 744, 21);
         text(c, String(state.hits[1]), 354, 744, 21);
       } else {
@@ -436,7 +436,7 @@ export function setup(rt: Runtime): GameHooks {
         if (state.players === 2)
           text(
             c,
-            `1: ${state.hits[0]}   ·   2: ${state.hits[1]}`,
+            `1: ${state.hits[0]},  2: ${state.hits[1]}`,
             CX,
             495,
             20,

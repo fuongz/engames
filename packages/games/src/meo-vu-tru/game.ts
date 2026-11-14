@@ -286,7 +286,7 @@ export function setup(rt: Runtime): GameHooks {
       case "power": {
         const label =
           s.power >= MAX_POWER && !e.switched ? l.maxed : l.level(e.power);
-        say(`${l.family[e.family]} · ${label}`, FAMILY_COLOR[e.family]);
+        say(`${l.family[e.family]}: ${label}`, FAMILY_COLOR[e.family]);
         burst(s.ship.x, s.ship.y, 18, [FAMILY_COLOR[e.family], "#ffffff"], 200);
         for (const [i, f] of (e.switched
           ? [523, 784, 1046]

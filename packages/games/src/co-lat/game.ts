@@ -372,7 +372,7 @@ export function setup(rt: Runtime): GameHooks {
         match.game = newGame();
         for (const [i, s] of match.seats.entries()) s.side = i === e.black ? 1 : 2;
         const name = e.black === me ? tr().you : (match.seats[e.black]?.name ?? "");
-        notice = { text: `${tr().gameN(e.n)} · ${tr().playsBlack(name)}`, until: now + 2.8 };
+        notice = { text: `${tr().gameN(e.n)}: ${tr().playsBlack(name)}`, until: now + 2.8 };
         break;
       }
       case "over":
@@ -906,7 +906,7 @@ export function setup(rt: Runtime): GameHooks {
       title = match.winner === null ? t.matchDraw : mySide() === 0 ? t.winOf(match.seats[match.winner]?.name ?? "") : won ? t.matchWin : t.matchLose;
       if (match.forfeit && mySide() !== 0) line = won ? t.forfeitWin : t.forfeitLose;
       const mine = results?.find((r) => r.seat === me);
-      if (mine && mine.score > 0) line = line ? `${line} · ${t.score(mine.score)}` : t.score(mine.score);
+      if (mine && mine.score > 0) line = line ? `${line}, ${t.score(mine.score)}` : t.score(mine.score);
       const mineWins = match.seats[Math.max(me, 0)]?.wins ?? 0;
       const theirWins = match.seats[me === 1 ? 0 : 1]?.wins ?? 0;
       if (!line) line = `${mineWins} – ${theirWins}`;
@@ -917,7 +917,7 @@ export function setup(rt: Runtime): GameHooks {
         line = t.discs(b, w);
       } else if (mode === "hot") {
         title = t.winOf(t.player(r === 2 ? 2 : 1));
-        line = `${t.discs(b, w)} · ${t.colour[1]} ${hotWins[1]} – ${hotWins[2]} ${t.colour[2]}`;
+        line = `${t.discs(b, w)}, ${t.colour[1]} ${hotWins[1]} – ${hotWins[2]} ${t.colour[2]}`;
       } else {
         const mine = human === 1 ? b : w;
         const theirs = human === 1 ? w : b;

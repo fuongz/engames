@@ -1140,7 +1140,7 @@ export function setup(rt: Runtime): GameHooks {
         albumPulse = 1;
         sfx.card(e.fresh);
         const name = l.cards[CARD_IDS[e.card]];
-        say(`${name} · ${e.fresh ? l.cardNew : `${l.cardDupe} ${l.count(e.count)}`}`, e.fresh ? VIOLET : LILAC, false, e.card);
+        say(`${name}: ${e.fresh ? l.cardNew : `${l.cardDupe} ${l.count(e.count)}`}`, e.fresh ? VIOLET : LILAC, false, e.card);
         cheer = Math.max(cheer, 1.2);
         break;
       }

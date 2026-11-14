@@ -43,3 +43,12 @@ export function timeAgo(then: number, now: number, locale: Locale): string {
   }
   return rtf.format(0, "second");
 }
+
+/**
+ * A score detail or save summary as stored by a game. Older records were written
+ * with a middle-dot separator ("67 hàng · 3 xu"); show them with a comma instead,
+ * like the games write them now ("67 hàng, 3 xu").
+ */
+export function tidyDetail(text: string): string {
+  return text.replace(/\s*·\s*/g, ", ");
+}

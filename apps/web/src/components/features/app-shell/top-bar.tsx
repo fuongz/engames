@@ -8,6 +8,7 @@ import { JackpotTicker } from "#/components/features/jackpot/jackpot-ticker";
 import { TicketChip } from "./ticket-chip";
 import { Kbd } from "#/components/ui/kbd";
 import { useMessages } from "#/hooks/use-messages";
+import { useSession } from "#/hooks/use-session";
 
 /**
  * Desktop: wide search field (opens the ⌘K palette), the Lucky Jar ticker, then
@@ -17,6 +18,7 @@ import { useMessages } from "#/hooks/use-messages";
  */
 export function TopBar({ onSearch }: { onSearch: () => void }) {
   const m = useMessages();
+  const { data: session } = useSession();
   return (
     <>
       {/* Sticky, full-bleed, carrying the notch inset. Solid on phones: a translucent blur under the iOS status bar reads as haze */}
@@ -46,10 +48,13 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
           {/* The wallet beside the account it belongs to; the avatar opens the options */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <TicketChip />
-            {/* Phones choose the language in the account sheet */}
-            <span className="hidden lg:contents">
-              <LanguageMenu variant="compact" />
-            </span>
+            {/* Signed in, the language lives in the account menu (sheet on phones,
+                dropdown from lg); a signed-out desktop has no menu, so it keeps the globe */}
+            {!session && (
+              <span className="hidden lg:contents">
+                <LanguageMenu variant="compact" />
+              </span>
+            )}
             <AccountButton variant="compact" />
           </div>
         </div>

@@ -73,7 +73,7 @@ export async function renderPoster(
   knife(c, 300, 575, 0, 0, 1.4, { sprites });
   text(
     c,
-    locale === "vi" ? "CANH NHỊP · PHÓNG DAO" : "FIND YOUR RHYTHM",
+    locale === "vi" ? "CANH NHỊP, PHÓNG DAO" : "FIND YOUR RHYTHM",
     300,
     701,
     26,

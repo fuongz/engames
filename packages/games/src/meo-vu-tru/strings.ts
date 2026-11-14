@@ -46,17 +46,17 @@ const vnNum = (n: number) => n.toLocaleString("vi-VN");
 const enNum = (n: number) => n.toLocaleString("en-US");
 
 const viWhere = (w: Where) =>
-  `${w.round > 1 ? `Vòng ${w.round} · ` : ""}Chương ${w.chapter} - Đợt ${w.wave}`;
+  `${w.round > 1 ? `Vòng ${w.round}, ` : ""}Chương ${w.chapter} - Đợt ${w.wave}`;
 const enWhere = (w: Where) =>
-  `${w.round > 1 ? `Round ${w.round} · ` : ""}Chapter ${w.chapter} - Wave ${w.wave}`;
+  `${w.round > 1 ? `Round ${w.round}, ` : ""}Chapter ${w.chapter} - Wave ${w.wave}`;
 
 export const STRINGS: Localized<Strings> = {
   vi: {
     title: "MÈO VŨ TRỤ",
     story: "Mèo ngoài hành tinh đang trộm cá của Trái Đất!",
     tapToStart: "Chạm để cất cánh",
-    dragHint: "Kéo ngón tay để bay · súng tự bắn",
-    keysHint: "Phím mũi tên / WASD để bay · Space phóng tên lửa",
+    dragHint: "Kéo ngón tay để bay, súng tự bắn",
+    keysHint: "Phím mũi tên / WASD để bay, Space phóng tên lửa",
     missileHint: "Chạm nút tên lửa để dọn sạch màn hình",
     where: viWhere,
     waveName: (d) => {
@@ -97,14 +97,14 @@ export const STRINGS: Localized<Strings> = {
     paused: "Tạm dừng",
     resume: "Chạm để bay tiếp",
     detail: viWhere,
-    best: (n, w) => `Kỷ lục ${vnNum(n)} · ${viWhere(w)}`,
+    best: (n, w) => `Kỷ lục ${vnNum(n)}, ${viWhere(w)}`,
   },
   en: {
     title: "COSMIC CATS",
     story: "Alien cats are stealing Earth's fish!",
     tapToStart: "Tap to take off",
-    dragHint: "Drag to fly · your guns fire on their own",
-    keysHint: "Arrows / WASD to fly · Space fires a missile",
+    dragHint: "Drag to fly, your guns fire on their own",
+    keysHint: "Arrows / WASD to fly, Space fires a missile",
     missileHint: "Tap the missile button to clear the screen",
     where: enWhere,
     waveName: (d) => {
@@ -145,6 +145,6 @@ export const STRINGS: Localized<Strings> = {
     paused: "Paused",
     resume: "Tap to keep flying",
     detail: enWhere,
-    best: (n, w) => `Best ${enNum(n)} · ${enWhere(w)}`,
+    best: (n, w) => `Best ${enNum(n)}, ${enWhere(w)}`,
   },
 };

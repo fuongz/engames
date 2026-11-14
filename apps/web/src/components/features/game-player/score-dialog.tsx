@@ -16,6 +16,7 @@ import { fmt, intlTag } from "#/lib/i18n";
 import { EASE_OUT } from "#/lib/motion";
 import { cn } from "#/lib/utils";
 import { type LeaderboardEntry, type SaveResult, getLeaderboard, submitScore } from "#/server/leaderboard";
+import { tidyDetail } from "#/lib/format";
 
 const NAME_KEY = "engames:portal:playerName";
 const PENDING_KEY = "engames:portal:pendingScore";
@@ -211,7 +212,7 @@ export function ScoreDialog({
         <div className="relative grid justify-items-center gap-1 rounded-2xl bg-muted/60 py-4">
           {celebrate && <Confetti />}
           <CountUp value={report.score} format={(n) => score.format(n)} />
-          {report.detail && <span className="text-sm text-muted-foreground">{report.detail}</span>}
+          {report.detail && <span className="text-sm text-muted-foreground">{tidyDetail(report.detail)}</span>}
           {result && (
             <motion.span {...RANK_POP} className="mt-1 text-sm font-semibold text-primary">
               {fmt(m.score.rank, { rank: result.rank })}

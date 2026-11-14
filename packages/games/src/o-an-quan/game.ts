@@ -412,7 +412,7 @@ export function setup(rt: Runtime): GameHooks {
         selected = null;
         pending = null;
         overAt = null;
-        notice = { text: `${tr().gameN(next.n)} · ${tr().firstMove(nameOf(next.first))}`, until: now + 2.4 };
+        notice = { text: `${tr().gameN(next.n)}: ${tr().firstMove(nameOf(next.first))}`, until: now + 2.4 };
         return;
       }
       anim = { steps: next.steps, seat: next.seat, i: 0, t: 0 };
@@ -838,7 +838,7 @@ export function setup(rt: Runtime): GameHooks {
       }
     } else if (mode === "hot") sub.push(t.wins(hotWins[s]));
     else sub.push(t.wins(s === HUMAN ? tally[level].w : tally[level].l));
-    if (sub.length) text(ctx, sub.join(" · "), r.x + 168, y + 88, 17, T.panelSoft, "left", 600);
+    if (sub.length) text(ctx, sub.join(", "), r.x + 168, y + 88, 17, T.panelSoft, "left", 600);
     // The captured pile
     const pile = pileAt(s);
     const pw = 170;
@@ -1086,7 +1086,7 @@ export function setup(rt: Runtime): GameHooks {
       title = match.winner === null ? t.matchDraw : me < 0 ? t.winOf(match.seats[match.winner]?.name ?? "") : won ? t.matchWin : t.matchLose;
       if (match.forfeit && me >= 0) line = won ? t.forfeitWin : t.forfeitLose;
       const mine = results?.find((r) => r.seat === me);
-      if (mine && mine.score > 0) line = line ? `${line} · ${t.score(mine.score)}` : t.score(mine.score);
+      if (mine && mine.score > 0) line = line ? `${line}, ${t.score(mine.score)}` : t.score(mine.score);
       if (!line) line = `${match.seats[0]?.wins ?? 0} – ${match.seats[1]?.wins ?? 0}`;
       if (match.winner !== null) color = T.seat[match.winner === bottomSeat ? 0 : 1];
     } else {

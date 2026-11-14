@@ -11,6 +11,7 @@ import { useLocale, useMessages } from "#/hooks/use-messages";
 import { signInWithGoogle } from "#/lib/auth-client";
 import { fmt, intlTag } from "#/lib/i18n";
 import { type HistoryEntry, getMatchHistory } from "#/server/history";
+import { tidyDetail } from "#/lib/format";
 
 const PAGE = 20;
 
@@ -128,9 +129,11 @@ function HistoryRow({ entry: e }: { entry: HistoryEntry }) {
             ))}
           </span>
           <span className="truncate text-sm text-muted-foreground">{who}</span>
-          <span className="truncate text-xs text-muted-foreground">
-            {e.you.detail ? `${e.you.detail} · ` : ""}
-            <time dateTime={new Date(e.playedAt * 1000).toISOString()}>{when}</time>
+          <span className="flex min-w-0 gap-x-2 text-xs text-muted-foreground">
+            {e.you.detail && <span className="truncate">{tidyDetail(e.you.detail)}</span>}
+            <time className="shrink-0" dateTime={new Date(e.playedAt * 1000).toISOString()}>
+              {when}
+            </time>
           </span>
         </span>
         {outcome && (
