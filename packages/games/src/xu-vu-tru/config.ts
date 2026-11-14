@@ -171,10 +171,16 @@ export const MINI_WEIGHTS = [40, 0.5, 30, 0.5, 15, 0.5, 8, 0.5];
 /** The Super spin (six cores collected): tickets only. */
 export const SUPER_PRIZES = [80, 100, 150, 200, 250, 300, 500];
 export const SUPER_WEIGHTS = [26, 26, 20, 13, 8, 5, 2];
-/** Seconds a spin's reel runs before it lands. */
+/**
+ * The full-screen Super wheel (1.4.0, game.ts): 18 equal slots, each an index
+ * into SUPER_PRIZES, clockwise from the top. Display only: the prize is a
+ * weighted pick (SUPER_WEIGHTS, logic.ts spinSuper) made before the wheel turns,
+ * and the wheel stops on one of that prize's slots. Equal slots, so three fill
+ * the screen's width; every prize has at least two, never side by side.
+ */
+export const SUPER_SLOTS = [0, 4, 1, 6, 2, 3, 0, 5, 1, 2, 6, 3, 0, 4, 1, 5, 2, 3];
+/** Seconds a Mini spin's reel runs before it lands. */
 export const SPIN_TIME = 2.4;
-/** The Super spin runs longer, for the drama. */
-export const SUPER_SPIN_TIME = 3.4;
 /** Capsules pushed off the front needed for a Super spin. */
 export const CORE_COUNT = 6;
 

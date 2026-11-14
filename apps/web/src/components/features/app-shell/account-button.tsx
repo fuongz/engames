@@ -1,4 +1,4 @@
-import { Cancel01Icon, GoogleIcon, UserCircleIcon } from "@hugeicons/core-free-icons";
+import { Cancel01Icon, GoogleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
@@ -62,20 +62,26 @@ export function AccountButton({ variant }: { variant: "sidebar" | "compact" }) {
       <>
         {/* From lg: straight to Google (the sidebar has the rest) */}
         <Button
-          variant="ghost"
-          size="icon"
-          className="size-10 rounded-full max-lg:hidden"
-          aria-label={m.account.signIn}
+          variant="outline"
+          className="h-10 rounded-full px-4 font-semibold text-primary hover:text-primary max-lg:hidden"
+          title={m.account.signIn}
           onClick={() => void signInWithGoogle()}
         >
-          <HugeiconsIcon icon={GoogleIcon} />
+          <HugeiconsIcon icon={GoogleIcon} data-icon="inline-start" />
+          {m.account.signInShort}
         </Button>
         {/* Below lg: the account sheet, so the pages that left the tab bar stay reachable */}
         <AccountSheet
           open={sheetOpen}
           onOpenChange={setSheetOpen}
-          trigger={<Button variant="ghost" size="icon" className="size-10 rounded-full lg:hidden" aria-label={m.account.menuTitle} />}
-          triggerBody={<HugeiconsIcon icon={UserCircleIcon} className="size-6" />}
+          trigger={
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-3.5 font-semibold text-primary hover:text-primary lg:hidden"
+              aria-label={m.account.menuTitle}
+            />
+          }
+          triggerBody={m.account.signInShort}
         >
           <GuestMenuBody onNavigate={() => setSheetOpen(false)} />
         </AccountSheet>

@@ -86,6 +86,7 @@ export const en: Messages = {
   account: {
     guestHint: "Sign in to put your name on the leaderboards, collect check-in tickets and trade them for prizes.",
     signIn: "Sign in with Google",
+    signInShort: "Sign in",
     signInHint: "Puts your name on leaderboards",
     signOut: "Sign out",
     history: "Match history",

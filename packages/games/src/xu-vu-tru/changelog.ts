@@ -3,6 +3,27 @@ import type { ChangelogEntry } from "@web-games/core";
 // Newest first. The in-game What's new card shows the entry for the current version.
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.4.0",
+    date: "2026-11-14",
+    title: { vi: "Vòng quay Super", en: "The Super wheel" },
+    changes: {
+      vi: [
+        "Đủ 6 lõi năng lượng là mở vòng quay SUPER khổng lồ chiếm cả màn hình: bấm QUAY! rồi ngồi xem kim dừng ở ô nào.",
+        "Vòng quay chạy thật nhanh rồi phanh dần, kim rung qua từng vạch; ô trúng sáng lên rồi hiện vé thưởng lớn với mưa xu.",
+        "Đang bật Tự động thì vòng Super tự quay sau một chút.",
+        "Đã đăng nhập, lượt Hũ may mắn của mỗi Super hiện ngay trên màn này; máy chạy tiếp khi bạn chạm để đóng.",
+        "Vé Super được cộng ngay khi bấm quay, nên tải lại trang giữa chừng cũng không mất vé.",
+      ],
+      en: [
+        "Six energy cores now open a giant full-screen SUPER wheel: press SPIN! and watch where the pointer stops.",
+        "The wheel races, then brakes, the pointer flicking at every peg; the winning slot lights up, then a big ticket prize with a coin shower.",
+        "With Auto on, the Super wheel spins by itself after a moment.",
+        "Signed in, each Super's Lucky Jar chance plays right on this screen; the machine carries on when you tap to close.",
+        "Super tickets are paid the moment you spin, so reloading mid-spin never loses them.",
+      ],
+    },
+  },
+  {
     version: "1.3.1",
     date: "2026-11-12",
     title: { vi: "Số vé rõ ràng hơn", en: "Clearer ticket numbers" },

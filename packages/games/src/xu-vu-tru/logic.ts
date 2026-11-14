@@ -42,7 +42,6 @@ import {
   SHELF_W,
   SPIN_TIME,
   SUPER_PRIZES,
-  SUPER_SPIN_TIME,
   SUPER_WEIGHTS,
   type Segment,
   WEIGHTS,
@@ -66,6 +65,11 @@ import { type Body, stepShelf } from "./physics";
 // exchangeSet). Pure and seeded:
 // the random state is a number in the state, so a session replays exactly and the
 // whole state (the card inventory included) can be saved as JSON (see save.ts).
+//
+// Six cores earn a Super spin (1.4.0): it waits in `superPending` and the
+// shell plays it on a full-screen wheel, the machine frozen behind it. spinSuper
+// picks and pays it the moment the player spins, so a reload mid-wheel neither
+// loses nor doubles it.
 //
 // The machine never ends. Out of coins it settles and idles (`idle`); coins
 // granted later (grantCoins: allowance, coupons) wake it up where it stood.
@@ -95,9 +99,10 @@ export interface Flight {
 
 export type SpinKind = "mini" | "super";
 
+/** A Mini spin on the reels (Super spins never run there since 1.4.0: see spinSuper). */
 export interface Spin {
   kind: SpinKind;
-  /** Index into MINI_PRIZES or SUPER_PRIZES. */
+  /** Index into MINI_PRIZES. */
   idx: number;
   t: number;
   paid: boolean;
@@ -145,11 +150,17 @@ export interface State {
   flights: Flight[];
   /** Capsules pushed off the front toward the next Super spin (can pass 6 while one waits). */
   cores: number;
+  /**
+   * Super spins earned and not spun yet: one for every CORE_COUNT cores. The
+   * shell shows the full-screen Super wheel while it is above 0 and calls
+   * spinSuper; the machine itself runs on as usual.
+   */
+  superPending: number;
   /** Cards in the inventory, per cat (CARD_IDS order): duplicates stack. */
   cards: number[];
   /** Which cats were ever collected (a cat exchanged down to 0 stays seen). */
   seen: boolean[];
-  /** Spins waiting their turn on the reels. */
+  /** Mini spins waiting their turn on the reels. */
   queue: SpinKind[];
   spin: Spin | null;
   /** Capsules dropped so far, to colour the next one. */
@@ -365,6 +376,7 @@ export function createMachine(seed: number, coins = 0, album: unknown = null): S
     bodies: [],
     flights: [],
     cores: 0,
+    superPending: 0,
     cards: owned.map((o) => (o ? 1 : 0)),
     seen: [...owned],
     queue: [],
@@ -525,12 +537,50 @@ function pick(s: State, weights: readonly number[]) {
   return 0;
 }
 
+/** One more Super spin waiting if the cores cover it: every CORE_COUNT cores earn one. */
+function earnSupers(s: State) {
+  while (s.cores >= CORE_COUNT * (s.superPending + 1)) s.superPending++;
+}
+
 /** A capsule over the front edge: one more core toward the Super spin. */
 function collectCore(s: State, ev: GameEvent[]) {
   s.cores++;
   ev.push({ type: "coreIn", count: s.cores });
-  // Queue the Super spin the moment the sixth arrives (a second one only after the first resets the meter)
-  if (s.cores === CORE_COUNT) s.queue.unshift("super");
+  // The sixth (and the twelfth...) earns a Super spin: the shell spins it full screen (spinSuper)
+  earnSupers(s);
+}
+
+/**
+ * Spin one waiting Super spin: pick its prize (SUPER_WEIGHTS, seeded) and pay
+ * it at once, use up CORE_COUNT cores, and count it. Returns its events in the
+ * order the reels used to send them (spinStart, spinWin, tickets, superReset),
+ * so jackpot.ts and the stats read them as before; the shell holds them back
+ * until its wheel stops on the prize (spinStart's `idx`). Paid here, at the
+ * pick, so a reload before the wheel stops neither loses nor repeats it. Does
+ * nothing (no events) when no Super spin is waiting.
+ */
+export function spinSuper(s: State): GameEvent[] {
+  if (s.superPending <= 0) return [];
+  const ev: GameEvent[] = [];
+  const idx = pick(s, SUPER_WEIGHTS);
+  const prize = prizeOf("super", idx);
+  ev.push({ type: "spinStart", kind: "super", idx });
+  ev.push({ type: "spinWin", kind: "super", idx, prize });
+  if (prize.kind === "tickets") {
+    earn(s, prize.value);
+    ev.push({ type: "tickets", amount: prize.value, source: "super" });
+  } else {
+    s.coins += prize.value;
+    s.idle = false;
+    ev.push({ type: "coinsWon", amount: prize.value });
+  }
+  s.supers++;
+  s.cores = Math.max(0, s.cores - CORE_COUNT);
+  s.superPending--;
+  // Cores past the meter carry over, and may already cover the next one
+  earnSupers(s);
+  ev.push({ type: "superReset" });
+  return ev;
 }
 
 /** A card over the front edge: into the inventory, nothing paid until it is exchanged. */
@@ -588,8 +638,6 @@ export function grantCard(s: State): number {
   s.packCards++;
   return card;
 }
-
-const spinTime = (kind: SpinKind) => (kind === "super" ? SUPER_SPIN_TIME : SPIN_TIME);
 
 /** Whether the machine can still change: something in the air, on the wheel or the reels, or coins left. */
 export const busy = (s: State) =>
@@ -685,35 +733,28 @@ export function update(s: State, input: Input, dt: number): GameEvent[] {
     if (pz.t >= PRIZE_SPIN_TIME + PRIZE_HOLD) s.prize = null;
   }
 
-  // The reels: Mini and Super spins, one at a time
+  // The reels: Mini spins, one at a time (Super spins are the shell's full-screen wheel: spinSuper)
   if (!s.spin && s.queue.length > 0) {
-    const kind = s.queue.shift() as SpinKind;
-    s.spin = { kind, idx: pick(s, kind === "mini" ? MINI_WEIGHTS : SUPER_WEIGHTS), t: 0, paid: false };
-    ev.push({ type: "spinStart", kind, idx: s.spin.idx });
+    s.queue.shift();
+    s.spin = { kind: "mini", idx: pick(s, MINI_WEIGHTS), t: 0, paid: false };
+    ev.push({ type: "spinStart", kind: "mini", idx: s.spin.idx });
   }
   if (s.spin) {
     const sp = s.spin;
     sp.t += dt;
-    const time = spinTime(sp.kind);
-    if (!sp.paid && sp.t >= time) {
+    if (!sp.paid && sp.t >= SPIN_TIME) {
       sp.paid = true;
-      const prize = prizeOf(sp.kind, sp.idx);
-      ev.push({ type: "spinWin", kind: sp.kind, idx: sp.idx, prize });
+      const prize = prizeOf("mini", sp.idx);
+      ev.push({ type: "spinWin", kind: "mini", idx: sp.idx, prize });
       if (prize.kind === "tickets") {
         earn(s, prize.value);
-        ev.push({ type: "tickets", amount: prize.value, source: sp.kind });
+        ev.push({ type: "tickets", amount: prize.value, source: "mini" });
       } else {
         s.coins += prize.value;
         ev.push({ type: "coinsWon", amount: prize.value });
       }
-      if (sp.kind === "super") {
-        s.supers++;
-        s.cores = Math.max(0, s.cores - CORE_COUNT);
-        ev.push({ type: "superReset" });
-        if (s.cores >= CORE_COUNT) s.queue.unshift("super");
-      }
     }
-    if (sp.t >= time + SPIN_HOLD) s.spin = null;
+    if (sp.t >= SPIN_TIME + SPIN_HOLD) s.spin = null;
   }
 
   // Out of coins and settled: idle (once), until coins come back from anywhere

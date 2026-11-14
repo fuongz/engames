@@ -13,7 +13,6 @@ import {
   RARE_TICKETS,
   SHELF_D,
   SHELF_W,
-  SUPER_PRIZES,
   VERSION,
   WHEEL,
 } from "./config";
@@ -46,8 +45,15 @@ import type { Body } from "./physics";
 //      slots in the same order (three coin slots pay more, see config.ts), so a
 //      prize spin saved mid-run stays on its slot. 1.1.0 had no pending card
 //      exchanges to carry: an exchange was paid the moment it was made.
+//   5  (1.4.0) the full-screen Super wheel: `superPending` (Super spins earned,
+//      not spun yet); the reels (`queue`, `spin`) only ever hold Mini spins.
+//      From schema 4 (1.2.0 to 1.3.x): every Super spin still owed (waiting in
+//      the queue, or running on the reels unpaid) is a full meter of cores
+//      still counted in `cores`, so `superPending` = floor(cores / 6); the
+//      Super spins leave the reels (a paid one only loses its last moments
+//      there). Mini spins stay where they were.
 
-export const SCHEMA = 4;
+export const SCHEMA = 5;
 
 /** The server refuses a save bigger than this (MAX_BYTES in apps/web/src/server/saves.ts). */
 export const SAVE_MAX_BYTES = 64 * 1024;
@@ -82,10 +88,13 @@ export interface PackedState {
   bodies: PackedBody[];
   flights: PackedFlight[];
   cores: number;
+  /** Super spins earned and not spun yet (schema 5). */
+  superPending: number;
   /** Cards in the inventory per cat (CARD_IDS order). */
   cards: number[];
   /** Bit i set: cat i was ever collected. */
   seen: number;
+  /** Mini spins only (schema 5). */
   queue: SpinKind[];
   spin: Spin | null;
   capsules: number;
@@ -140,6 +149,7 @@ export function pack(s: State): PackedState {
     bodies: s.bodies.map((b) => [b.id, KINDS.indexOf(b.kind), r2(b.x), r2(b.y), r2(b.vx), r2(b.vy), b.stack, tagOf(b.kind, b.core, b.card)]),
     flights: s.flights.map((f) => [f.id, r4(f.t), f.phase === "up" ? 0 : 1, r2(f.x), r2(f.aim), KINDS.indexOf(f.kind), tagOf(f.kind, f.core, f.card)]),
     cores: s.cores,
+    superPending: s.superPending,
     cards: [...s.cards],
     seen: s.seen.reduce((m, seen, i) => (seen ? m | (1 << i) : m), 0),
     queue: [...s.queue],
@@ -184,6 +194,7 @@ export function unpack(p: PackedState): State {
       return { id, t, phase: phase === 0 ? "up" : "down", x, aim, kind, core: kind === "core" ? tag : -1, card: kind === "card" ? tag : -1 };
     }),
     cores: p.cores,
+    superPending: p.superPending,
     cards: [...p.cards],
     seen: Array.from({ length: CARD_COUNT }, (_, i) => (p.seen & (1 << i)) !== 0),
     queue: [...p.queue],
@@ -212,10 +223,15 @@ const STEPS: Record<number, (state: unknown) => unknown> = {
   2: (state) => toV3(state as PackedV2),
   // 3 → 4: the jar's and the Prize Counter's counters, from 0
   3: (state) => toV4(state as PackedV3),
+  // 4 → 5: Super spins off the reels, into superPending
+  4: (state) => toV5(state as PackedV4),
 };
 
-/** Schema 3 (1.1.0): today's packed shape without the jar's and the Prize Counter's counters. */
-export type PackedV3 = Omit<PackedState, "eaten" | "packCards">;
+/** Schema 4 (1.2.0 to 1.3.x): today's packed shape without `superPending`; Super spins queued or running on the reels. */
+export type PackedV4 = Omit<PackedState, "superPending">;
+
+/** Schema 3 (1.1.0): schema 4's packed shape without the jar's and the Prize Counter's counters. */
+export type PackedV3 = Omit<PackedV4, "eaten" | "packCards">;
 
 /** Schema 2 (1.0.0): schema 3's packed shape with the album as an owned-cats bit mask. */
 export type PackedV2 = Omit<PackedV3, "cards" | "seen"> & { album: number };
@@ -223,7 +239,7 @@ export type PackedV2 = Omit<PackedV3, "cards" | "seen"> & { album: number };
 /** Schema 1's plain 1.0.0 State packed as schema 2. */
 function packV1(st: State & { album: boolean[] }): PackedV2 {
   if (!isObj(st) || !Array.isArray(st.album)) throw new Error("not a schema-1 state");
-  const { cards: _c, seen: _s, eaten: _e, packCards: _p, ...rest } = pack({ ...st, cards: [], seen: [], eaten: 0, packCards: 0 });
+  const { cards: _c, seen: _s, eaten: _e, packCards: _p, superPending: _sp, ...rest } = pack({ ...st, cards: [], seen: [], eaten: 0, packCards: 0, superPending: 0 });
   return { ...rest, album: st.album.reduce((m, owned, i) => (owned === true ? m | (1 << i) : m), 0) };
 }
 
@@ -254,9 +270,31 @@ export function toV3(p: PackedV2): PackedV3 {
  * bought yet. Card exchanges in 1.1.0 paid at once (tickets or coins), so there
  * is nothing waiting to convert; the inventory carries over as it is.
  */
-export function toV4(p: PackedV3): PackedState {
+export function toV4(p: PackedV3): PackedV4 {
   if (!isObj(p) || !Array.isArray(p.cards)) throw new Error("not a schema-3 state");
   return { ...p, eaten: 0, packCards: 0 };
+}
+
+/**
+ * A 1.2.0–1.3.x machine moved onto 1.4.0, where Super spins leave the reels for
+ * the full-screen wheel. A Super spin that had not paid (waiting in the queue,
+ * or running on the reels) stood for a full meter whose cores are still in
+ * `cores`; one that already paid had spent its six already. So every Super spin
+ * still owed is a full meter in `cores`, and `superPending` is how many of
+ * those it holds (1.3.x queued the next one only once the first paid; 1.4.0
+ * owes them all at once). The Super spins leave the queue and the reels (a paid
+ * one loses only its last moments there); Mini spins, the cores and everything
+ * else carry over as they are.
+ */
+export function toV5(p: PackedV4): PackedState {
+  if (!isObj(p) || !Array.isArray(p.queue) || !isInt(p.cores, 0, 1000)) throw new Error("not a schema-4 state");
+  const onReels = isObj(p.spin) && p.spin.kind === "super";
+  return {
+    ...p,
+    queue: p.queue.filter((q) => q !== "super"),
+    spin: onReels ? null : p.spin,
+    superPending: Math.floor(p.cores / CORE_COUNT),
+  };
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -292,6 +330,8 @@ export function validState(x: unknown): x is PackedState {
   for (const k of ["nextId", "lifetimeTickets", "supers", "sets", "cardsWon", "shots", "returned", "eaten", "packCards", "gateShots", "gateHits", "capsules"] as const)
     if (!isInt(x[k], 0, COUNT)) return false;
   if (!isInt(x.seed, -(2 ** 31), 2 ** 32) || !isInt(x.coins, 0, 1e9) || !isInt(x.cores, 0, 1000)) return false;
+  // Every pending Super spin is a full meter of cores not yet spent
+  if (!isInt(x.superPending, 0, 1000) || x.superPending * CORE_COUNT > x.cores) return false;
   if (!isNum(x.t, 0, 1e10) || !isNum(x.wheel, -10, 10) || !isNum(x.gate, -10, 10) || !isNum(x.pusherT, 0, PUSH_PERIOD * 10)) return false;
   if (!isNum(x.cooldown, 0, 10) || !isNum(x.quiet, 0, 1e10) || typeof x.idle !== "boolean") return false;
   if (!isInt(x.stock, 0, PRIZE_QUEUE_MAX) || !isInt(x.seen, 0, 2 ** CARD_COUNT - 1)) return false;
@@ -305,14 +345,15 @@ export function validState(x: unknown): x is PackedState {
     sp !== null &&
     !(
       isObj(sp) &&
-      (sp.kind === "mini" || sp.kind === "super") &&
-      isInt(sp.idx, 0, (sp.kind === "mini" ? MINI_PRIZES : SUPER_PRIZES).length - 1) &&
+      sp.kind === "mini" &&
+      isInt(sp.idx, 0, MINI_PRIZES.length - 1) &&
       isNum(sp.t, 0, 100) &&
       typeof sp.paid === "boolean"
     )
   )
     return false;
-  if (!Array.isArray(x.queue) || x.queue.length > 100 || !x.queue.every((q) => q === "mini" || q === "super")) return false;
+  // The reels hold Mini spins only (schema 5): a Super spin is `superPending`
+  if (!Array.isArray(x.queue) || x.queue.length > 100 || !x.queue.every((q) => q === "mini")) return false;
   if (!Array.isArray(x.bodies) || x.bodies.length > MAX_SAVED_BODIES || !x.bodies.every(validBody)) return false;
   if (!Array.isArray(x.flights) || x.flights.length > MAX_SAVED_FLIGHTS || !x.flights.every(validFlight)) return false;
   // Every id was handed out before nextId

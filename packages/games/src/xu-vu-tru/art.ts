@@ -7,7 +7,9 @@
 // drawn here in code, in the same palette, and so are the 1.2.0 parts: the
 // robot jar on the front lip with its lane, and the hole's lid (no sprites, no
 // art-src), and the 1.3.0 Lucky Jar parts: the marquee's pool line and roll
-// suspense, the jar's badge, and the win's coin rain, confetti and sunburst. The cat cards (img/cards-v3/<id>.webp)
+// suspense, the jar's badge, and the win's coin rain, confetti and sunburst, and
+// the 1.4.0 full-screen Super wheel (its starry backdrop, the giant wheel, its
+// pointer, crest and button, all in code). The cat cards (img/cards-v3/<id>.webp)
 // are loaded by game.ts too. The shelf is 2D physics seen from above; `proj`
 // tilts it into a 3/4 view.
 import { type Rect, clamp, lerp, mulberry32 } from "@web-games/core";
@@ -502,12 +504,13 @@ export function versionTag(ctx: Ctx, x: number, y: number, label: string) {
 /** A lamp: a brown-rimmed bulb with a soft halo when lit. */
 export function bulb(ctx: Ctx, x: number, y: number, r: number, color: string, on: boolean) {
   if (on) {
-    ctx.globalAlpha = 0.28;
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * 0.28;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = a;
   }
   ctx.fillStyle = BROWN;
   ctx.beginPath();
@@ -1274,7 +1277,7 @@ export function drawTicketIcon(ctx: Ctx, sp: Sprites, x: number, y: number, w: n
   ctx.stroke();
 }
 
-/** The reels window for the Mini and Super spins. `offset` scrolls the strip (in cells); `hot` is the Super spin. */
+/** The reels window for the Mini spins (Super spins have their own full-screen wheel). `offset` scrolls the strip (in cells). */
 export function drawReels(
   ctx: Ctx,
   sp: Sprites,
@@ -1284,10 +1287,8 @@ export function drawReels(
   active: boolean,
   won: boolean,
   t: number,
-  hot = false,
 ) {
   const r = REEL;
-  const accent = hot ? TERRA : HONEY;
   ctx.save();
   ctx.fillStyle = BROWN;
   ctx.beginPath();
@@ -1300,13 +1301,13 @@ export function drawReels(
   ctx.roundRect(r.x, r.y, r.w, r.h, 12);
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = active ? (hot ? CORE_COLORS[Math.floor(t * 10) % 6] : HONEY) : "rgba(245,228,190,0.5)";
+  ctx.strokeStyle = active ? HONEY : "rgba(245,228,190,0.5)";
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.roundRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8, 9);
   ctx.stroke();
   const split = r.x + 122;
-  text(ctx, label, r.x + 63, r.y + r.h / 2 + 2, fitSize(ctx, label, 22, 104), active ? accent : CREAM, "center", active ? BROWN : null);
+  text(ctx, label, r.x + 63, r.y + r.h / 2 + 2, fitSize(ctx, label, 22, 104), active ? HONEY : CREAM, "center", active ? BROWN : null);
   // Reel strip
   const rw = r.x + r.w - 9 - split;
   const sy = r.y + 7;
@@ -1914,10 +1915,12 @@ export function drawSunburst(ctx: Ctx, x: number, y: number, r: number, t: numbe
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(t * 0.35);
+  // Relative to the alpha it is drawn at, so it fades with whatever it is part of
+  const base = ctx.globalAlpha;
   const n = 14;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
-    ctx.globalAlpha = alpha * (i % 2 === 0 ? 0.32 : 0.18);
+    ctx.globalAlpha = base * alpha * (i % 2 === 0 ? 0.32 : 0.18);
     ctx.fillStyle = i % 2 === 0 ? HONEY : CREAM;
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -1928,7 +1931,7 @@ export function drawSunburst(ctx: Ctx, x: number, y: number, r: number, t: numbe
   const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.6);
   g.addColorStop(0, "rgba(255,243,207,0.75)");
   g.addColorStop(1, "rgba(255,243,207,0)");
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha = base * alpha;
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2);
@@ -2311,4 +2314,458 @@ export function shineCard(out: HTMLCanvasElement, tex: HTMLCanvasElement, tx: nu
   g.fillStyle = glint;
   g.fillRect(0, 0, w, h);
   g.restore();
+}
+
+// ---------------------------------------------------------------- the Super wheel (1.4.0, drawn in code)
+
+const TAU = Math.PI * 2;
+
+/** A star path centred at (x, y): `points` tips at radius r, the notches at r·inner. */
+function starPath(ctx: Ctx, x: number, y: number, r: number, rot: number, points = 5, inner = 0.45) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const a = rot + (i * Math.PI) / points - Math.PI / 2;
+    const rr = i % 2 === 0 ? r : r * inner;
+    if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+}
+
+/** A four-point twinkle (a sparkle), `r` its tip radius. */
+export function drawTwinkle(ctx: Ctx, x: number, y: number, r: number, color: string, alpha = 1) {
+  if (r <= 0.5 || alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.fillStyle = color;
+  starPath(ctx, x, y, r, 0, 4, 0.22);
+  ctx.fill();
+  ctx.globalAlpha *= 0.5;
+  ctx.fillStyle = CREAM;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.22, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The Super wheel's backdrop over the whole view: the energy cores' colours
+ * glowing out from the top (yellow, orange, red, purple), slow honey rays, and a
+ * field of cream stars drifting down and twinkling. `glow` (0..1) brightens the
+ * middle (the prize screen).
+ */
+export function drawSuperBackdrop(ctx: Ctx, v: Rect, t: number, glow = 0) {
+  ctx.save();
+  const cx = v.x + v.w / 2;
+  const cy = v.y + v.h * 0.3;
+  const r = Math.hypot(v.w, v.h) * 0.72;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, CORE_COLORS[2]);
+  g.addColorStop(0.28 + 0.12 * glow, CORE_COLORS[1]);
+  g.addColorStop(0.6 + 0.1 * glow, CORE_COLORS[0]);
+  g.addColorStop(1, CORE_COLORS[5]);
+  ctx.fillStyle = g;
+  ctx.fillRect(v.x, v.y, v.w, v.h);
+  drawSunburst(ctx, cx, cy, r * 0.9, t * 0.6, 0.55 + 0.45 * glow);
+  // The star field: a staggered grid drifting down, each star twinkling on its own beat
+  const base = ctx.globalAlpha;
+  const gap = 78;
+  const drift = (t * 14) % gap;
+  ctx.fillStyle = CREAM;
+  for (let y = v.y - gap + drift; y < v.y + v.h + gap; y += gap) {
+    const k = Math.floor((y - drift) / gap);
+    for (let x = v.x - gap + ((k & 1) * gap) / 2; x < v.x + v.w + gap; x += gap) {
+      const seed = Math.sin(x * 12.9898 + k * 78.233) * 43758.5453;
+      const f = seed - Math.floor(seed);
+      const tw = 0.5 + 0.5 * Math.sin(t * (1.5 + f * 2) + f * 9);
+      ctx.globalAlpha = base * (0.12 + 0.2 * tw);
+      starPath(ctx, x + (f - 0.5) * 20, y, 7 + f * 7, f * 2 + t * 0.2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * Sparkles winking in and out over an annulus (centre, inner and outer radius,
+ * and the angles it spans), `n` of them at once. Stateless: each one's spot and
+ * colour come from a seeded hash of its slot and lifetime, so nothing is stored.
+ */
+export function drawSparkles(ctx: Ctx, cx: number, cy: number, r0: number, r1: number, a0: number, a1: number, t: number, n: number, alpha = 1) {
+  const colors = [CREAM, HONEY, CYAN, CREAM];
+  for (let i = 0; i < n; i++) {
+    const ph = t / 0.65 + i * 0.618;
+    const k = Math.floor(ph);
+    const u = ph - k;
+    const rng = mulberry32(i * 7919 + k * 104_729);
+    const a = a0 + rng() * (a1 - a0);
+    const rr = r0 + rng() * (r1 - r0);
+    const size = (7 + rng() * 11) * Math.sin(u * Math.PI);
+    drawTwinkle(ctx, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, size, colors[i % colors.length], alpha);
+  }
+}
+
+/** The Super wheel's parts, as shares of its radius: the rim band, and the inner edge of the prize ring (where the pegs are). */
+export const SUPER_RIM = 34;
+export const SUPER_RING_IN = 0.58;
+
+export interface SuperWheelOpts {
+  cx: number;
+  cy: number;
+  /** The rim's outer radius. */
+  r: number;
+  /** The face's turn (radians, clockwise on screen): slot i starts at angle + i·step from straight up. */
+  angle: number;
+  /** Tickets per slot, clockwise from slot 0. */
+  values: readonly number[];
+  /** 0..1: how smeared the face is (from its speed): ghost copies, rainbow streaks, the numbers fading. */
+  blur: number;
+  /** Radians the face turned over the last frame, which the ghost copies trail across. */
+  sweep: number;
+  /** The slot that won (lit up, its border blinking), or -1. */
+  lit: number;
+  t: number;
+}
+
+/** The middle of slot `i` on screen, in canvas radians (straight up is -π/2). */
+const slotMid = (o: SuperWheelOpts, i: number) => -Math.PI / 2 + o.angle + ((i + 0.5) * TAU) / o.values.length;
+
+/** One slot's wedge between radii r0 and r1, starting at canvas angle a, `w` wide. */
+function sector(ctx: Ctx, cx: number, cy: number, r0: number, r1: number, a: number, w: number) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, r1, a, a + w);
+  ctx.arc(cx, cy, r0, a + w, a, true);
+  ctx.closePath();
+}
+
+/** A slot's colour: the 500 in honey, the rest round the six core colours (never honey's yellow twice in a row). */
+const superFill = (value: number, i: number) => (value >= 500 ? HONEY : [CORE_COLORS[0], CORE_COLORS[4], CORE_COLORS[1], CORE_COLORS[3], CORE_COLORS[5], TEAL][i % 6]);
+
+/**
+ * The giant Super wheel: a honey rim with chasing bulbs (fixed), the prize ring
+ * turning inside it (`angle`), pegs on the ring's inner edge, and a night hub.
+ * The pointer and the crest are drawn on top by drawSuperNeedle and drawSuperCrest.
+ */
+export function drawSuperWheel(ctx: Ctx, sp: Sprites, o: SuperWheelOpts) {
+  const { cx, cy, r, t } = o;
+  const n = o.values.length;
+  const step = TAU / n;
+  const ring0 = r - SUPER_RIM;
+  const ring1 = r * SUPER_RING_IN;
+  const blur = clamp(o.blur, 0, 1);
+  ctx.save();
+  // Every alpha below is relative to the one it is drawn at (the screen fades in and out)
+  const base = ctx.globalAlpha;
+  // The rim, on a brown drop
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.arc(cx, cy + 8, r + 6, 0, TAU);
+  ctx.fill();
+  const rimG = ctx.createRadialGradient(cx, cy, ring0, cx, cy, r);
+  rimG.addColorStop(0, TERRA);
+  rimG.addColorStop(0.45, HONEY);
+  rimG.addColorStop(1, TERRA);
+  ctx.fillStyle = rimG;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  // The prize ring: ghost copies trailing the turn, then the ring itself
+  ctx.fillStyle = NIGHT;
+  ctx.beginPath();
+  ctx.arc(cx, cy, ring0, 0, TAU);
+  ctx.fill();
+  const ghosts = blur > 0.04 ? 4 : 0;
+  for (let gi = ghosts; gi >= 0; gi--) {
+    const off = ghosts > 0 ? -o.sweep * (gi / ghosts) : 0;
+    ctx.globalAlpha = base * (gi === 0 ? 1 - blur * 0.5 : 0.3 + 0.25 * blur);
+    for (let i = 0; i < n; i++) {
+      sector(ctx, cx, cy, ring1, ring0, -Math.PI / 2 + o.angle + off + i * step, step);
+      ctx.fillStyle = superFill(o.values[i], i);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = base;
+  // Soft shading: lighter toward the rim, like a raised ring
+  const shade = ctx.createRadialGradient(cx, cy, ring1, cx, cy, ring0);
+  shade.addColorStop(0, "rgba(73,51,44,0.35)");
+  shade.addColorStop(0.5, "rgba(73,51,44,0)");
+  shade.addColorStop(1, "rgba(255,248,230,0.18)");
+  ctx.fillStyle = shade;
+  sector(ctx, cx, cy, ring1, ring0, 0, TAU);
+  ctx.fill();
+  if (blur > 0.02) {
+    // Speed: the colours run together into rainbow bands, with cream streaks
+    const band = (ring0 - ring1) / 6;
+    for (let b = 0; b < 6; b++) {
+      ctx.globalAlpha = base * blur * 0.6;
+      ctx.strokeStyle = CORE_COLORS[b];
+      ctx.lineWidth = band + 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ring1 + band * (b + 0.5), 0, TAU);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = CREAM;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 7; i++) {
+      const rr = ring1 + ((i * 0.37 + 0.11) % 1) * (ring0 - ring1);
+      const a = -Math.PI / 2 + o.angle * (0.6 + i * 0.05) + i * 1.3;
+      ctx.globalAlpha = base * blur * 0.55;
+      ctx.lineWidth = 2 + (i % 3);
+      ctx.beginPath();
+      ctx.arc(cx, cy, rr, a, a + 0.5 + blur * 0.9);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = base;
+  }
+  // Slot edges, numbers and tickets: clear when slow, gone in the blur
+  const sharp = clamp(1 - blur * 1.6, 0, 1);
+  if (sharp > 0) {
+    ctx.globalAlpha = base * sharp;
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + o.angle + i * step;
+      ctx.moveTo(cx + Math.cos(a) * ring1, cy + Math.sin(a) * ring1);
+      ctx.lineTo(cx + Math.cos(a) * ring0, cy + Math.sin(a) * ring0);
+    }
+    ctx.stroke();
+    const rl = ring1 + (ring0 - ring1) * 0.62;
+    const ri = ring1 + (ring0 - ring1) * 0.25;
+    for (let i = 0; i < n; i++) {
+      const a = slotMid(o, i);
+      // Only the slots in the top half can be on screen
+      if (Math.sin(a) > 0.2) continue;
+      const str = String(o.values[i]);
+      const size = fitSize(ctx, str, o.values[i] >= 500 ? 66 : 58, step * rl * 0.78);
+      ctx.save();
+      ctx.translate(cx + Math.cos(a) * rl, cy + Math.sin(a) * rl);
+      ctx.rotate(a + Math.PI / 2);
+      headline(ctx, str, 0, 0, size, CREAM);
+      ctx.restore();
+      ctx.save();
+      ctx.translate(cx + Math.cos(a) * ri, cy + Math.sin(a) * ri);
+      ctx.rotate(a + Math.PI / 2);
+      drawTicketIcon(ctx, sp, 0, 0, 54);
+      ctx.restore();
+    }
+    ctx.globalAlpha = base;
+  }
+  // The winning slot: lit up, its border blinking
+  if (o.lit >= 0 && o.lit < n) {
+    const a = -Math.PI / 2 + o.angle + o.lit * step;
+    sector(ctx, cx, cy, ring1, ring0, a, step);
+    ctx.globalAlpha = base * (0.28 + 0.18 * Math.sin(t * 18));
+    ctx.fillStyle = CREAM;
+    ctx.fill();
+    ctx.globalAlpha = base;
+    ctx.strokeStyle = Math.floor(t * 8) % 2 === 0 ? CREAM : HONEY;
+    ctx.lineWidth = 8;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, ring0, 0, TAU);
+  ctx.stroke();
+  // The hub: night blue with a honey ring of studs turning with the face
+  const hub = ctx.createRadialGradient(cx, cy - ring1 * 0.4, 0, cx, cy, ring1);
+  hub.addColorStop(0, NIGHT_HI);
+  hub.addColorStop(1, NIGHT);
+  ctx.fillStyle = hub;
+  ctx.beginPath();
+  ctx.arc(cx, cy, ring1, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.fillStyle = HONEY;
+  for (let i = 0; i < n * 2; i++) {
+    const a = -Math.PI / 2 + o.angle + (i + 0.5) * (step / 2);
+    starPath(ctx, cx + Math.cos(a) * (ring1 - 26), cy + Math.sin(a) * (ring1 - 26), 7, a);
+    ctx.globalAlpha = base * 0.55;
+    ctx.fill();
+  }
+  ctx.globalAlpha = base;
+  // Pegs on the ring's inner edge, one per slot edge: the pointer flicks on them
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + o.angle + i * step;
+    const x = cx + Math.cos(a) * (ring1 + 3);
+    const y = cy + Math.sin(a) * (ring1 + 3);
+    ctx.fillStyle = BROWN;
+    ctx.beginPath();
+    ctx.arc(x, y + 2, 9, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = CREAM;
+    ctx.beginPath();
+    ctx.arc(x, y, 7.5, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  }
+  // The rim's bulbs chase round (faster while it spins)
+  const bulbs = 60;
+  for (let i = 0; i < bulbs; i++) {
+    const a = -Math.PI / 2 + (i / bulbs) * TAU;
+    const on = (i + Math.floor(t * (6 + blur * 18))) % 3 !== 0;
+    bulb(ctx, cx + Math.cos(a) * (r - SUPER_RIM / 2), cy + Math.sin(a) * (r - SUPER_RIM / 2), 6, CORE_COLORS[i % 6], on);
+  }
+  ctx.restore();
+}
+
+/**
+ * The pointer: a terracotta triangle standing on the hub with its tip up at the
+ * pegs, pivoting on its round base. `tilt` (radians, + = clockwise) is the flick
+ * a peg gives it.
+ */
+export function drawSuperNeedle(ctx: Ctx, x: number, tipY: number, len: number, tilt: number) {
+  const w = len * 0.62;
+  ctx.save();
+  ctx.translate(x, tipY + len);
+  ctx.rotate(tilt);
+  ctx.lineJoin = "round";
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.moveTo(0, -len + 4);
+  ctx.lineTo(w / 2, 4);
+  ctx.lineTo(-w / 2, 4);
+  ctx.closePath();
+  ctx.fill();
+  const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+  g.addColorStop(0, CORE_COLORS[0]);
+  g.addColorStop(1, TERRA);
+  ctx.fillStyle = g;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -len);
+  ctx.lineTo(w / 2, 0);
+  ctx.lineTo(-w / 2, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = CREAM;
+  const base = ctx.globalAlpha;
+  ctx.globalAlpha = base * 0.6;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-3, -len + 16);
+  ctx.lineTo(-w / 2 + 12, -8);
+  ctx.stroke();
+  ctx.globalAlpha = base;
+  ctx.fillStyle = HONEY;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = BROWN;
+  ctx.beginPath();
+  ctx.arc(0, 0, w * 0.36, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = CREAM;
+  ctx.beginPath();
+  ctx.arc(-w * 0.1, -w * 0.1, w * 0.1, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The crest on top of the rim at (x, y): the six energy cores in an arc over a
+ * violet plate with the label in rainbow letters, and the core count above.
+ */
+export function drawSuperCrest(ctx: Ctx, sp: Sprites, x: number, y: number, label: string, count: string, t: number) {
+  ctx.save();
+  const size = 54;
+  ctx.font = `800 ${size}px ${FONT}`;
+  const tw = ctx.measureText(label).width;
+  const pw = tw + 76;
+  const ph = 70;
+  const top = y - ph / 2 - 6;
+  const base = ctx.globalAlpha;
+  // The cores, bobbing in an arc above the plate
+  for (let i = 0; i < 6; i++) {
+    const d = i - 2.5;
+    const gx = x + d * 40;
+    const gy = top - 18 + d * d * 4 + Math.sin(t * 4 + i) * 3;
+    ctx.globalAlpha = base * (0.45 + 0.2 * Math.sin(t * 6 + i));
+    ctx.fillStyle = CORE_COLORS[i];
+    ctx.beginPath();
+    ctx.arc(gx, gy - 17, 24, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = base;
+    drawOrb(ctx, sp, i, gx, gy, 36);
+  }
+  text(ctx, count, x, top - 84, 22, CREAM);
+  // The plate
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(x - pw / 2, top + 6, pw, ph, 22);
+  ctx.fill();
+  const g = ctx.createLinearGradient(0, top, 0, top + ph);
+  g.addColorStop(0, VIOLET);
+  g.addColorStop(1, CORE_COLORS[5]);
+  ctx.fillStyle = g;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(x - pw / 2, top, pw, ph, 22);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = CREAM;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(x - pw / 2 + 7, top + 7, pw - 14, ph - 14, 15);
+  ctx.stroke();
+  // Rainbow letters, the colours running along
+  let lx = x - tw / 2;
+  for (let i = 0; i < label.length; i++) {
+    const ch = label[i];
+    ctx.font = `800 ${size}px ${FONT}`;
+    const cw = ctx.measureText(ch).width;
+    headline(ctx, ch, lx + cw / 2, top + ph / 2 + 2 + Math.sin(t * 5 + i * 0.8) * 2, size, CORE_COLORS[(i + Math.floor(t * 5)) % 6]);
+    lx += cw;
+  }
+  ctx.restore();
+}
+
+/** The Super wheel's big button: a green toy button with its label and a smaller line under it, breathing gently. */
+export function drawSuperButton(ctx: Ctx, r: Rect, label: string, sub: string, t: number, pressed = false) {
+  ctx.save();
+  const k = pressed ? 0.97 : 1 + 0.035 * Math.sin(t * 6);
+  ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+  ctx.scale(k, k);
+  ctx.translate(-r.w / 2, -r.h / 2);
+  const rad = r.h / 2.2;
+  const base = ctx.globalAlpha;
+  ctx.globalAlpha = base * (0.35 + 0.15 * Math.sin(t * 6));
+  ctx.fillStyle = CREAM;
+  ctx.beginPath();
+  ctx.roundRect(-10, -10, r.w + 20, r.h + 26, rad + 10);
+  ctx.fill();
+  ctx.globalAlpha = base;
+  ctx.fillStyle = BROWN;
+  ctx.beginPath();
+  ctx.roundRect(0, 8, r.w, r.h, rad);
+  ctx.fill();
+  const g = ctx.createLinearGradient(0, 0, 0, r.h);
+  g.addColorStop(0, GO_GREEN);
+  g.addColorStop(1, TEAL);
+  ctx.fillStyle = g;
+  ctx.strokeStyle = BROWN;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(0, pressed ? 4 : 0, r.w, r.h, rad);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,248,230,0.32)";
+  ctx.beginPath();
+  ctx.roundRect(14, 7, r.w - 28, r.h * 0.22, r.h * 0.11);
+  ctx.fill();
+  headline(ctx, label, r.w / 2, r.h * 0.42, fitSize(ctx, label, 50, r.w - 40), CREAM);
+  text(ctx, sub, r.w / 2, r.h * 0.78, fitSize(ctx, sub, 21, r.w - 40), HONEY);
+  ctx.restore();
 }

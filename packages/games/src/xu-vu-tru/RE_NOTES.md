@@ -25,9 +25,69 @@ characters, logos, sounds or layouts).
 | Card slot | a cat card drops onto the shelf, picked by CARD_WEIGHTS (below) |
 | Shelf | walls on both sides the whole way; only the front edge drops things: +1 coin and +1 ticket per coin, except into the jar |
 | Robot jar (1.2.0) | A glass jar with a robot face stands on the middle of the front lip (art.ts `drawJar`, drawn in code). A coin whose centre leaves the front within JAR_W / 2 = 22 world units of JAR_X = 220 (the middle 44 of the shelf's 440, **10.0 %** of the front edge, ~46 px on screen) drops into it and is kept: no coin back, no ticket (`fall` event `jar: true`, `State.eaten`). The jar munches (squash, happy eyes, chewing, "Măm!/Yum!", antenna lit) and its coins pile up inside. Its lane is marked over the coins: a terracotta tint, dashed cream rails at the section's exact edges and chevrons running toward it. Capsules and cards are never eaten: in the jar's section they count like anywhere else |
-| Core meter | 6 slots; only a capsule pushed off the **front** fills one. The sixth starts a **Super spin**: 80/100/150/200/250/300/500 tickets |
+| Core meter | 6 slots; only a capsule pushed off the **front** fills one. The sixth earns a **Super spin** (80/100/150/200/250/300/500 tickets), played on the full-screen Super wheel (1.4.0, below) |
 | Cards | a card pushed off the **front** goes into the card inventory (`State.cards`, a count per cat: duplicates stack) and pays nothing by itself. `State.seen` marks cats ever collected. The player exchanges cards for tickets when they choose (below) |
 | Out of coins | coins at 0 and nothing in the air, on the wheel, in the stock or on the reels, and nothing has fallen for ~5.7 s: the machine **idles** (`State.idle`). There is no end state and no blocking panel: a strip over the shelf shows the next daily coins (the streak's next amount; for a guest, a sign-in hint) and the code button, and, signed in, a line pointing at the Prize Counter. `grantCoins` or a coin pushed off the shelf (not into the jar) wakes it where it stood |
+
+## 1.4.0: the Super wheel
+
+The Super spin left the reels for a full-screen wheel the player sits and
+watches. The genre's mobile coin pushers stage it this way (a giant wheel rising
+from the bottom of the screen); only the staging is borrowed, the art, colours
+and names are the game's own, all drawn in code (art.ts `drawSuperBackdrop`,
+`drawSuperWheel`, `drawSuperNeedle`, `drawSuperCrest`, `drawSuperButton`,
+`drawSparkles`).
+
+- **Earning it.** Every sixth core pushed off the front (logic.ts `collectCore`)
+  adds one to `State.superPending`: twelve cores, two waiting. Nothing goes on
+  the reels any more; they run Mini spins only. `update` runs on as usual while
+  one waits (a pending Super spin does not keep the machine from idling: it
+  never changes the coins).
+- **Spinning it.** `spinSuper(s)` (pure, seeded) picks the prize by
+  SUPER_WEIGHTS and pays it at once: tickets earned, `supers` + 1, `cores` −
+  CORE_COUNT, `superPending` − 1 (+ 1 again if the cores left still cover a
+  meter). It returns the events the reels used to send, in the same order
+  (`spinStart`, `spinWin` kind super, `tickets` source super, `superReset`), so
+  jackpot.ts and the stats read them unchanged. Paying at the pick means a
+  reload between SPIN and the pointer stopping neither loses the prize nor pays
+  it twice (save.test.ts).
+- **The screen** (game.ts overlay `superWheel`). It opens 0.9 s after a Super
+  spin is earned, once no other overlay, Lucky Jar line or set celebration is
+  up (so it waits behind the start card and What's new), and the machine is
+  frozen behind it. Phases: ready → spin → lit → prize → (jar) → close. No close
+  button, and no tap skips the spin.
+  - **Layout** (logical px, checked first at 390×844 where the view is 540×1169
+    from y −104): the wheel's centre sits 20 px under the view's bottom edge,
+    rim radius SUPER_R = 560, so only its top shows. 18 equal slots
+    (config.ts SUPER_SLOTS, each prize at least twice, never side by side), so
+    three fill the game's width. The crest on the top of the rim: the six core
+    orbs over a violet "SUPER" plate in rainbow letters, "6/6 lõi" above. The
+    pointer is a terracotta triangle standing on the hub, tip up at the pegs on
+    the ring's inner edge. "SUPER SPIN!" floats in the sky. The SPIN button
+    ("QUAY!" / "Nhận Vé thưởng!") sits under the pointer, its foot at least 70
+    px above the view's bottom (the home indicator).
+  - **Ready.** A tap anywhere (after a 0.5 s guard, so taps meant for SHOOT
+    don't spin it) or Space spins. With Auto on when it opened, it spins itself
+    after 1.5 s ("Tự động quay…" under the label).
+  - **Spin.** 5.6 s, six whole turns plus the way to the picked slot, a little
+    off its middle; position 1 − (1 − u)³: about 3 turns a second at first,
+    the last second crawling under one slot. While fast the face smears: ghost
+    copies trail the turn, the colours run into rainbow bands with cream
+    streaks, the numbers fade, sparkles wink over the ring. Each slot edge that
+    passes flicks the pointer (a damped spring) and ticks (`sfx.tick`).
+  - **Lit.** The pointer stops: the held events go to the Lucky Jar feed and
+    `onEvent` now (so the roll starts here), the slot lights up and its border
+    blinks for 1.1 s.
+  - **Prize.** The backdrop glows, the wheel sinks away, a big ticket flies in
+    and lands with a bounce, the amount counts up, coins rain and confetti
+    bursts (`sfx.superBonus`). "Chạm để nhận" after 0.8 s (with Auto, it
+    collects itself after 3.6 s).
+  - **Jar** (signed in, a roll out): the Lucky Jar's suspense plays on this
+    screen (the jar trembling, lamps racing round it, at least 1.8 s), then
+    "not this time" or the jar's win (the 1.3.0 `drawJarWin`). A tap closes it
+    once it has shown; a failed roll just closes. Then the wheel fades out and
+    the machine plays on. A guest gets the old sign-in toast instead.
+- **Saves**: schema 5 (below).
 
 ## 1.3.0: the Lucky Jar
 
@@ -41,7 +101,8 @@ the jar lives on the server.
   portal batches them and the server turns coins into pool tickets (×2, capped
   per player per game per day). The house pays: the player's wallet is untouched.
 - **Rolling.** Each Super spin that pays (`spinWin` with `kind: "super"`) asks
-  for exactly one `ctx.jackpot.roll()`. Rolls go one at a time: a second Super
+  for exactly one `ctx.jackpot.roll()` (since 1.4.0 those events reach the feed
+  when the Super wheel's pointer stops, and the roll plays on its screen). Rolls go one at a time: a second Super
   spin waits for the first's answer. Signed in only: a guest's trial machine
   never contributes or rolls (after a guest's Super spin a toast says to sign in).
   Every failure (offline, signed out, the server) is swallowed; the server's
@@ -184,9 +245,12 @@ exchanged one by one, up to ~70.8 with sets).
 
 The jar's share is 0.10 ± 0.01 in every style; perfect aim drains least (its
 Mini coins skip the jar). logic.test.ts measures random, held and perfect aim
-(3 seeds × 1,500 shots: 0.114 / 0.094 / 0.095) and checks each within
-0.05–0.14, the jar's share within 0.07–0.13, the spread under 0.05 and perfect
-aim no faster than random.
+(3 seeds × 1,500 shots: 0.114 / 0.094 / 0.095 when written; 0.132 / 0.095 /
+0.089 on 1.3.1 and 0.131 / 0.095 / 0.080 on 1.4.0, bun over logic.ts,
+2026-11-14) and checks each within 0.05–0.14, the jar's share within
+0.07–0.13, the spread under 0.06 (0.05 until 1.4.0: with the Super spin off the
+reels the seeded runs shift and the spread measured 0.050) and perfect aim no
+faster than random.
 
 ### Simulated sessions (bun over logic.ts, 2026-11-11, final tuning)
 
@@ -281,6 +345,7 @@ exchanging them later is accepted the same way.
 | 2 | 1.0.0 | bodies and flights packed into tuples, floats rounded, album as a bit mask |
 | 3 | 1.1.0 | as 2 on the 11-slot wheel, with `cards` (a count per cat) and `seen` (bit mask) instead of the album |
 | 4 | 1.2.0 | as 3, plus `eaten` (coins the jar kept) and `packCards` (cards bought at the Prize Counter) |
+| 5 | 1.4.0 | as 4, plus `superPending` (Super spins earned, not spun); `queue` and `spin` hold Mini spins only |
 
 2 → 3 (`toV3`): each owned cat becomes a count of 1 and is seen; a prize spin
 running on the old 24-slot wheel is dropped, refunded into the stock (capped at
@@ -296,8 +361,21 @@ live-shaped 1.1.0 save (a stash, a spin running, coins in the air), checks the
 machine is otherwise identical, that the server accepts the next save after
 it, and walks a 1.0.0 save all the way up.
 
+4 → 5 (`toV5`): every Super spin still owed (waiting in the queue, or running
+on the reels unpaid) is a full meter whose cores are still in `cores`, and one
+that already paid has spent its six, so `superPending` = ⌊cores / 6⌋. 1.3.x
+queued the second of two only once the first paid; 1.4.0 owes both at once.
+The Super spins leave the queue and the reels; Mini spins, the cores and the
+rest carry over. `validState` refuses a Super spin on the reels and a
+`superPending` the cores don't cover. save.test.ts migrates a queued one, a
+running unpaid one, a paid one and twelve cores, checks the server accepts the
+next save, and that a Super spin spun before a reload stays paid once.
+
 The session simulations in logic.test.ts (`continuous play`) are opt-in because they are slow:
 run `XVT_SIMS=1 bunx vitest run src/xu-vu-tru` from packages/games after any economy change.
+Since 1.4.0 they spin each Super spin the moment it is earned (`play` in
+logic.test.ts), as the shell's wheel does; game time stops while the wheel
+shows, so the minutes are unchanged by it.
 
 ## Physics (physics.ts)
 

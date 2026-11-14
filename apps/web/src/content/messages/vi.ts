@@ -85,6 +85,7 @@ export const vi = {
   account: {
     guestHint: "Đăng nhập để lưu tên trên bảng xếp hạng, nhận vé điểm danh và đổi quà.",
     signIn: "Đăng nhập Google",
+    signInShort: "Đăng nhập",
     signInHint: "Lưu tên trên bảng xếp hạng",
     signOut: "Đăng xuất",
     history: "Lịch sử đấu",

@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { CARD_COUNT, COIN_R, LAND_X, MAX_BODIES, MAX_STACK, PRIZE_QUEUE_MAX, SHELF_D, SHELF_W, TRIAL_COINS, VERSION, WHEEL } from "./config";
-import { type State, createMachine, drainTickets, exchangeCard, exchangeSet, grantCard, grantCoins, update } from "./logic";
-import { type PackedV2, type PackedV3, SAVE_MAX_BYTES, SCHEMA, fromSave, migrate, pack, parseSave, plausible, rules, toSave, toV3, toV4 } from "./save";
+import { CARD_COUNT, COIN_R, CORE_COUNT, LAND_X, MAX_BODIES, MAX_STACK, PRIZE_QUEUE_MAX, SHELF_D, SHELF_W, SUPER_PRIZES, TRIAL_COINS, VERSION, WHEEL } from "./config";
+import { type State, createMachine, drainTickets, exchangeCard, exchangeSet, grantCard, grantCoins, spinSuper, update } from "./logic";
+import {
+  type PackedV2,
+  type PackedV3,
+  type PackedV4,
+  SAVE_MAX_BYTES,
+  SCHEMA,
+  fromSave,
+  migrate,
+  pack,
+  parseSave,
+  plausible,
+  rules,
+  toSave,
+  toV3,
+  toV4,
+  toV5,
+} from "./save";
 
 const DT = 1 / 60;
 
@@ -50,7 +66,9 @@ function fullShelf(): State {
     card: -1,
   }));
   s.nextId = id;
-  s.queue = ["super", "mini", "mini", "mini"];
+  s.queue = ["mini", "mini", "mini", "mini"];
+  s.cores = 2 * CORE_COUNT + 3;
+  s.superPending = 2;
   s.stock = 4;
   s.cards = s.cards.map((_, i) => (i % 2 === 0 ? 999 : 0));
   s.seen = s.cards.map((n) => n > 0);
@@ -160,7 +178,7 @@ describe("migrate", () => {
   /** A live 1.0.0 save (schema 2): the album a bit mask, a prize running on the old 24-slot wheel, a coin on its way up. */
   function v100(seed: number, album: number, prize: { seg: number; t: number; paid: boolean } | null, stock: number) {
     const s = midPlay(seed);
-    const { cards: _c, seen: _s, eaten: _e, packCards: _p, ...state } = pack(s);
+    const { cards: _c, seen: _s, eaten: _e, packCards: _p, superPending: _sp, ...state } = pack(s);
     const v2: PackedV2 = { ...state, album, prize, stock };
     v2.flights = [...v2.flights, [v2.nextId, 0.2, 0, SHELF_W / 2, 27.5, 0, -1]];
     v2.nextId++;
@@ -213,13 +231,12 @@ describe("migrate", () => {
     s.seen = [true, true, true, true, false, true, false, false, true, true];
     s.prize = { seg: 3, t: 0.6, paid: false };
     s.stock = 2;
-    const { eaten: _e, packCards: _p, ...state } = pack(s);
+    const { eaten: _e, packCards: _p, superPending: _sp, ...state } = pack(s);
     const v3: PackedV3 = state;
     return { s, save: JSON.parse(JSON.stringify({ v: "1.1.0", schema: 3, state: v3 })) as { v: string; schema: number; state: PackedV3 } };
   }
 
   it("migrates a live 1.1.0 save to 1.2.0: everything kept, the jar and pack counters from 0", () => {
-    expect(SCHEMA).toBe(4);
     const { s, save } = v110(41);
     expect("eaten" in save.state).toBe(false);
     const m = migrate(save);
@@ -265,6 +282,91 @@ describe("migrate", () => {
     const current = JSON.parse(JSON.stringify(toSave(midPlay(43))));
     delete current.state.eaten;
     expect(migrate(current)).toEqual({ ok: false, reason: "broken" });
+    const noPending = JSON.parse(JSON.stringify(toSave(midPlay(43))));
+    delete noPending.state.superPending;
+    expect(migrate(noPending)).toEqual({ ok: false, reason: "broken" });
+  });
+
+  /** A live 1.3.x save (schema 4): no `superPending`; Super spins queued or running on the reels. */
+  function v13(seed: number, over: Partial<PackedV4>) {
+    const s = midPlay(seed);
+    s.prize = null;
+    const { superPending: _sp, ...state } = pack(s);
+    const v4: PackedV4 = { ...state, ...over };
+    return { s, save: JSON.parse(JSON.stringify({ v: "1.3.1", schema: 4, state: v4 })) as { v: string; schema: number; state: PackedV4 } };
+  }
+
+  it("migrates a 1.3.x save to 1.4.0: a Super spin waiting in the queue becomes pending, the Mini spins stay", () => {
+    expect(SCHEMA).toBe(5);
+    const { s, save } = v13(51, { cores: CORE_COUNT + 2, queue: ["super", "mini", "mini"], spin: { kind: "mini", idx: 2, t: 0.5, paid: false } });
+    const m = migrate(save);
+    expect(m.ok).toBe(true);
+    if (!m.ok) return;
+    expect(m.save.schema).toBe(SCHEMA);
+    expect(m.save.v).toBe("1.3.1");
+    const back = fromSave(m.save);
+    expect(back.superPending).toBe(1);
+    expect(back.queue).toEqual(["mini", "mini"]);
+    expect(back.spin).toEqual({ kind: "mini", idx: 2, t: 0.5, paid: false });
+    expect(back.cores).toBe(CORE_COUNT + 2);
+    // Nothing else moved
+    expect(back.coins).toBe(s.coins);
+    expect(back.lifetimeTickets).toBe(s.lifetimeTickets);
+    expect(back.supers).toBe(s.supers);
+    expect(back.bodies.length).toBe(s.bodies.length);
+    // The server takes it after the old save, and the pending spin pays once
+    const again = JSON.parse(JSON.stringify(toSave(back)));
+    expect(migrate(again)).toEqual({ ok: true, save: again });
+    const prev = parseSave(save);
+    expect(prev && plausible(prev, again)).toBe(true);
+    const ev = spinSuper(back);
+    expect(ev.some((e) => e.type === "spinWin" && e.kind === "super")).toBe(true);
+    expect(back.superPending).toBe(0);
+    expect(back.cores).toBe(2);
+    expect(spinSuper(back)).toEqual([]);
+  });
+
+  it("migrates a Super spin running on the 1.3.x reels: unpaid it becomes pending, paid it is gone", () => {
+    const unpaid = migrate(v13(52, { cores: CORE_COUNT, queue: [], spin: { kind: "super", idx: 3, t: 1.2, paid: false } }).save);
+    expect(unpaid.ok).toBe(true);
+    if (!unpaid.ok) return;
+    expect(unpaid.save.state.superPending).toBe(1);
+    expect(unpaid.save.state.spin).toBeNull();
+    // Paid already: its six cores are spent, the reels are cleared
+    const paid = migrate(v13(53, { cores: 1, queue: ["mini"], spin: { kind: "super", idx: 3, t: 3.6, paid: true } }).save);
+    expect(paid.ok).toBe(true);
+    if (!paid.ok) return;
+    expect(paid.save.state.superPending).toBe(0);
+    expect(paid.save.state.spin).toBeNull();
+    expect(paid.save.state.queue).toEqual(["mini"]);
+    // Twelve cores and the next one not queued yet (1.3.x queued it after the first paid): both are owed
+    const two = migrate(v13(54, { cores: 2 * CORE_COUNT + 1, queue: ["super"], spin: null }).save);
+    expect(two.ok && two.save.state.superPending).toBe(2);
+    // No Super spin anywhere: nothing pending
+    const none = migrate(v13(55, { cores: 3, queue: ["mini"], spin: null }).save);
+    expect(none.ok && none.save.state.superPending).toBe(0);
+    expect(() => toV5({} as PackedV4)).toThrow();
+  });
+
+  it("a Super spin spun before a reload stays paid, once", () => {
+    const s = midPlay(56);
+    s.cores = CORE_COUNT;
+    s.superPending = 1;
+    const before = s.lifetimeTickets;
+    const ev = spinSuper(s);
+    const win = ev.find((e) => e.type === "spinWin");
+    if (win?.type !== "spinWin") throw new Error("no win");
+    expect(SUPER_PRIZES).toContain(win.prize.value);
+    // The shell drains and saves at once; the page reloads before the wheel stops
+    drainTickets(s);
+    const back = fromSave(JSON.parse(JSON.stringify(toSave(s))));
+    expect(back.lifetimeTickets).toBe(before + win.prize.value);
+    expect(back.supers).toBe(s.supers);
+    expect(back.superPending).toBe(0);
+    expect(back.cores).toBe(0);
+    // Nothing left to spin again
+    expect(spinSuper(back)).toEqual([]);
+    expect(back.lifetimeTickets).toBe(before + win.prize.value);
   });
 
   it("keeps the jar's and the Prize Counter's counters across a save", () => {
@@ -302,6 +404,15 @@ describe("migrate", () => {
         x.state.cards = Array(CARD_COUNT).fill(1);
       },
       (x: { state: Record<string, unknown> }) => (x.state.queue = ["mega"]),
+      // Super spins never sit on the reels in schema 5, and every pending one needs a full meter
+      (x: { state: Record<string, unknown> }) => (x.state.queue = ["super"]),
+      (x: { state: Record<string, unknown> }) => (x.state.spin = { kind: "super", idx: 0, t: 0, paid: false }),
+      (x: { state: Record<string, unknown> }) => {
+        x.state.cores = CORE_COUNT - 1;
+        x.state.superPending = 1;
+      },
+      (x: { state: Record<string, unknown> }) => (x.state.superPending = -1),
+      (x: { state: Record<string, unknown> }) => (x.state.superPending = 0.5),
       (x: { state: Record<string, unknown> }) => ((x.state.bodies as unknown[]).push([1, 0, 10, 10, 0, 0, 9, -1])),
       (x: { state: Record<string, unknown> }) => ((x.state.bodies as unknown[]).push([99_999_999, 1, 10, 10, 0, 0, 1, 7])),
       (x: { state: Record<string, unknown> }) => (x.state.spin = { kind: "super", idx: 40, t: 0, paid: false }),

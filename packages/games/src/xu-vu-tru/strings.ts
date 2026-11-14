@@ -54,6 +54,20 @@ export interface Strings {
   jarGuestSuper: string;
   superSpin: string;
   miniSpin: string;
+  /** The reels' label while a Mini spin runs (an arcade word, the same in both languages). */
+  miniLabel: string;
+  /**
+   * The full-screen Super wheel (1.4.0): the name on its crest, the core count
+   * under it, the big button and its line, the auto-spin note, the prize
+   * screen's "tap to collect", and the line that closes it after the Lucky Jar.
+   */
+  superLabel: string;
+  superCores: (n: number, of: number) => string;
+  superSpinButton: string;
+  superSpinLine: string;
+  superAutoLine: string;
+  superCollect: string;
+  superContinue: string;
   coreIn: (n: number, of: number) => string;
   coinsWon: (n: number) => string;
   coinRain: (n: number) => string;
@@ -171,6 +185,14 @@ export const STRINGS: Localized<Strings> = {
     jarGuestSuper: "Đăng nhập để Super trúng được Hũ may mắn",
     superSpin: "SUPER SPIN!",
     miniSpin: "MINI SPIN!",
+    miniLabel: "MINI",
+    superLabel: "SUPER",
+    superCores: (n, of) => `${n}/${of} lõi`,
+    superSpinButton: "QUAY!",
+    superSpinLine: "Nhận Vé thưởng!",
+    superAutoLine: "Tự động quay…",
+    superCollect: "Chạm để nhận",
+    superContinue: "Chạm để chơi tiếp",
     coreIn: (n, of) => `Lõi năng lượng ${n}/${of}`,
     coinsWon: (n) => `+${n} xu`,
     coinRain: (n) => `${n} xu`,
@@ -220,7 +242,7 @@ export const STRINGS: Localized<Strings> = {
       "Quay thưởng: đèn dừng ở một ô (ô càng rộng càng dễ trúng). Ô VÉ: cộng vé. Ô XU: xu rơi khắp kệ.",
       "Tối đa 4 lượt chờ (đèn dưới cổng). Đủ 4 lượt thì nắp lỗ đóng: xu nảy xuống kệ, không mất xu nào.",
       "Xu bị đẩy rơi mép trước: +1 xu, +1 vé (hai bên có vách). Riêng khúc giữa có hũ robot: xu rơi vào hũ thì máy giữ.",
-      "Ô LÕI: lõi rơi xuống kệ + 1 MINI SPIN. Đẩy 6 lõi rơi mép trước: SUPER SPIN 80–500 vé! Lõi và thẻ rơi vào hũ vẫn được tính.",
+      "Ô LÕI: lõi rơi xuống kệ + 1 MINI SPIN. Đẩy 6 lõi rơi mép trước: mở vòng quay SUPER cả màn hình, 80–500 vé! Lõi và thẻ rơi vào hũ vẫn được tính.",
       "Hũ may mắn: xu rơi vào hũ robot nuôi một hũ vé chung của mọi game thùng. Đã đăng nhập, mỗi SUPER SPIN có một cơ hội trúng cả hũ (hũ càng đầy càng dễ nổ), vé vào ví.",
       "Ô THẺ: thẻ mèo rơi xuống kệ. Đẩy rơi mép trước: vào kho thẻ, thẻ trùng cộng dồn. Mèo Ragdoll hiếm hơn.",
       "Đổi thẻ lấy vé khi bạn muốn: 1 thẻ = 60 vé (Ragdoll 300 vé); cả bộ 10 giống = 1000 vé.",
@@ -287,6 +309,14 @@ export const STRINGS: Localized<Strings> = {
     jarGuestSuper: "Sign in so your Supers can win the Lucky Jar",
     superSpin: "SUPER SPIN!",
     miniSpin: "MINI SPIN!",
+    miniLabel: "MINI",
+    superLabel: "SUPER",
+    superCores: (n, of) => `${n}/${of} cores`,
+    superSpinButton: "SPIN!",
+    superSpinLine: "Win tickets!",
+    superAutoLine: "Auto spin…",
+    superCollect: "Tap to collect",
+    superContinue: "Tap to play on",
     coreIn: (n, of) => `Energy core ${n}/${of}`,
     coinsWon: (n) => `+${n} coins`,
     coinRain: (n) => (n === 1 ? "1 coin" : `${n} coins`),
@@ -336,7 +366,7 @@ export const STRINGS: Localized<Strings> = {
       "Prize spin: a light stops on a slot (wider = likelier). TICKETS pay at once; COINS rain onto the shelf.",
       "Up to 4 spins wait (lamps under the gate). With all 4 lit the hole's lid shuts: coins bounce onto the shelf, none is wasted.",
       "Coins pushed off the front: +1 coin, +1 ticket each (walls guard the sides). In the middle sits the robot jar: coins that fall in are kept by the machine.",
-      "CORE: a core drops onto the shelf + a MINI SPIN. Push 6 cores off the front: SUPER SPIN, 80–500 tickets! Cores and cards still count in the jar's spot.",
+      "CORE: a core drops onto the shelf + a MINI SPIN. Push 6 cores off the front: the full-screen SUPER wheel, 80–500 tickets! Cores and cards still count in the jar's spot.",
       "Lucky Jar: coins the robot jar eats fill a jar shared by all arcade games. Signed in, each SUPER SPIN can win it all (the fuller, the likelier).",
       "CARD: a cat card drops onto the shelf. Pushed off the front, it goes into your card stash; duplicates stack. The Ragdoll is rare.",
       "Exchange cards for tickets when you like: one card = 60 tickets (Ragdoll 300); a full set of 10 cats = 1000 tickets.",

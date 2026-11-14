@@ -45,6 +45,7 @@ import {
   WHEEL_R,
   type WheelLight,
   along,
+  bulb,
   button,
   cardBackH,
   cardTexture,
@@ -67,6 +68,14 @@ import {
   drawCodeCoin,
   drawConfetti,
   drawSunburst,
+  drawJarGlyph,
+  drawSparkles,
+  drawSuperBackdrop,
+  drawSuperButton,
+  drawSuperCrest,
+  drawSuperNeedle,
+  drawSuperWheel,
+  SUPER_RING_IN,
   type Confetto,
   type MarqueeOpts,
   JAR_MOUTH,
@@ -111,7 +120,7 @@ import {
   SHELF_D,
   SPIN_TIME,
   SUPER_PRIZES,
-  SUPER_SPIN_TIME,
+  SUPER_SLOTS,
   TRIAL_COINS,
   VERSION,
   W,
@@ -165,7 +174,6 @@ import tileT50Art from "./img/v2/tile-t50.webp";
 import wheelHubArt from "./img/v2/wheel-hub.webp";
 import {
   type GameEvent,
-  type SpinKind,
   type State,
   createMachine,
   drainTickets,
@@ -182,6 +190,7 @@ import {
   hasSet,
   readyToShoot,
   setRate,
+  spinSuper,
   update,
 } from "./logic";
 import { createJarFeed, supersPaid } from "./jackpot";
@@ -219,6 +228,15 @@ import { STRINGS } from "./strings";
 // a sign-in hint), runs a short suspense while a roll is out, then shows the
 // outcome: a celebration (the jar bursting, a coin rain and confetti drawn in
 // code, the amount counting up) or a gentle "not this time". Errors are silent.
+//
+// The Super wheel (1.4.0): six cores earn a Super spin (logic's `superPending`).
+// Once nothing else is open, a full-screen wheel takes over and the machine
+// waits behind it: SPIN (or Auto, after a beat) calls logic's spinSuper, which
+// picks and pays the prize at once (saved at once), and the wheel then races,
+// brakes and stops on that prize. Its events are held until the pointer
+// stops, then go to the Lucky Jar feed and onEvent like any step's: the prize
+// screen follows, and, signed in, the Lucky Jar's roll plays on the same
+// screen. A tap closes it and the machine plays on.
 
 /** The guest's trial machine and its trial tickets: { save, tickets }. */
 const TRIAL_KEY = "trial";
@@ -318,13 +336,30 @@ const ART_SRC: ArtSrc = {
   "robot-left": robotLeftArt,
   "robot-right": robotRightArt,
 };
-/** What the two reels show. */
+/** What the reels show (Mini spins only: the Super spin has its own wheel). */
 const MINI_CELLS: ReelCell[] = MINI_PRIZES.map((p) => ({ value: p.value, coin: p.kind === "coins" }));
-const SUPER_CELLS: ReelCell[] = SUPER_PRIZES.map((value) => ({ value, coin: false }));
-const cellsOf = (kind: SpinKind) => (kind === "mini" ? MINI_CELLS : SUPER_CELLS);
-const spinTimeOf = (kind: SpinKind) => (kind === "mini" ? SPIN_TIME : SUPER_SPIN_TIME);
-/** Seconds of Super spin win celebration. */
-const SUPER_FX = 3.2;
+/** Seconds after a Super spin is earned before its wheel opens (the sixth core's own cheer plays first). */
+const SUPER_OPEN_DELAY = 0.9;
+/** Seconds the Super wheel takes to fade in, and to fade out once it closes. */
+const SUPER_FADE = 0.35;
+/** Seconds after it opens before a tap spins it (a tap meant for SHOOT never spins it by accident). */
+const SUPER_TAP_GUARD = 0.5;
+/** With Auto on it spins by itself this long after opening, and collects its prize after SUPER_AUTO_COLLECT. */
+const SUPER_AUTO_DELAY = 1.5;
+const SUPER_AUTO_COLLECT = 3.6;
+/** Seconds the wheel turns (fast, then braking), and the whole turns it makes on the way. */
+const SUPER_SPIN_TIME = 5.6;
+const SUPER_TURNS = 6;
+/** Seconds the winning slot blinks before the prize screen, and into it before a tap collects. */
+const SUPER_LIT = 1.1;
+const SUPER_COLLECT_GUARD = 0.8;
+/** The wheel's rim radius (logical px): three of its 18 slots fill the game's width. */
+const SUPER_R = 560;
+/** The pointer's length, from the pegs down to its pivot. */
+const SUPER_NEEDLE = 84;
+const SUPER_STEP = (Math.PI * 2) / SUPER_SLOTS.length;
+/** Tickets on each slot of the wheel. */
+const SUPER_VALUES = SUPER_SLOTS.map((i) => SUPER_PRIZES[i]);
 /** The Lucky Jar: the suspense plays at least this long, and gives up silently after the max. */
 const JAR_SUSPENSE_MIN = 1.8;
 const JAR_SUSPENSE_MAX = 15;
@@ -359,7 +394,7 @@ const BTN_CARD: [string, string] = ["#CBB0E8", "#9A76C4"];
 const LILAC = "#E2D2F2";
 
 type ButtonId = "go" | "rules" | "code" | "retry";
-type Overlay = "start" | "rules" | "pause" | "album" | "exchange" | "viewer" | "news" | null;
+type Overlay = "start" | "rules" | "pause" | "album" | "exchange" | "viewer" | "news" | "superWheel" | null;
 /** loading/failed: the account machine is on its way (or could not be fetched). */
 type Mode = "loading" | "failed" | "account" | "guest";
 
@@ -435,6 +470,37 @@ interface CardFly {
   x: number;
   y: number;
   t: number;
+}
+
+/** The full-screen Super wheel: a Super spin waiting, spinning, or showing what it paid. */
+interface SuperWheel {
+  /**
+   * ready: waiting for SPIN. spin: turning. lit: stopped, its slot blinking.
+   * prize: the prize screen. jar: the Lucky Jar's roll. close: fading out.
+   */
+  phase: "ready" | "spin" | "lit" | "prize" | "jar" | "close";
+  /** Seconds in this phase, and since it opened. */
+  t: number;
+  life: number;
+  /** Auto was on when it opened: it spins, and collects, by itself. */
+  auto: boolean;
+  /** The face's run (radians, clockwise), and where it is now. */
+  from: number;
+  to: number;
+  angle: number;
+  /** Radians it turned over the last step: its speed, and the blur's trail. */
+  sweep: number;
+  /** The slot it stops on (-1 before the spin), and what it paid. */
+  slot: number;
+  value: number;
+  /** spinSuper's events, held until the pointer stops on the prize. */
+  held: GameEvent[];
+  /** The peg last under the pointer, and the pointer's flick (radians) and its speed. */
+  peg: number;
+  tilt: number;
+  tiltV: number;
+  /** The Lucky Jar's roll played on it (it fades out from that screen). */
+  afterJar: boolean;
 }
 
 /** Reels run at full speed for 60% of the spin, then brake evenly to a stop. */
@@ -602,8 +668,6 @@ export function setup(rt: Runtime): GameHooks {
   let chase = 0;
   let shake = 0;
   let cheer = 0;
-  let superFx = 0;
-  let superWon = 0;
   let setFx = 0;
   let albumPulse = 0;
   let chuteGlow = 0;
@@ -633,11 +697,18 @@ export function setup(rt: Runtime): GameHooks {
   let bits: Bit[] = [];
   let fallers: Faller[] = [];
   let cardFlies: CardFly[] = [];
-  /** The spin reel: which prize list it shows, where the strip is, and the run it is making. */
-  let reelKind: SpinKind = "mini";
+  /** The Mini spin reel: where the strip is, and the run it is making. */
   let reelPos = 0;
   let reel: { from: number; to: number } | null = null;
   let lastReelCell = 0;
+  /** The Super wheel while it shows, and where its face last stopped (it opens where it was). */
+  let superWheel: SuperWheel | null = null;
+  let superAngle = -SUPER_STEP / 2;
+  /** Seconds left before a waiting Super spin's wheel opens (-1: none waiting). */
+  let superOpenIn = -1;
+  /** The prize screen's coin rain and confetti. */
+  let superRain: RainCoin[] = [];
+  let superConfetti: Confetto[] = [];
 
   const view = () => stage.view;
 
@@ -708,9 +779,6 @@ export function setup(rt: Runtime): GameHooks {
         audio.tone({ freq: f / 2, dur: 0.16, type: "triangle", vol: 0.05, delay: i * 0.11 });
       }
       audio.noise(0.4, 0.06);
-    },
-    reset() {
-      audio.tone({ freq: 880, to: 220, dur: 0.4, type: "triangle", vol: 0.04 });
     },
     card(fresh: boolean) {
       const notes = fresh ? [988, 1319, 1568, 1976] : [988, 1319];
@@ -793,8 +861,7 @@ export function setup(rt: Runtime): GameHooks {
     }
     const waitingRoll = jarFeed.rolling || (devRoll !== null && devAnswerAt >= 0);
     if (jarPhase === "rolling") {
-      // The Super spin's own celebration finishes first
-      if (jarAnswers.length > 0 && jarPhaseT >= JAR_SUSPENSE_MIN && superFx <= 0.3) resolveJar(jarAnswers.shift() as JackpotRoll);
+      if (jarAnswers.length > 0 && jarPhaseT >= JAR_SUSPENSE_MIN) resolveJar(jarAnswers.shift() as JackpotRoll);
       // A failed roll (offline, signed out, the server) or no answer in time: the line just goes, silently
       else if (jarAnswers.length === 0 && (!waitingRoll || jarPhaseT > JAR_SUSPENSE_MAX)) jarPhase = null;
       else if (t - lastJarTick > 0.09) {
@@ -1012,10 +1079,9 @@ export function setup(rt: Runtime): GameHooks {
     return { segs: [wrapSeg(head), wrapSeg(head - 1), wrapSeg(head - 2)], won: false };
   }
 
-  /** Start the reel strip on a run that ends on prize `idx`. */
-  function aimReel(kind: SpinKind, idx: number) {
-    reelKind = kind;
-    const n = cellsOf(kind).length;
+  /** Start the reel strip on a run that ends on Mini prize `idx`. */
+  function aimReel(idx: number) {
+    const n = MINI_CELLS.length;
     const from = reelPos;
     const at = ((Math.round(from) % n) + n) % n;
     reel = { from, to: Math.round(from) + n * 5 + ((idx - at + n) % n) };
@@ -1129,10 +1195,12 @@ export function setup(rt: Runtime): GameHooks {
         } else sfx.lost();
         break;
       case "coreIn": {
-        const i = Math.min(e.count, CORE_COUNT) - 1;
+        // Cores past a full meter (a Super spin still waiting) count toward the next one
+        const n = ((e.count - 1) % CORE_COUNT) + 1;
+        const i = n - 1;
         lampPulse[i] = 1;
         sfx.core();
-        say(l.coreIn(Math.min(e.count, CORE_COUNT), CORE_COUNT), CORE_COLORS[i]);
+        say(l.coreIn(n, CORE_COUNT), CORE_COLORS[i]);
         burst(lampX(i), LAMPS_Y, 22, [CORE_COLORS[i], CREAM], 240);
         break;
       }
@@ -1145,34 +1213,27 @@ export function setup(rt: Runtime): GameHooks {
         break;
       }
       case "spinStart":
+        // A Super spin's start is its wheel's (it plays when SPIN is pressed)
+        if (e.kind === "super") break;
         sfx.spinStart();
-        aimReel(e.kind, e.idx);
-        if (e.kind === "super") {
-          say(l.superSpin, TERRA);
-          shake = Math.max(shake, 0.4);
-          cheer = Math.max(cheer, 2);
-        } else say(l.miniSpin, HONEY);
+        aimReel(e.idx);
+        say(l.miniSpin, HONEY);
         break;
       case "spinWin": {
-        const big = e.kind === "super" || e.prize.value >= 40;
-        sfx.spinWin(e.kind === "super" ? 100 : e.prize.value);
+        if (e.kind === "super") {
+          // The pointer just stopped on it: the wheel shows the rest, the robots cheer once it closes
+          sfx.spinWin(100);
+          cheer = Math.max(cheer, 4);
+          break;
+        }
+        const big = e.prize.value >= 40;
+        sfx.spinWin(e.prize.value);
         if (e.prize.kind === "tickets") pop(`+${e.prize.value}`, REEL.x + REEL.w - 70, REEL.y - 16, HONEY, big ? 46 : 38);
         burst(REEL.x + REEL.w - 70, REEL.y + REEL.h / 2, big ? 40 : 22, [HONEY, CREAM, TERRA], 300);
         cheer = Math.max(cheer, 1.5);
         if (big) shake = Math.max(shake, 0.3);
-        if (e.kind === "super") {
-          superFx = SUPER_FX;
-          superWon = e.prize.value;
-          shake = 0.9;
-          cheer = SUPER_FX;
-          sfx.superBonus();
-          for (let i = 0; i < 6; i++) burst(60 + i * 84, 300 + (i % 2) * 200, 26, CORE_COLORS, 380);
-        }
         break;
       }
-      case "superReset":
-        sfx.reset();
-        break;
       case "idle":
         sfx.rest();
         onIdle();
@@ -1197,7 +1258,12 @@ export function setup(rt: Runtime): GameHooks {
     light = null;
     gateFlash = 0;
     reel = null;
-    superFx = 0;
+    // A Super wheel showing belonged to the old machine (it already paid there)
+    if (overlay === "superWheel") overlay = null;
+    superWheel = null;
+    superOpenIn = -1;
+    superRain = [];
+    superConfetti = [];
     setFx = 0;
     zeroFor = 0;
     stripIn = 0;
@@ -1679,6 +1745,12 @@ export function setup(rt: Runtime): GameHooks {
       }
       // Out of coins: look for Prize Counter coins now and then
       if (stripIn >= 1 && mode === "account" && !claiming && Date.now() - lastClaimAt >= EMPTY_CLAIM_GAP) void claimAllowance();
+      // A Super spin waiting: its wheel opens a beat later, once nothing else is up
+      // (the start card, What's new, a menu, the Lucky Jar's line, a celebration)
+      if (overlay === null && s.superPending > 0 && jarPhase === null && jarWinFx <= 0 && setFx <= 0) {
+        superOpenIn = superOpenIn < 0 ? SUPER_OPEN_DELAY : superOpenIn - dt;
+        if (superOpenIn <= 0) openSuperWheel();
+      } else if (s.superPending <= 0) superOpenIn = -1;
       // Prize Counter cards, one viewer at a time, once nothing else is open
       if (overlay === null && reveals.length > 0) openViewer(reveals.shift() as number, null, true);
     }
@@ -1700,14 +1772,14 @@ export function setup(rt: Runtime): GameHooks {
       burst(JAR_MOUTH.x, JAR_MOUTH.y, 8, [HONEY, CREAM, "#F2A6A0"], 120);
     }
     if (overlay === "viewer") stepViewer(dt);
+    else if (overlay === "superWheel") stepSuperWheel(dt);
     if (ready && overlay === null) stepJar(dt);
 
     // Lights and counters
     const busyReels = s.spin !== null || s.prize !== null;
-    chase += dt * (superFx > 0 || setFx > 0 ? 24 : busyReels ? 14 : 5);
+    chase += dt * (setFx > 0 || s.superPending > 0 ? 24 : busyReels ? 14 : 5);
     shake = Math.max(0, shake - dt);
     cheer = Math.max(0, cheer - dt);
-    superFx = Math.max(0, superFx - dt);
     setFx = Math.max(0, setFx - dt);
     albumPulse = Math.max(0, albumPulse - dt * 1.2);
     chuteGlow = Math.max(0, chuteGlow - dt * 4);
@@ -1750,9 +1822,9 @@ export function setup(rt: Runtime): GameHooks {
     } else light = null;
 
     // The spin reel (a resumed run may come back mid-spin)
-    if (s.spin && !reel) aimReel(s.spin.kind, s.spin.idx);
+    if (s.spin && !reel) aimReel(s.spin.idx);
     if (s.spin && reel) {
-      const k = clamp(s.spin.t / spinTimeOf(s.spin.kind), 0, 1);
+      const k = clamp(s.spin.t / SPIN_TIME, 0, 1);
       reelPos = reel.from + (reel.to - reel.from) * reelEase(k);
       const cell = Math.floor(reelPos);
       if (cell !== lastReelCell) {
@@ -1902,7 +1974,7 @@ export function setup(rt: Runtime): GameHooks {
   function drawMachine() {
     const l = tr();
     const v = view();
-    const rainbow = superFx > 0 || setFx > 0 || s.spin?.kind === "super";
+    const rainbow = setFx > 0 || s.superPending > 0;
     drawCabinet(ctx, sp, v);
     // Title above the cabinet when the phone is tall enough to show it
     if (v.y < -50) headline(ctx, l.title, W / 2, v.y / 2, fitSize(ctx, l.title, 40, 380), CREAM);
@@ -1911,7 +1983,7 @@ export function setup(rt: Runtime): GameHooks {
     drawMenuButton(ctx, MENU_BTN, l.menu);
     drawAlbumButton(ctx, sp, ALBUM_BTN, l.album, ownedCount(s.cards), CARD_COUNT, albumPulse);
     versionTag(ctx, 493, 76, l.versionLabel(version));
-    drawCoreLamps(ctx, sp, s.cores, CORE_COUNT, t, superFx > 0, lampPulse);
+    drawCoreLamps(ctx, sp, s.cores, CORE_COUNT, t, s.superPending > 0, lampPulse);
     drawRobots(ctx, sp, t, cheer);
     drawWheel(ctx, sp, s.wheel, t, chase, wheelLight());
     drawGate(ctx, sp, holeAt(s.gate), s.stock, gateFlash, s.stock >= PRIZE_QUEUE_MAX, t, readyGlow, lidK, lidKnock);
@@ -1919,8 +1991,7 @@ export function setup(rt: Runtime): GameHooks {
 
     // Reels and the spins counter
     const spinning = s.spin !== null;
-    const reelLabel = !s.spin ? l.youWin : s.spin.kind === "super" ? "SUPER" : "MINI";
-    drawReels(ctx, sp, reelLabel, cellsOf(reelKind), reelPos, spinning, !!s.spin?.paid, t, s.spin?.kind === "super");
+    drawReels(ctx, sp, s.spin ? l.miniLabel : l.youWin, MINI_CELLS, reelPos, spinning, !!s.spin?.paid, t);
     drawCounter(ctx, SPINS_BOX, l.spins, s.queue.length, VIOLET, 2, 0);
 
     // The shelf
@@ -2289,26 +2360,6 @@ export function setup(rt: Runtime): GameHooks {
       ctx.restore();
     }
     if (setFx > 0) drawSetCelebration();
-    if (superFx > 0) {
-      const k = SUPER_FX - superFx;
-      const l = tr();
-      const pop = k < 0.3 ? easeOutCubic(k / 0.3) : 1;
-      const fade = superFx < 0.4 ? superFx / 0.4 : 1;
-      ctx.save();
-      ctx.globalAlpha = fade;
-      ctx.fillStyle = "rgba(51,38,33,0.78)";
-      ctx.fillRect(0, WHEEL_C.y - 78, W, 156);
-      ctx.translate(W / 2, WHEEL_C.y - 18);
-      ctx.scale(pop, pop);
-      ctx.rotate(Math.sin(t * 6) * 0.03);
-      headline(ctx, l.superSpin, 0, 0, fitSize(ctx, l.superSpin, 62, 480), CORE_COLORS[Math.floor(t * 10) % 6]);
-      ctx.restore();
-      ctx.save();
-      ctx.globalAlpha = fade;
-      headline(ctx, `+${superWon} ${l.tickets}`, W / 2, WHEEL_C.y + 44, 40, HONEY);
-      ctx.restore();
-      if (Math.random() < 0.5) burst(Math.random() * W, WHEEL_C.y - 70, 3, CORE_COLORS, 160);
-    }
     if (jarWinFx > 0) drawJarWin();
   }
 
@@ -2582,6 +2633,10 @@ export function setup(rt: Runtime): GameHooks {
     const l = tr();
     const loading = mode === "loading" || mode === "failed";
     if (!overlay && !loading) return;
+    if (overlay === "superWheel" && !loading) {
+      drawSuperOverlay();
+      return;
+    }
     const v = view();
     ctx.fillStyle = "rgba(40,29,25,0.62)";
     ctx.fillRect(v.x, v.y, v.w, v.h);
@@ -2656,6 +2711,382 @@ export function setup(rt: Runtime): GameHooks {
     ctx.fill();
   }
 
+  // ---------------------------------------------------------------- the Super wheel (1.4.0)
+
+  const TAU = Math.PI * 2;
+  /** The peg under the pointer at face angle `a`: one per slot edge, so it changes as an edge passes. */
+  const pegAt = (a: number) => Math.floor(a / SUPER_STEP);
+
+  /**
+   * Where things go: the wheel's centre just under the view's bottom edge (so only
+   * the top of it shows), the pointer's tip at the pegs, the button under it.
+   */
+  function superLayout() {
+    const v = view();
+    const c = { x: v.x + v.w / 2, y: v.y + v.h + 20 };
+    const tipY = c.y - SUPER_R * SUPER_RING_IN + 2;
+    // Clear of the home indicator: the button's foot stays well above the view's bottom
+    const by = Math.min(tipY + SUPER_NEEDLE + 66, v.y + v.h - 70);
+    const button: Rect = { x: c.x - 160, y: by - 52, w: 320, h: 104 };
+    return { v, c, tipY, button };
+  }
+
+  function openSuperWheel() {
+    superOpenIn = -1;
+    pointersHeld.clear();
+    tap = false;
+    spaceHeld = false;
+    superRain = [];
+    superConfetti = [];
+    superWheel = {
+      phase: "ready",
+      t: 0,
+      life: 0,
+      auto: autoOn,
+      from: superAngle,
+      to: superAngle,
+      angle: superAngle,
+      sweep: 0,
+      slot: -1,
+      value: 0,
+      held: [],
+      peg: pegAt(superAngle),
+      tilt: 0,
+      tiltV: 0,
+      afterJar: false,
+    };
+    overlay = "superWheel";
+    sfx.core();
+  }
+
+  /**
+   * SPIN: logic picks and pays the prize now (saved now, so a reload mid-spin
+   * keeps it, once); the wheel then runs SUPER_TURNS turns and stops on one of
+   * that prize's slots. Its events wait for the pointer to stop.
+   */
+  function spinSuperWheel() {
+    const w = superWheel;
+    if (w?.phase !== "ready") return;
+    const held = spinSuper(s);
+    const start = held.find((e) => e.type === "spinStart");
+    const win = held.find((e) => e.type === "spinWin");
+    if (start?.type !== "spinStart" || win?.type !== "spinWin") {
+      closeSuperWheel();
+      return;
+    }
+    payOut();
+    markDirty();
+    saveNow();
+    const slots = SUPER_SLOTS.flatMap((p, i) => (p === start.idx ? [i] : []));
+    w.slot = slots[Math.floor(Math.random() * slots.length)] ?? 0;
+    w.value = win.prize.value;
+    w.held = held;
+    // Stop with the slot under the pointer, a little off its middle so no two stops look alike
+    const stop = -(w.slot + 0.5 + (Math.random() - 0.5) * 0.6) * SUPER_STEP;
+    w.from = w.angle;
+    w.to = w.angle + SUPER_TURNS * TAU + ((((stop - w.angle) % TAU) + TAU) % TAU);
+    w.phase = "spin";
+    w.t = 0;
+    sfx.spinStart();
+  }
+
+  /** The pointer stopped: the held events play now (the Lucky Jar's roll, the sounds, the counters). */
+  function landSuperWheel(w: SuperWheel) {
+    w.angle = w.to;
+    w.sweep = 0;
+    superAngle = ((w.to % TAU) + TAU) % TAU;
+    w.phase = "lit";
+    w.t = 0;
+    w.tiltV -= 3;
+    const evs = w.held;
+    w.held = [];
+    jarFeed.feed(evs);
+    if (hasJar && mode === "guest" && supersPaid(evs) > 0) say(tr().jarGuestSuper, CYAN, true);
+    for (const e of evs) onEvent(e);
+  }
+
+  function showSuperPrize(w: SuperWheel) {
+    w.phase = "prize";
+    w.t = 0;
+    shake = Math.max(shake, 0.6);
+    sfx.superBonus();
+    const v = view();
+    const cx = v.x + v.w / 2;
+    const cy = superPrizeY();
+    const colors = [HONEY, CREAM, TERRA, TEAL, VIOLET, CYAN, ...CORE_COLORS];
+    for (let i = 0; i < 90; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.8;
+      const sp0 = 300 + Math.random() * 600;
+      superConfetti.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(a) * sp0,
+        vy: Math.sin(a) * sp0,
+        rot: Math.random() * 6,
+        vr: (Math.random() - 0.5) * 14,
+        w: 6 + Math.random() * 6,
+        h: 10 + Math.random() * 8,
+        color: colors[i % colors.length],
+      });
+    }
+  }
+
+  /** Tap to collect: on to the Lucky Jar's roll if one is out (signed in), else the wheel closes. */
+  function collectSuper(w: SuperWheel) {
+    sfx.back(3);
+    bumpTickets = 1;
+    if (jarPhase !== null || jarAnswers.length > 0 || jarFeed.rolling) {
+      w.phase = "jar";
+      w.t = 0;
+      w.afterJar = true;
+      // The suspense starts now, on this screen
+      if (jarPhase === null || jarPhase === "rolling") {
+        jarPhase = "rolling";
+        jarPhaseT = 0;
+      }
+    } else closeSuperWheel();
+  }
+
+  function closeSuperWheel() {
+    const w = superWheel;
+    if (!w) {
+      overlay = null;
+      return;
+    }
+    w.phase = "close";
+    w.t = 0;
+  }
+
+  /** A tap (or Space) on the wheel: SPIN, collect, or close after the Lucky Jar. Never a skip while it turns. */
+  function superTap() {
+    const w = superWheel;
+    if (!w) return;
+    if (w.phase === "ready" && w.life >= SUPER_TAP_GUARD) spinSuperWheel();
+    else if (w.phase === "prize" && w.t >= SUPER_COLLECT_GUARD) collectSuper(w);
+    else if (w.phase === "jar") {
+      if (jarPhase === "lost" && w.t >= 0.8) jarPhase = null;
+      // The win: once the amount has counted up, it fades out
+      else if (jarPhase === "won" && JAR_WIN_FX - jarWinFx >= JAR_COUNT_FROM + JAR_COUNT_TIME) jarWinFx = Math.min(jarWinFx, 0.5);
+    }
+  }
+
+  function stepSuperWheel(dt: number) {
+    const w = superWheel;
+    if (!w) return;
+    w.t += dt;
+    w.life += dt;
+    // The pointer springs back after each flick
+    w.tiltV += (-320 * w.tilt - 16 * w.tiltV) * dt;
+    w.tilt += w.tiltV * dt;
+    stepSuperRain(w, dt);
+    if (w.phase === "ready") {
+      if (w.auto && w.life >= SUPER_AUTO_DELAY) spinSuperWheel();
+    } else if (w.phase === "spin") {
+      // Fast at first, then braking to a stop (the last slots crawl past)
+      const u = clamp(w.t / SUPER_SPIN_TIME, 0, 1);
+      const next = w.from + (w.to - w.from) * (1 - (1 - u) ** 3);
+      w.sweep = next - w.angle;
+      w.angle = next;
+      const peg = pegAt(w.angle);
+      if (peg !== w.peg) {
+        // A peg flicks the pointer the way the wheel turns, harder as it slows
+        w.peg = peg;
+        w.tilt = Math.max(w.tilt, 0.2 + 0.22 * clamp(1 - w.sweep / (SUPER_STEP * 0.4), 0, 1));
+        w.tiltV = Math.min(w.tiltV, 0);
+        sfx.tick();
+      }
+      if (u >= 1) landSuperWheel(w);
+    } else if (w.phase === "lit") {
+      if (w.t >= SUPER_LIT) showSuperPrize(w);
+    } else if (w.phase === "prize") {
+      if (w.auto && w.t >= SUPER_AUTO_COLLECT) collectSuper(w);
+    } else if (w.phase === "jar") {
+      stepJar(dt);
+      if (jarPhase === null) closeSuperWheel();
+    } else if (w.t >= SUPER_FADE) {
+      overlay = null;
+      superWheel = null;
+      superRain = [];
+      superConfetti = [];
+    }
+  }
+
+  /** The prize screen's coins (a rain from the top for a while) and confetti, falling. */
+  function stepSuperRain(w: SuperWheel, dt: number) {
+    const v = view();
+    if (w.phase === "prize" && w.t < 2.6 && Math.random() < dt * 34)
+      superRain.push({ x: v.x + Math.random() * v.w, y: v.y - 20, vx: (Math.random() - 0.5) * 60, vy: 120 + Math.random() * 160, spin: Math.random() * 6, vs: 5 + Math.random() * 8, r: 10 + Math.random() * 8 });
+    for (const c of superRain) {
+      c.vy += 1100 * dt;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.spin += c.vs * dt;
+    }
+    superRain = superRain.filter((c) => c.y < v.y + v.h + 40);
+    for (const c of superConfetti) {
+      c.vy += 420 * dt;
+      c.vx *= 1 - dt * 1.6;
+      c.vy = Math.min(c.vy, 170);
+      c.x += (c.vx + Math.sin(c.rot * 2) * 30) * dt;
+      c.y += c.vy * dt;
+      c.rot += c.vr * dt;
+    }
+    superConfetti = superConfetti.filter((c) => c.y < v.y + v.h + 30);
+  }
+
+  /** Where the prize screen's ticket and amount sit: the sky over the wheel. */
+  const superPrizeY = () => {
+    const v = view();
+    return v.y + v.h * 0.36;
+  };
+
+  /** The whole Super wheel screen: backdrop, wheel, pointer, crest, then the button, the prize or the Lucky Jar. */
+  function drawSuperOverlay() {
+    const w = superWheel;
+    if (!w) return;
+    const l = tr();
+    const lay = superLayout();
+    const { v, c } = lay;
+    const cx = c.x;
+    const prized = w.phase === "prize" || w.phase === "jar" || (w.phase === "close" && w.slot >= 0);
+    const glow = w.phase === "prize" ? clamp(w.t / 0.4, 0, 1) : prized ? 1 : 0;
+    ctx.save();
+    ctx.globalAlpha = w.phase === "close" ? 1 - clamp(w.t / SUPER_FADE, 0, 1) : clamp(w.life / SUPER_FADE, 0, 1);
+    if (shake > 0) {
+      const a = Math.min(1, shake) * 8;
+      ctx.translate((Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+    }
+    drawSuperBackdrop(ctx, v, t, glow);
+    // The wheel rises into place as it opens, and sinks out of the way for the prize
+    const sink = prized ? easeOutCubic(w.phase === "prize" ? clamp(w.t / 0.5, 0, 1) : 1) * 640 : 0;
+    ctx.save();
+    ctx.translate(0, (1 - easeOutCubic(clamp(w.life / 0.55, 0, 1))) * 260 + sink);
+    const blur = clamp((Math.abs(w.sweep) * 60 - 2) / 10, 0, 1);
+    const lit = w.phase !== "ready" && w.phase !== "spin" ? w.slot : -1;
+    drawSuperWheel(ctx, sp, { cx, cy: c.y, r: SUPER_R, angle: w.angle, values: SUPER_VALUES, blur, sweep: w.sweep, lit, t });
+    const ring1 = SUPER_R * SUPER_RING_IN;
+    if (w.phase === "spin") drawSparkles(ctx, cx, c.y, ring1, SUPER_R, -Math.PI / 2 - 0.8, -Math.PI / 2 + 0.8, t, Math.round(6 + 18 * blur));
+    else if (lit >= 0) drawSparkles(ctx, cx, c.y, ring1, SUPER_R, -Math.PI / 2 - SUPER_STEP * 0.7, -Math.PI / 2 + SUPER_STEP * 0.7, t, 10);
+    else drawSparkles(ctx, cx, c.y, ring1, SUPER_R, -Math.PI / 2 - 0.8, -Math.PI / 2 + 0.8, t, 5, 0.8);
+    drawSuperNeedle(ctx, cx, lay.tipY, SUPER_NEEDLE, w.tilt);
+    drawSuperCrest(ctx, sp, cx, c.y - SUPER_R, l.superLabel, l.superCores(CORE_COUNT, CORE_COUNT), t);
+    ctx.restore();
+    const crestTop = c.y - SUPER_R - 130;
+    if (!prized) {
+      // The title in the sky
+      const hy = Math.max(v.y + 80, (v.y + crestTop) / 2);
+      ctx.save();
+      ctx.translate(cx, hy);
+      ctx.rotate(Math.sin(t * 5) * 0.04);
+      const k = 1 + 0.04 * Math.sin(t * 7);
+      ctx.scale(k, k);
+      headline(ctx, l.superSpin, 0, 0, fitSize(ctx, l.superSpin, 66, Math.min(v.w, W) - 60), CORE_COLORS[Math.floor(t * 10) % 6]);
+      ctx.restore();
+    }
+    // SPIN, fading as the wheel starts (nothing can stop it once it turns)
+    const btnAlpha = w.phase === "ready" ? 1 : w.phase === "spin" ? 1 - clamp(w.t / 0.3, 0, 1) : 0;
+    if (btnAlpha > 0) {
+      ctx.save();
+      ctx.globalAlpha *= btnAlpha;
+      drawSuperButton(ctx, lay.button, l.superSpinButton, w.auto ? l.superAutoLine : l.superSpinLine, t, w.phase === "spin");
+      ctx.restore();
+    }
+    if (prized) drawSuperPrize(w);
+    if (w.afterJar) drawSuperJar(w, lay.button);
+    ctx.restore();
+  }
+
+  /** The prize screen: the ticket flying in, the amount counting up, coins and confetti, and "tap to collect". */
+  function drawSuperPrize(w: SuperWheel) {
+    const l = tr();
+    const v = view();
+    const cx = v.x + v.w / 2;
+    const cy = superPrizeY();
+    const k = w.phase === "prize" ? w.t : 9;
+    const maxW = Math.min(v.w, W) - 60;
+    drawSunburst(ctx, cx, cy, 320, t, clamp(k / 0.3, 0, 1));
+    // The title
+    const pop = easeOutCubic(clamp(k / 0.35, 0, 1));
+    ctx.save();
+    ctx.translate(cx, cy - 175);
+    ctx.scale(pop, pop);
+    ctx.rotate(Math.sin(t * 5) * 0.03);
+    headline(ctx, l.superSpin, 0, 0, fitSize(ctx, l.superSpin, 62, maxW), CORE_COLORS[Math.floor(t * 10) % 6]);
+    ctx.restore();
+    // The ticket flies in from above and lands with a bounce
+    const fly = clamp(k / 0.55, 0, 1);
+    const land = k > 0.55 ? Math.exp(-(k - 0.55) * 5) * Math.sin((k - 0.55) * 20) * 0.12 : 0;
+    ctx.save();
+    ctx.translate(cx, cy - 30 - (1 - easeOutCubic(fly)) * (cy - v.y + 140));
+    ctx.rotate((1 - fly) * -0.7 + Math.sin(t * 3) * 0.05);
+    const sc = (0.55 + 0.45 * easeOutCubic(fly)) * (1 + land) * (fly >= 1 ? 1 + 0.03 * Math.sin(t * 6) : 1);
+    ctx.scale(sc, sc);
+    ctx.shadowColor = HONEY;
+    ctx.shadowBlur = 30;
+    drawTicketIcon(ctx, sp, 0, 0, 170);
+    ctx.restore();
+    // The amount counts up
+    if (k >= 0.35) {
+      const q = clamp((k - 0.35) / 1.1, 0, 1);
+      const size = fitSize(ctx, l.ticketsN(w.value), 84, maxW);
+      const beat = q >= 1 ? 1 + 0.04 * Math.sin(t * 8) : 1;
+      ctx.save();
+      ctx.translate(cx, cy + 105);
+      ctx.scale(beat, beat);
+      headline(ctx, l.ticketsN(Math.round(w.value * easeOutCubic(q))), 0, 0, size, HONEY);
+      ctx.restore();
+    }
+    drawConfetti(ctx, superConfetti);
+    for (const coin of superRain) drawCodeCoin(ctx, coin.x, coin.y, coin.r, coin.spin);
+    if (w.phase === "prize" && k >= SUPER_COLLECT_GUARD) {
+      ctx.save();
+      ctx.globalAlpha *= 0.65 + 0.35 * Math.sin(t * 5);
+      headline(ctx, l.superCollect, cx, cy + 215, fitSize(ctx, l.superCollect, 34, maxW), CREAM);
+      ctx.restore();
+    }
+  }
+
+  /** The Lucky Jar's roll on the wheel's screen: the suspense, then "not this time" or the win (drawJarWin). */
+  function drawSuperJar(w: SuperWheel, button: Rect) {
+    const l = tr();
+    const v = view();
+    const cx = v.x + v.w / 2;
+    const cy = superPrizeY();
+    const maxW = Math.min(v.w, W) - 60;
+    if (w.phase === "close") {
+      // Fading out after the roll: just its dimmed screen
+      ctx.fillStyle = "rgba(40,29,25,0.62)";
+      ctx.fillRect(v.x, v.y, v.w, v.h);
+      return;
+    }
+    if (jarPhase === "won" || jarWinFx > 0) {
+      drawJarWin();
+      if (JAR_WIN_FX - jarWinFx >= JAR_COUNT_FROM + JAR_COUNT_TIME) text(ctx, l.superContinue, cx, button.y + button.h / 2, fitSize(ctx, l.superContinue, 26, maxW), CREAM);
+      return;
+    }
+    ctx.fillStyle = "rgba(40,29,25,0.62)";
+    ctx.fillRect(v.x, v.y, v.w, v.h);
+    const rolling = jarPhase === "rolling";
+    // The jar trembles while the roll is out, with lamps racing round it
+    const quake = rolling ? Math.sin(t * 46) * 4 * Math.min(1, jarPhaseT) : 0;
+    ctx.save();
+    ctx.translate(cx + quake, cy + 10);
+    ctx.scale(5, 5);
+    drawJarGlyph(ctx, 0, 0, 11, t);
+    ctx.restore();
+    const lamps = 18;
+    const head = Math.floor(t * 26) % lamps;
+    for (let i = 0; i < lamps; i++) {
+      const a = -Math.PI / 2 + (i / lamps) * TAU;
+      const lag = (head - i + lamps) % lamps;
+      bulb(ctx, cx + Math.cos(a) * 128, cy + Math.sin(a) * 128, 7, CORE_COLORS[i % 6], rolling ? lag < 3 : i % 2 === 0);
+    }
+    const title = rolling ? l.jarRolling : l.jarMissed;
+    const lines = wrap(ctx, title, maxW, 38).slice(0, 2);
+    for (const [i, ln] of lines.entries()) headline(ctx, ln, cx, cy - 190 + i * 46 - (lines.length - 1) * 23, 38, rolling ? HONEY : CYAN);
+    if (jarPhase === "lost" && w.t >= 0.8) text(ctx, l.superContinue, cx, button.y + button.h / 2, fitSize(ctx, l.superContinue, 26, maxW), CREAM);
+  }
+
   // ---------------------------------------------------------------- input
 
   function inShoot(p: PointerInfo) {
@@ -2682,6 +3113,10 @@ export function setup(rt: Runtime): GameHooks {
     if (mode === "loading") return;
     if (mode === "failed") {
       if (inRect(p, RETRY)) press("retry", "start");
+      return;
+    }
+    if (overlay === "superWheel") {
+      superTap();
       return;
     }
     if (overlay === "news") {
@@ -2779,14 +3214,18 @@ export function setup(rt: Runtime): GameHooks {
     update: step,
     render() {
       stage.begin();
-      ctx.save();
-      if (shake > 0) {
-        const a = Math.min(1, shake) * 9;
-        ctx.translate((Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+      // The Super wheel covers the whole view once it has faded in: the machine under it is not drawn
+      const covered = overlay === "superWheel" && superWheel !== null && superWheel.phase !== "close" && superWheel.life >= SUPER_FADE;
+      if (!covered) {
+        ctx.save();
+        if (shake > 0) {
+          const a = Math.min(1, shake) * 9;
+          ctx.translate((Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+        }
+        drawMachine();
+        drawFx();
+        ctx.restore();
       }
-      drawMachine();
-      drawFx();
-      ctx.restore();
       drawOverlay();
       stage.end();
     },
@@ -2808,6 +3247,7 @@ export function setup(rt: Runtime): GameHooks {
         else if (overlay === "news") closeNews();
         else if (overlay === "start" || overlay === "pause") press("go", overlay);
         else if (overlay === "viewer") flipViewer();
+        else if (overlay === "superWheel") superTap();
         else if (overlay === "rules") overlay = rulesFrom;
         else if (overlay === "album") overlay = albumFrom;
         else if (overlay === "exchange") {

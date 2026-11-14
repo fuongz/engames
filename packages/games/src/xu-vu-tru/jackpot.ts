@@ -7,7 +7,9 @@ import type { GameEvent } from "./logic";
 //
 // - every coin the robot jar eats (logic's `eaten` event) feeds the pool:
 //   `contribute(coins)` per event, batched by the portal;
-// - every Super spin that has paid asks for one roll (`roll()`), one at a time.
+// - every Super spin that has paid asks for one roll (`roll()`), one at a time
+//   (since 1.4.0 game.ts feeds a Super spin's events when its full-screen
+//   wheel's pointer stops, so the roll starts there).
 //
 // Signed in only: a guest's trial machine never feeds the jar or rolls (the
 // portal would refuse anyway). The pool itself is public, so `pool`/`cap` are

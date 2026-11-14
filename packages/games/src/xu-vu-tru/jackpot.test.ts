@@ -1,8 +1,8 @@
 import type { GameJackpot, JackpotRoll } from "@web-games/core";
 import { describe, expect, it } from "vitest";
-import { CARD_R, COIN_R, CORE_COUNT, CORE_R, JAR_W, JAR_X, SHELF_D, SPIN_TIME, SUPER_SPIN_TIME, VERSION } from "./config";
+import { CARD_R, COIN_R, CORE_COUNT, CORE_R, JAR_W, JAR_X, SHELF_D, SPIN_TIME, VERSION } from "./config";
 import { createJarFeed, jarCoins, supersPaid } from "./jackpot";
-import { type GameEvent, SPIN_HOLD, type State, createMachine, inJar, update } from "./logic";
+import { type GameEvent, SPIN_HOLD, type State, createMachine, inJar, spinSuper, update } from "./logic";
 import type { Body } from "./physics";
 import { SCHEMA, fromSave, migrate, toSave } from "./save";
 
@@ -25,6 +25,14 @@ function bare(seed = 1): State {
   const s = createMachine(seed, 0);
   s.bodies = [];
   s.flights = [];
+  return s;
+}
+
+/** A machine with `n` Super spins waiting (a full meter of cores each), as the shell's wheel finds it. */
+function supersWaiting(n: number) {
+  const s = bare();
+  s.cores = n * CORE_COUNT;
+  s.superPending = n;
   return s;
 }
 
@@ -176,17 +184,22 @@ describe("the jar feed: rolls", () => {
     return s;
   }
 
-  it("a Super spin that pays asks for exactly one roll, when it pays", async () => {
+  it("a Super spin asks for exactly one roll, when its events are fed (the wheel's pointer stopping)", async () => {
     const f = fakeJar({ won: true, amount: 23_410, pool: 5000 });
     const got: JackpotRoll[] = [];
     let started = 0;
     const feed = createJarFeed({ jackpot: f.jackpot, signedIn: () => true, onRollStart: () => started++, onRoll: (r) => got.push(r) });
     const s = superReady();
     const before = playFed(s, 12, feed);
-    expect(before.some((e) => e.type === "spinStart" && e.kind === "super")).toBe(true);
-    // Running, not paid yet: no roll
+    // Earned, waiting for the wheel: no spin, no roll
+    expect(s.superPending).toBe(1);
+    expect(before.some((e) => e.type === "spinStart" || e.type === "spinWin")).toBe(false);
     expect(f.rolls()).toBe(0);
-    const ev = playFed(s, steps(SUPER_SPIN_TIME + SPIN_HOLD), feed);
+    // Spun: paid at once, but the shell holds the events until its pointer stops; still no roll
+    const ev = spinSuper(s);
+    expect(s.supers).toBe(1);
+    expect(f.rolls()).toBe(0);
+    feed.feed(ev);
     expect(supersPaid(ev)).toBe(1);
     expect(f.rolls()).toBe(1);
     expect(started).toBe(1);
@@ -214,9 +227,9 @@ describe("the jar feed: rolls", () => {
     const f = fakeJar();
     const got: JackpotRoll[] = [];
     const feed = createJarFeed({ jackpot: f.jackpot, signedIn: () => true, onRoll: (r) => got.push(r) });
-    const s = bare();
-    s.queue = ["super", "super"];
-    playFed(s, steps(2 * (SUPER_SPIN_TIME + SPIN_HOLD) + 1), feed);
+    const s = supersWaiting(2);
+    feed.feed(spinSuper(s));
+    feed.feed(spinSuper(s));
     expect(s.supers).toBe(2);
     // The second waits for the first's answer
     expect(f.rolls()).toBe(1);
@@ -232,9 +245,7 @@ describe("the jar feed: rolls", () => {
     let failed = 0;
     const got: JackpotRoll[] = [];
     const feed = createJarFeed({ jackpot: f.jackpot, signedIn: () => true, onRoll: (r) => got.push(r), onRollFailed: () => failed++ });
-    const s = bare();
-    s.queue = ["super"];
-    playFed(s, steps(SUPER_SPIN_TIME + 0.5), feed);
+    feed.feed(spinSuper(supersWaiting(1)));
     expect(f.rolls()).toBe(1);
     await f.answer();
     expect(failed).toBe(1);
@@ -276,8 +287,10 @@ describe("the jar feed: guests", () => {
     const s = bare();
     coinOff(s, JAR_X, 3);
     playFed(s, 12, feed);
-    s.queue = ["super"];
-    const ev = playFed(s, steps(SUPER_SPIN_TIME + SPIN_HOLD), feed);
+    s.cores = CORE_COUNT;
+    s.superPending = 1;
+    const ev = spinSuper(s);
+    feed.feed(ev);
     expect(s.eaten).toBe(3);
     expect(supersPaid(ev)).toBe(1);
     const t = createMachine(9, 200);
@@ -298,8 +311,10 @@ describe("the jar feed: guests", () => {
     expect(f.contributed).toEqual([1]);
     signedIn = false;
     coinOff(s, JAR_X, 2);
-    s.queue = ["super"];
-    playFed(s, steps(SUPER_SPIN_TIME + SPIN_HOLD), feed);
+    playFed(s, 12, feed);
+    s.cores = CORE_COUNT;
+    s.superPending = 1;
+    feed.feed(spinSuper(s));
     expect(f.contributed).toEqual([1]);
     expect(f.rolls()).toBe(0);
   });
@@ -308,8 +323,8 @@ describe("the jar feed: guests", () => {
     const feed = createJarFeed({ jackpot: undefined, signedIn: () => true });
     const s = bare();
     coinOff(s, JAR_X, 2);
-    s.queue = ["super"];
-    const ev = playFed(s, steps(SUPER_SPIN_TIME + SPIN_HOLD), feed);
+    const ev = [...playFed(s, 12, feed), ...spinSuper(supersWaiting(1))];
+    expect(jarCoins(ev)).toBe(2);
     expect(supersPaid(ev)).toBe(1);
     expect(feed.feed(ev)).toEqual({ coins: 0, rolls: 0 });
     expect(feed.pool).toBeNull();
@@ -325,17 +340,18 @@ describe("the jar feed: guests", () => {
   });
 });
 
-describe("saves in 1.3.0", () => {
-  it("the Lucky Jar changes nothing saved: schema 4 as in 1.2.0, a 1.2.0 save loads as it was", () => {
-    expect(VERSION).toBe("1.3.1");
-    expect(SCHEMA).toBe(4);
+describe("saves and the Lucky Jar", () => {
+  it("the Lucky Jar saves nothing; 1.4.0's schema 5 only adds superPending, so a 1.2.0–1.3.x save loads as it was", () => {
+    expect(VERSION).toBe("1.4.0");
+    expect(SCHEMA).toBe(5);
     const s = createMachine(4, 120);
     run(s, steps(20), true);
-    const old = { ...toSave(s), v: "1.2.0" };
+    const { superPending: _p, ...v4 } = toSave(s).state;
+    const old = { v: "1.3.1", schema: 4, state: v4 };
     const m = migrate(JSON.parse(JSON.stringify(old)));
     expect(m.ok).toBe(true);
     if (!m.ok) return;
     expect(toSave(fromSave(m.save)).state).toEqual(toSave(s).state);
-    expect(toSave(s).v).toBe("1.3.1");
+    expect(toSave(s).v).toBe("1.4.0");
   });
 });
