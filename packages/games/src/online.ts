@@ -2,6 +2,7 @@ import type { RoomGame } from "@web-games/core/online";
 import { caroOnline } from "./caro/online";
 import { coCaNguaOnline } from "./co-ca-ngua/online";
 import { coLatOnline } from "./co-lat/online";
+import { coThuOnline } from "./co-thu/online";
 import { coTyPhuOnline } from "./co-ty-phu/online";
 import { coVuaOnline } from "./co-vua/online";
 import { kyTucXaOnline } from "./ky-tuc-xa/online";
@@ -19,6 +20,7 @@ export const onlineGames: Record<string, RoomGame> = {
   caro: caroOnline as RoomGame,
   "co-ca-ngua": coCaNguaOnline as RoomGame,
   "co-lat": coLatOnline as RoomGame,
+  "co-thu": coThuOnline as RoomGame,
   "co-ty-phu": coTyPhuOnline as RoomGame,
   "co-vua": coVuaOnline as RoomGame,
   "noi-la-co": noiLaCoOnline as RoomGame,
