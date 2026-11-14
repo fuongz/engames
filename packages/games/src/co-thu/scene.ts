@@ -43,27 +43,28 @@ import { buildDiorama, squareX, squareZ } from "./diorama";
 import { COLS, ROWS, type Side, rankOf, sideOf, sq } from "./logic";
 
 // The animal art: img/<id>.webp, 512 × 512 with transparency. Every sprite is
-// drawn on the same grid: the figure is 420 px tall and its feet stand 42 px
-// above the image's bottom edge, so one anchor fits them all.
+// drawn on the same grid: the animal, side-on toy figures on all fours, is 420 px
+// wide (the Rat a little less) and its feet stand 42 px above the image's bottom
+// edge, so one anchor fits them all.
 const ART = import.meta.glob<string>("./img/*.webp", { eager: true, import: "default" });
 const artUrl = (id: AnimalId): string | undefined => ART[`./img/${id}.webp`];
 
 const FONT = '"Baloo 2", system-ui, sans-serif';
 const BASE_H = 0.14;
-/** World height of the whole sprite image (the figure is 420/512 of it). */
-const SPRITE_H = 1.08;
+/** World size of the whole sprite image (the figure is 420/512 of its width, about one tile). */
+const SPRITE_H = 1.4;
 /** Where the feet are in the image, from the bottom (0..1): they rest on the base. */
 const FEET_V = 42 / 512;
 /** A gentle size step by rank, so the Elephant reads bigger than the Rat without breaking the set. */
 const SPRITE_SCALE: Record<AnimalId, number> = {
-  chuot: 0.86,
-  meo: 0.88,
-  cho: 0.91,
-  soi: 0.93,
-  bao: 0.95,
-  ho: 0.98,
+  chuot: 0.94,
+  meo: 0.94,
+  cho: 0.96,
+  soi: 0.97,
+  bao: 0.98,
+  ho: 1,
   "su-tu": 1,
-  voi: 1.04,
+  voi: 1.02,
 };
 
 /** Only if an image fails to load: a plain disc with the rank, so the game stays playable. */

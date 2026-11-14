@@ -2,6 +2,15 @@ import type { ChangelogEntry } from "@web-games/core";
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.0.1",
+    date: "2026-11-14",
+    title: { vi: "Thú dễ nhận ra hơn", en: "Easier-to-read animals" },
+    changes: {
+      vi: ["Vẽ lại cả tám con thú thành đồ chơi nhựa có dáng giống con thật, to hơn trên ô cờ, nhìn lướt là biết con nào."],
+      en: ["All eight animals redrawn as toy figures shaped like the real animals, bigger on their squares, so you can tell them apart at a glance."],
+    },
+  },
+  {
     version: "1.0.0",
     date: "2026-11-14",
     title: { vi: "Ra mắt", en: "Launch" },
